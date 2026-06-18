@@ -613,6 +613,17 @@ function createRepo() {
       previewTotals: input.plan.preview.totals,
       previewAnomalies: input.plan.preview.anomalies
     })),
+    checkMonthlyReplaceSafety: vi.fn(async () => ({
+      canReplace: true,
+      activeLinesCount: 0,
+      activeOrdersCount: 0,
+      startedOrdersCount: 0,
+      assignedPickersCount: 0,
+      assignedCheckersCount: 0,
+      checkUnitsCount: 0,
+      nonImportEventsCount: 0,
+      blockReasons: []
+    })),
     listShiftErrors: vi.fn(async (shiftId: string) => {
       return state.errors.filter((error) => error.shiftId === shiftId);
     }),
@@ -1454,6 +1465,7 @@ describe('manual shift workers service', () => {
               k !== 'applyDailyImport' &&
               k !== 'countMonthlyImportShiftRows' &&
               k !== 'applyMonthlyImport' &&
+              k !== 'checkMonthlyReplaceSafety' &&
               k !== 'setWorkerAuthUser'
     );
     expect(canonicalKeys).toEqual([]);
@@ -3574,7 +3586,7 @@ describe('manual shift monthly import apply', () => {
         plan
       })
     ).rejects.toMatchObject({
-      code: 'MONTHLY_IMPORT_REQUIRES_EMPTY_SHIFT',
+      code: 'MONTHLY_IMPORT_REQUIRES_REPLACE_MODE',
       details: {
         shiftId: ids.shift,
         activeLinesCount: 1,

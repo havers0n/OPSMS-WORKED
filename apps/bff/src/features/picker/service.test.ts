@@ -182,7 +182,18 @@ function createManualRepoMock(): ManualShiftsRepo {
     listOrdersItemRollups: vi.fn(async (_orderIds: string[]) => new Map()),
     listShiftCheckUnits: vi.fn(async () => []),
     listShiftAshlamot: vi.fn(async () => []),
-    listShiftWorkHierarchy: vi.fn(async () => ({ shiftId: '', areas: [] }))
+    listShiftWorkHierarchy: vi.fn(async () => ({ shiftId: '', areas: [] })),
+    checkMonthlyReplaceSafety: vi.fn(async () => ({
+      canReplace: true,
+      activeLinesCount: 0,
+      activeOrdersCount: 0,
+      startedOrdersCount: 0,
+      assignedPickersCount: 0,
+      assignedCheckersCount: 0,
+      checkUnitsCount: 0,
+      nonImportEventsCount: 0,
+      blockReasons: []
+    }))
   };
 }
 

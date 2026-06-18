@@ -10,6 +10,7 @@ import type {
   ManualShiftDaySummary,
   ManualShiftWorker,
   ManualShiftWorkHierarchyResponse,
+  ManualShiftMonthlyReplaceSafety,
   OpenAshlamaBoardItem
 } from '@wos/domain';
 import { queryOptions } from '@tanstack/react-query';
@@ -33,7 +34,9 @@ export const manualShiftKeys = {
   daySummary: (shiftId: string) => [...manualShiftKeys.all, 'day-summary', shiftId] as const,
   shiftOpenAshlamot: (shiftId: string) =>
     [...manualShiftKeys.all, 'shift-open-ashlamot', shiftId] as const,
-  bindableUsers: () => [...manualShiftKeys.all, 'bindable-users'] as const
+  bindableUsers: () => [...manualShiftKeys.all, 'bindable-users'] as const,
+  monthlyReplaceSafety: (shiftId: string) =>
+    [...manualShiftKeys.all, 'monthly-replace-safety', shiftId] as const
 };
 
 async function fetchTodayShift(): Promise<ManualShiftTodayResponse> {
@@ -207,10 +210,25 @@ async function fetchBindableUsers(): Promise<BindableUser[]> {
   return bffRequest<BindableUser[]>('/api/manual-shifts/worker-bindable-users');
 }
 
+async function fetchMonthlyReplaceSafety(shiftId: string): Promise<ManualShiftMonthlyReplaceSafety> {
+  return bffRequest<ManualShiftMonthlyReplaceSafety>(
+    `/api/manual-shifts/${shiftId}/monthly-replace-safety`
+  );
+}
+
 export function bindableUsersQueryOptions() {
   return queryOptions({
     queryKey: manualShiftKeys.bindableUsers(),
     queryFn: fetchBindableUsers,
     staleTime: 30_000
+  });
+}
+
+export function monthlyReplaceSafetyQueryOptions(shiftId: string) {
+  return queryOptions({
+    queryKey: manualShiftKeys.monthlyReplaceSafety(shiftId),
+    queryFn: () => fetchMonthlyReplaceSafety(shiftId),
+    enabled: !!shiftId,
+    staleTime: 10_000
   });
 }

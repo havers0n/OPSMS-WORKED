@@ -1,16 +1,18 @@
 ﻿import { useState, type ChangeEvent } from 'react';
-import type { ManualShiftMonthlyApplyResponse, ManualShiftMonthlyPreview } from '@wos/domain';
+import type { ManualShiftMonthlyApplyResponse, ManualShiftMonthlyPreview, ManualShiftMonthlyReplaceSafety } from '@wos/domain';
 import { AlertTriangle, Loader2, X } from 'lucide-react';
 import {
   useApplyManualShiftMonthlyImport,
   usePreviewManualShiftMonthlyImport
 } from '@/entities/manual-shift/api/mutations';
 import { BffRequestError } from '@/shared/api/bff/client';
-import { translateBffError } from '@/shared/i18n';
+import { translate, translateBffError } from '@/shared/i18n';
 
 interface MonthlyImportPreviewSheetProps {
   shiftId: string;
   selectedDate: string;
+  hasExistingWork: boolean;
+  replaceSafety: ManualShiftMonthlyReplaceSafety | null;
   onClose: () => void;
   onSuccess: (result: ManualShiftMonthlyApplyResponse) => void;
 }
@@ -19,6 +21,17 @@ function severityClass(severity: 'info' | 'warning' | 'blocking') {
   if (severity === 'blocking') return 'border-red-200 bg-red-50 text-red-800';
   if (severity === 'warning') return 'border-amber-200 bg-amber-50 text-amber-900';
   return 'border-blue-200 bg-blue-50 text-blue-800';
+}
+
+function formatBlockReasons(reasons: string[]): string {
+  const labelMap: Record<string, string> = {
+    orders_started: translate('monthlyImport.blockReason.ordersStarted'),
+    picker_assigned: translate('monthlyImport.blockReason.pickerAssigned'),
+    checker_assigned: translate('monthlyImport.blockReason.checkerAssigned'),
+    check_units_exist: translate('monthlyImport.blockReason.checkUnitsExist'),
+    non_import_events_exist: translate('monthlyImport.blockReason.nonImportEventsExist')
+  };
+  return reasons.map((r) => labelMap[r] ?? r).join('\n');
 }
 
 function StatRow({ label, value }: { label: string; value: string | number }) {
@@ -32,6 +45,8 @@ function StatRow({ label, value }: { label: string; value: string | number }) {
 export function MonthlyImportPreviewSheet({
   shiftId,
   selectedDate,
+  hasExistingWork,
+  replaceSafety,
   onClose,
   onSuccess
 }: MonthlyImportPreviewSheetProps) {
@@ -40,12 +55,16 @@ export function MonthlyImportPreviewSheet({
   const [preview, setPreview] = useState<ManualShiftMonthlyPreview | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [confirmedReplace, setConfirmedReplace] = useState(false);
 
   const isBlocking = previewMutation.isPending || applyMutation.isPending;
   const blockingWarnings = preview?.warnings.filter((warning) => warning.severity === 'blocking') ?? [];
   const previewErrorCode =
     previewMutation.error instanceof BffRequestError ? previewMutation.error.code : null;
   const applyErrorCode = applyMutation.error instanceof BffRequestError ? applyMutation.error.code : null;
+
+  const isReplaceBlocked = hasExistingWork && replaceSafety && !replaceSafety.canReplace;
+  const applyMode: 'initial' | 'replace' = hasExistingWork ? 'replace' : 'initial';
 
   async function handleSelectFile(file: File | null) {
     if (!file) return;
@@ -68,13 +87,15 @@ export function MonthlyImportPreviewSheet({
     input.value = '';
   }
 
-  async function handleApply() {
+async function handleApply() {
     if (!selectedFile || !preview || blockingWarnings.length > 0) return;
+    if (hasExistingWork && !confirmedReplace) return;
     setErrorMessage(null);
     try {
       const response = await applyMutation.mutateAsync({
         shiftId,
-        file: selectedFile
+        file: selectedFile,
+        mode: applyMode
       });
       onSuccess(response);
       onClose();
@@ -103,9 +124,25 @@ export function MonthlyImportPreviewSheet({
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto p-4">
-          {errorMessage && (
+{errorMessage && (
             <div className="whitespace-pre-line rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
               {errorMessage}
+            </div>
+          )}
+
+          {isReplaceBlocked && (
+            <div className="space-y-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              <p className="font-medium">{translate('monthlyImport.blocked')}</p>
+              <p className="whitespace-pre-line text-xs">
+                {replaceSafety ? formatBlockReasons(replaceSafety.blockReasons) : ''}
+              </p>
+            </div>
+          )}
+
+          {hasExistingWork && !isReplaceBlocked && !confirmedReplace && (
+            <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              <p className="font-medium">{translate('monthlyImport.existingWork')}</p>
+              <p>{translate('monthlyImport.replaceWarning')}</p>
             </div>
           )}
 
@@ -246,15 +283,25 @@ export function MonthlyImportPreviewSheet({
           >
             סגור
           </button>
-          {preview && (
+{preview && (
             <button
               type="button"
-              onClick={() => void handleApply()}
-              disabled={!selectedFile || blockingWarnings.length > 0 || isBlocking}
+              onClick={() => {
+                if (hasExistingWork && !confirmedReplace) {
+                  setConfirmedReplace(true);
+                  return;
+                }
+                void handleApply();
+              }}
+              disabled={!selectedFile || blockingWarnings.length > 0 || isBlocking || !!isReplaceBlocked}
               className="flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-gray-900 font-medium text-white disabled:opacity-40"
             >
               {applyMutation.isPending && <Loader2 size={16} className="animate-spin" />}
-              {applyMutation.isPending ? 'מייבא...' : 'אשר ייבוא'}
+              {applyMutation.isPending
+                ? 'מייבא...'
+                : hasExistingWork
+                  ? translate('monthlyImport.replaceAction')
+                  : 'אשר ייבוא'}
             </button>
           )}
         </div>

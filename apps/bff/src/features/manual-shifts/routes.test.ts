@@ -328,6 +328,17 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
       previewTotals: input.plan.preview.totals,
       previewAnomalies: input.plan.preview.anomalies
     })),
+    checkMonthlyReplaceSafety: vi.fn(async () => ({
+      canReplace: true,
+      activeLinesCount: 0,
+      activeOrdersCount: 0,
+      startedOrdersCount: 0,
+      assignedPickersCount: 0,
+      assignedCheckersCount: 0,
+      checkUnitsCount: 0,
+      nonImportEventsCount: 0,
+      blockReasons: []
+    })),
     patchOrder: vi.fn(async () => ({ ...createOrder('queued'), comment: 'Updated' })),
     startOrderCheck: vi.fn(async () => ({ ...createOrder('picking'), checkStartedAt: '2026-05-26T07:25:00.000Z' })),
     deleteOrder: vi.fn(async () => ({ ...createOrder('queued'), deletedAt: '2026-05-26T08:00:00.000Z', deletedByProfileId: ids.user, deletedByName: 'Shift Dispatcher', deleteReason: 'cleanup' })),
@@ -1364,7 +1375,7 @@ describe('manual shifts routes', () => {
           negativeQuantityRows: 1,
           nonSoOrderRows: 1,
           rowsWithoutDistributionSlash: 1,
-          pointFallbackRows: 1,
+          pointFallbackRows: 0,
           pickupNoteRows: 2,
           ashlamaNoteRows: 1,
           invalidDistributionDateRows: [],
@@ -1381,7 +1392,7 @@ describe('manual shifts routes', () => {
             uniqueSkus: 2,
             totalQuantity: 4,
             negativeQuantityRows: 1,
-            anomalyCount: 7,
+            anomalyCount: 5,
             warnings: [
               {
                 severity: 'warning',
@@ -1410,12 +1421,6 @@ describe('manual shifts routes', () => {
             severity: 'warning',
             code: 'NON_SO_ORDER_ROWS',
             message: 'Order values not starting with SO are present in the preview.',
-            count: 1
-          },
-          {
-            severity: 'warning',
-            code: 'POINT_FALLBACK_ROWS',
-            message: 'Some rows used customer name as the derived point because the distribution value had no slash.',
             count: 1
           }
         ]

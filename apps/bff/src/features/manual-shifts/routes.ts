@@ -43,6 +43,7 @@ import {
   manualShiftImportPreviewResponseSchema,
   manualShiftMonthlyImportPreviewResponseSchema,
   manualShiftMonthlyApplyResponseSchema,
+  manualShiftMonthlyReplaceSafetySchema,
   manualShiftWorkHierarchyResponseSchema,
   applyManualShiftImportRequestSchema,
   applyManualShiftImportResponseSchema,
@@ -748,7 +749,7 @@ export function registerManualShiftsRoutes(
       logImportStage(request, '/api/manual-shifts/import/monthly-apply', 'tenant_resolved', { tenantId });
 
       const { fileName, fileBuffer, fields } = await readMultipartUpload(request, {
-        allowedFieldNames: ['selectedDate', 'shiftId'],
+        allowedFieldNames: ['selectedDate', 'shiftId', 'mode'],
         route: '/api/manual-shifts/import/monthly-apply'
       });
       const selectedDate = fields.get('selectedDate')?.trim() ?? '';
@@ -758,9 +759,12 @@ export function registerManualShiftsRoutes(
       const shiftId = parseOrThrow(idResponseSchema, {
         id: fields.get('shiftId')?.trim() ?? ''
       }).id;
+      const modeRaw = fields.get('mode')?.trim();
+      const mode = modeRaw === 'replace' ? 'replace' : 'initial';
       logImportStage(request, '/api/manual-shifts/import/monthly-apply', 'selected_date_resolved', {
         selectedDate,
-        shiftId
+        shiftId,
+        mode
       });
 
       const workbook = parseManualShiftMonthlyImportWorkbook({
@@ -798,7 +802,8 @@ export function registerManualShiftsRoutes(
         tenantId,
         shiftId,
         selectedDate,
-        plan
+        plan,
+        mode
       });
 
       logImportStage(request, '/api/manual-shifts/import/monthly-apply', 'service_result', {
@@ -810,6 +815,28 @@ export function registerManualShiftsRoutes(
 
       return parseOrThrow(manualShiftMonthlyApplyResponseSchema, result);
     });
+  });
+
+  app.get('/api/manual-shifts/:shiftId/monthly-replace-safety', async (request, reply) => {
+    try {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+      const tenantId = requireTenant(auth);
+      const { id: shiftId } = parseOrThrow(
+        idResponseSchema,
+        { id: (request.params as Record<string, string>).shiftId ?? '' }
+      );
+      const result = await getManualShiftsService(auth).checkMonthlyReplaceSafety({
+        tenantId,
+        shiftId
+      });
+      return parseOrThrow(manualShiftMonthlyReplaceSafetySchema, result);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return sendApiError(reply, error, request.id);
+      }
+      return sendApiError(reply, new ApiError(500, 'INTERNAL_ERROR', 'Unexpected error'), request.id);
+    }
   });
 
   app.post('/api/debug/upload', async (request, reply) => {

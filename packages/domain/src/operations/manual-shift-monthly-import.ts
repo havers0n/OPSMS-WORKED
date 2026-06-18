@@ -202,6 +202,9 @@ export const manualShiftMonthlyApplyResponseSchema = z.object({
   linesCreated: z.number().int().min(0),
   ordersCreated: z.number().int().min(0),
   orderItemsCreated: z.number().int().min(0),
+  replacedLines: z.number().int().min(0).optional(),
+  replacedOrders: z.number().int().min(0).optional(),
+  replacedItems: z.number().int().min(0).optional(),
   appliedGroups: z.number().int().min(0),
   skippedGroups: z.number().int().min(0),
   skippedNegativeQuantityRows: z.number().int().min(0),
@@ -216,6 +219,19 @@ export const manualShiftMonthlyApplyResponseSchema = z.object({
   previewAnomalies: manualShiftMonthlyPreviewSchema.shape.anomalies
 });
 export type ManualShiftMonthlyApplyResponse = z.infer<typeof manualShiftMonthlyApplyResponseSchema>;
+
+export const manualShiftMonthlyReplaceSafetySchema = z.object({
+  canReplace: z.boolean(),
+  activeLinesCount: z.number().int().min(0),
+  activeOrdersCount: z.number().int().min(0),
+  startedOrdersCount: z.number().int().min(0),
+  assignedPickersCount: z.number().int().min(0),
+  assignedCheckersCount: z.number().int().min(0),
+  checkUnitsCount: z.number().int().min(0),
+  nonImportEventsCount: z.number().int().min(0),
+  blockReasons: z.array(z.string())
+});
+export type ManualShiftMonthlyReplaceSafety = z.infer<typeof manualShiftMonthlyReplaceSafetySchema>;
 
 function normalizeTrimmedString(value: string | null | undefined): string | null {
   if (value === null || value === undefined) {
@@ -354,10 +370,9 @@ function buildWorkingRow(row: ManualShiftMonthlyParsedRow): WorkingRow {
       lineBucketName = pointName;
     } else {
       lineName = rawDistributionValue;
-      pointName = customerName;
-      usedPointFallback = pointName !== null;
+      pointName = rawDistributionValue;
       lineGroupName = rawDistributionValue;
-      lineBucketName = null;
+      lineBucketName = rawDistributionValue;
     }
   }
 
@@ -569,8 +584,6 @@ export function parseManualShiftMonthlyPreview(
       lineEntry.negativeQuantityRows += 1;
       rowAnomalyCount += 1;
     }
-    if (row.usedPointFallback) rowAnomalyCount += 1;
-    if (!row.hadSlash) rowAnomalyCount += 1;
     if (row.notes?.includes('איסוף')) rowAnomalyCount += 1;
     if (row.notes?.includes('השלמה')) rowAnomalyCount += 1;
     if (row.orderNumber && !/^SO/i.test(row.orderNumber)) rowAnomalyCount += 1;
@@ -636,15 +649,6 @@ export function parseManualShiftMonthlyPreview(
       code: 'NON_SO_ORDER_ROWS',
       message: 'Order values not starting with SO are present in the preview.',
       count: nonSoOrderRows
-    });
-  }
-
-  if (pointFallbackRows > 0) {
-    topWarnings.push({
-      severity: 'warning',
-      code: 'POINT_FALLBACK_ROWS',
-      message: 'Some rows used customer name as the derived point because the distribution value had no slash.',
-      count: pointFallbackRows
     });
   }
 

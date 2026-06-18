@@ -1,5 +1,6 @@
-import type { ManualShiftLineSummary } from '@wos/domain';
+import type { ManualShiftLineSummary, ManualShiftMonthlyReplaceSafety } from '@wos/domain';
 import { LineCard } from './line-card';
+import { translate } from '@/shared/i18n';
 
 interface LineListProps {
   lines: ManualShiftLineSummary[];
@@ -7,10 +8,23 @@ interface LineListProps {
   canImport: boolean;
   canPreviewMonthly: boolean;
   canAddManual: boolean;
+  canReImportMonthly: boolean;
+  replaceSafety: ManualShiftMonthlyReplaceSafety | null;
   onImportExcel: () => void;
   onPreviewMonthly: () => void;
   onAddLineManually: () => void;
   showNoShiftHint: boolean;
+}
+
+function formatBlockReasons(reasons: string[]): string {
+  const labelMap: Record<string, string> = {
+    orders_started: translate('monthlyImport.blockReason.ordersStarted'),
+    picker_assigned: translate('monthlyImport.blockReason.pickerAssigned'),
+    checker_assigned: translate('monthlyImport.blockReason.checkerAssigned'),
+    check_units_exist: translate('monthlyImport.blockReason.checkUnitsExist'),
+    non_import_events_exist: translate('monthlyImport.blockReason.nonImportEventsExist')
+  };
+  return reasons.map((r) => labelMap[r] ?? r).join('\n');
 }
 
 export function LineList({
@@ -19,6 +33,8 @@ export function LineList({
   canImport,
   canPreviewMonthly,
   canAddManual,
+  canReImportMonthly,
+  replaceSafety,
   onImportExcel,
   onPreviewMonthly,
   onAddLineManually,
@@ -70,6 +86,28 @@ export function LineList({
 
   return (
     <div className="p-4 pb-8 flex flex-col gap-3" dir="rtl">
+      {canReImportMonthly && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 space-y-2">
+          <p className="font-medium">{translate('monthlyImport.existingWork')}</p>
+          {replaceSafety && !replaceSafety.canReplace && (
+            <>
+              <p className="font-medium text-red-700">{translate('monthlyImport.blocked')}</p>
+              <p className="whitespace-pre-line text-red-700 text-xs">
+                {formatBlockReasons(replaceSafety.blockReasons)}
+              </p>
+            </>
+          )}
+          {replaceSafety?.canReplace !== false && (
+            <button
+              type="button"
+              onClick={onPreviewMonthly}
+              className="w-full bg-gray-900 text-white font-medium py-2.5 rounded-xl"
+            >
+              {translate('monthlyImport.replaceAction')}
+            </button>
+          )}
+        </div>
+      )}
       {lines.map(summary => (
         <LineCard key={summary.line.id} summary={summary} onSelect={onSelectLine} />
       ))}
