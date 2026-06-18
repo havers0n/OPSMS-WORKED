@@ -90,6 +90,7 @@ import {
   dailyManualShiftImportPreviewSchema,
   manualShiftMonthlyPreviewSchema,
   manualShiftMonthlyApplyResponseSchema as manualShiftMonthlyApplyResponseDtoSchema,
+  manualShiftMonthlyReplaceSafetySchema as manualShiftMonthlyReplaceSafetyDtoSchema,
   applyDailyManualShiftImportRequestSchema,
   applyDailyManualShiftImportResponseSchema,
   warehouseLabelPreviewRequestSchema as warehouseLabelPreviewRequestDtoSchema,
@@ -572,6 +573,7 @@ export const manualShiftMonthlyImportPreviewResponseSchema = z.object({
   preview: manualShiftMonthlyPreviewSchema
 });
 export const manualShiftMonthlyApplyResponseSchema = manualShiftMonthlyApplyResponseDtoSchema;
+export const manualShiftMonthlyReplaceSafetySchema = manualShiftMonthlyReplaceSafetyDtoSchema;
 export const applyManualShiftImportRequestSchema = applyDailyManualShiftImportRequestSchema;
 export const applyManualShiftImportResponseSchema = applyDailyManualShiftImportResponseSchema;
 export const warehouseLabelPreviewRequestBodySchema = warehouseLabelPreviewRequestDtoSchema;

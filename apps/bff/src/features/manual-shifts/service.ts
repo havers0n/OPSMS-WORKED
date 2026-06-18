@@ -4,6 +4,7 @@ import type {
   DailyManualShiftImportPreview,
   ManualShiftMonthlyApplyPlan,
   ManualShiftMonthlyApplyResponse,
+  ManualShiftMonthlyReplaceSafety,
   ManualShiftBulkAddInputRow,
   ManualShiftBulkAddResult,
   ManualShiftDaySummary,
@@ -67,7 +68,8 @@ import {
   manualShiftImportShiftNotFound,
   manualShiftImportInvalidPreviewPayload,
   manualShiftImportForbidden,
-  manualShiftMonthlyImportRequiresEmptyShift
+  manualShiftMonthlyImportRequiresReplaceMode,
+  manualShiftMonthlyReplaceNotSafe
 } from './errors.js';
 import type { ManualShiftsRepo, MonthlyImportShiftCounts } from './repo.js';
 import { createManualShiftsRepo } from './repo.js';
@@ -255,7 +257,12 @@ export type ManualShiftsService = {
     shiftId: string;
     selectedDate: string;
     plan: ManualShiftMonthlyApplyPlan;
+    mode?: 'initial' | 'replace';
   }): Promise<ManualShiftMonthlyApplyResponse>;
+  checkMonthlyReplaceSafety(input: {
+    tenantId: string;
+    shiftId: string;
+  }): Promise<ManualShiftMonthlyReplaceSafety>;
   getShiftWorkHierarchy(input: {
     tenantId: string;
     shiftId: string;
@@ -1282,8 +1289,10 @@ export function createManualShiftsServiceFromRepo(
         tenantId: input.tenantId,
         shiftId: input.shiftId
       });
-      if (monthlyImportShiftCounts.activeLinesCount > 0 || monthlyImportShiftCounts.activeOrdersCount > 0) {
-        throw manualShiftMonthlyImportRequiresEmptyShift(
+      const hasWork = monthlyImportShiftCounts.activeLinesCount > 0 || monthlyImportShiftCounts.activeOrdersCount > 0;
+
+      if (hasWork && input.mode !== 'replace') {
+        throw manualShiftMonthlyImportRequiresReplaceMode(
           input.shiftId,
           buildMonthlyImportShiftGuardDetails(monthlyImportShiftCounts)
         );
@@ -1298,10 +1307,11 @@ export function createManualShiftsServiceFromRepo(
           tenantId: input.tenantId,
           shiftId: input.shiftId,
           selectedDate: input.selectedDate,
-          plan: input.plan
+          plan: input.plan,
+          mode: input.mode
         });
       } catch (error) {
-        const dbError = error as { code?: string; message?: string };
+        const dbError = error as { code?: string; message?: string; hint?: string };
         if (dbError?.code === 'P0001') {
           if (dbError.message === 'SHIFT_NOT_FOUND') {
             throw manualShiftImportShiftNotFound(input.shiftId);
@@ -1313,10 +1323,14 @@ export function createManualShiftsServiceFromRepo(
             throw manualShiftImportShiftDateMismatch(input.shiftId, shift.date, input.selectedDate);
           }
           if (dbError.message === 'SHIFT_NOT_EMPTY') {
-            throw manualShiftMonthlyImportRequiresEmptyShift(
+            throw manualShiftMonthlyImportRequiresReplaceMode(
               input.shiftId,
               buildMonthlyImportShiftGuardDetails(monthlyImportShiftCounts)
             );
+          }
+          if (dbError.message === 'MONTHLY_REPLACE_NOT_SAFE') {
+            const reasons = dbError.hint ? [dbError.hint] : [];
+            throw manualShiftMonthlyReplaceNotSafe(input.shiftId, reasons);
           }
           if (dbError.message === 'INVALID_PREVIEW_PAYLOAD') {
             throw manualShiftImportInvalidPreviewPayload();
@@ -1330,6 +1344,17 @@ export function createManualShiftsServiceFromRepo(
         }
         throw error;
       }
+    },
+
+    async checkMonthlyReplaceSafety(input) {
+      const shift = await requireShift(input.shiftId);
+      if (shift.tenantId !== input.tenantId) {
+        throw manualShiftNotFound(input.shiftId);
+      }
+      return repo.checkMonthlyReplaceSafety({
+        tenantId: input.tenantId,
+        shiftId: input.shiftId
+      });
     },
 
     async patchOrder(input) {

@@ -328,6 +328,17 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
       previewTotals: input.plan.preview.totals,
       previewAnomalies: input.plan.preview.anomalies
     })),
+    checkMonthlyReplaceSafety: vi.fn(async () => ({
+      canReplace: true,
+      activeLinesCount: 0,
+      activeOrdersCount: 0,
+      startedOrdersCount: 0,
+      assignedPickersCount: 0,
+      assignedCheckersCount: 0,
+      checkUnitsCount: 0,
+      nonImportEventsCount: 0,
+      blockReasons: []
+    })),
     patchOrder: vi.fn(async () => ({ ...createOrder('queued'), comment: 'Updated' })),
     startOrderCheck: vi.fn(async () => ({ ...createOrder('picking'), checkStartedAt: '2026-05-26T07:25:00.000Z' })),
     deleteOrder: vi.fn(async () => ({ ...createOrder('queued'), deletedAt: '2026-05-26T08:00:00.000Z', deletedByProfileId: ids.user, deletedByName: 'Shift Dispatcher', deleteReason: 'cleanup' })),

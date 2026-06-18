@@ -34,15 +34,27 @@ export function manualShiftImportShiftNotEmpty(shiftId: string) {
   return new ApiError(409, 'SHIFT_NOT_EMPTY', `Manual shift ${shiftId} already has lines or orders.`);
 }
 
-export function manualShiftMonthlyImportRequiresEmptyShift(
+export function manualShiftMonthlyImportRequiresReplaceMode(
   shiftId: string,
   details?: MonthlyImportShiftCounts
 ) {
   return new ApiError(
     409,
-    'MONTHLY_IMPORT_REQUIRES_EMPTY_SHIFT',
-    `Manual shift ${shiftId} already has lines or orders.`,
+    'MONTHLY_IMPORT_REQUIRES_REPLACE_MODE',
+    `Manual shift ${shiftId} already has lines or orders. Use replace mode to re-import.`,
     details
+  );
+}
+
+export function manualShiftMonthlyReplaceNotSafe(
+  shiftId: string,
+  reasons: string[]
+) {
+  return new ApiError(
+    409,
+    'MONTHLY_REPLACE_NOT_SAFE',
+    `Cannot replace monthly import for shift ${shiftId}. Operational work already started.`,
+    { shiftId, reasons }
   );
 }
 

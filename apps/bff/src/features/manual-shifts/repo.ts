@@ -4,6 +4,7 @@ import type {
   DailyManualShiftImportPreview,
   ManualShiftMonthlyApplyPlan,
   ManualShiftMonthlyApplyResponse,
+  ManualShiftMonthlyReplaceSafety,
   ManualShiftDaySummaryByError,
   ManualShiftLine,
   ManualShiftLineEvent,
@@ -655,7 +656,12 @@ export type ManualShiftsRepo = {
     shiftId: string;
     selectedDate: string;
     plan: ManualShiftMonthlyApplyPlan;
+    mode?: 'initial' | 'replace';
   }): Promise<ManualShiftMonthlyApplyResponse>;
+  checkMonthlyReplaceSafety(input: {
+    tenantId: string;
+    shiftId: string;
+  }): Promise<ManualShiftMonthlyReplaceSafety>;
   updateOrder(orderId: string, patch: ManualShiftOrderPatch): Promise<ManualShiftOrder | null>;
   createOrderEvent(input: {
     tenantId: string;
@@ -1174,6 +1180,90 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       };
     },
 
+    async checkMonthlyReplaceSafety({ tenantId, shiftId }) {
+      const [
+        activeLinesResult,
+        activeOrdersResult,
+        startedOrdersResult,
+        pickerOrdersResult,
+        checkerOrdersResult,
+        checkUnitsResult,
+        nonImportEventsResult
+      ] = await Promise.all([
+        supabase
+          .from('manual_shift_lines')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', tenantId)
+          .eq('shift_id', shiftId)
+          .is('deleted_at', null),
+        supabase
+          .from('manual_shift_orders')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', tenantId)
+          .eq('shift_id', shiftId)
+          .is('deleted_at', null),
+        supabase
+          .from('manual_shift_orders')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', tenantId)
+          .eq('shift_id', shiftId)
+          .is('deleted_at', null)
+          .neq('status', 'queued'),
+        supabase
+          .from('manual_shift_orders')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', tenantId)
+          .eq('shift_id', shiftId)
+          .is('deleted_at', null)
+          .or('picker_worker_id.not.is.null,picker_name.not.is.null'),
+        supabase
+          .from('manual_shift_orders')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', tenantId)
+          .eq('shift_id', shiftId)
+          .is('deleted_at', null)
+          .not('checker_name', 'is', null),
+        supabase
+          .from('manual_shift_order_check_units')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', tenantId)
+          .eq('shift_id', shiftId),
+        supabase
+          .from('manual_shift_order_events')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', tenantId)
+          .eq('shift_id', shiftId)
+          .or('event_type.neq.created,and(payload->>source.neq.monthly_xlsx_import)')
+      ]);
+
+      const activeLinesCount = activeLinesResult.count ?? 0;
+      const activeOrdersCount = activeOrdersResult.count ?? 0;
+      const startedOrdersCount = startedOrdersResult.count ?? 0;
+      const assignedPickersCount = pickerOrdersResult.count ?? 0;
+      const assignedCheckersCount = checkerOrdersResult.count ?? 0;
+      const checkUnitsCount = checkUnitsResult.count ?? 0;
+      const nonImportEventsCount = nonImportEventsResult.count ?? 0;
+
+      const blockReasons: string[] = [];
+      if (startedOrdersCount > 0) blockReasons.push('orders_started');
+      if (assignedPickersCount > 0) blockReasons.push('picker_assigned');
+      if (assignedCheckersCount > 0) blockReasons.push('checker_assigned');
+      if (checkUnitsCount > 0) blockReasons.push('check_units_exist');
+      if (nonImportEventsCount > 0) blockReasons.push('non_import_events_exist');
+
+      return {
+        canReplace: blockReasons.length === 0,
+        activeLinesCount,
+        activeOrdersCount,
+        startedOrdersCount,
+        assignedPickersCount,
+        assignedCheckersCount,
+        checkUnitsCount,
+        nonImportEventsCount,
+        blockReasons
+      };
+    },
+
     async findOrderAshlamaById(ashlamaId) {
       const { data, error } = await supabase
         .from('manual_shift_order_ashlamot')
@@ -1356,7 +1446,8 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         p_tenant_id: input.tenantId,
         p_shift_id: input.shiftId,
         p_selected_date: input.selectedDate,
-        p_plan: input.plan
+        p_plan: input.plan,
+        p_mode: input.mode ?? 'initial'
       });
 
       if (error) {
@@ -1370,6 +1461,9 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         linesCreated: Number(row.lines_created ?? 0),
         ordersCreated: Number(row.orders_created ?? 0),
         orderItemsCreated: Number(row.order_items_created ?? 0),
+        replacedLines: row.replaced_lines != null ? Number(row.replaced_lines) : undefined,
+        replacedOrders: row.replaced_orders != null ? Number(row.replaced_orders) : undefined,
+        replacedItems: row.replaced_items != null ? Number(row.replaced_items) : undefined,
         appliedGroups: Number(row.applied_groups ?? input.plan.appliedGroups),
         skippedGroups: Number(row.skipped_groups ?? input.plan.skippedGroups),
         skippedNegativeQuantityRows: Number(row.skipped_negative_quantity_rows ?? input.plan.skippedNegativeQuantityRows),
