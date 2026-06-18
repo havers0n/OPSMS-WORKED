@@ -5,7 +5,6 @@ import type {
   CheckQueue,
   LineHierarchySummary,
   OrderDetail,
-  LineSummary,
   PickerDetail,
   PickerWorkload,
   PointHierarchySummary,
@@ -23,7 +22,6 @@ export interface DesktopOperatorShellProps {
   shift: ManualShiftSession | null;
   isLoading: boolean;
   kpi: ShiftSummary | undefined;
-  lineSummaries: LineSummary[];
   activeOrders: ActiveOrder[];
   pickerWorkloads: PickerWorkload[];
   checkQueue: CheckQueue;
@@ -98,7 +96,6 @@ export function DesktopOperatorShell({
   shift,
   isLoading,
   kpi,
-  lineSummaries,
   activeOrders: _activeOrders,
   pickerWorkloads,
   checkQueue,
@@ -211,7 +208,11 @@ export function DesktopOperatorShell({
       ) : (
         <div className="flex flex-1 overflow-hidden gap-px">
           <aside className="w-72 bg-white overflow-y-auto shrink-0">
-            <DesktopLinePanel lines={lineSummaries} selectedLineId={selectedLineId} onSelectLine={onSelectHierarchyLine} />
+            <DesktopLinePanel
+              lines={lineHierarchySummaries}
+              selectedLineId={selectedLineId}
+              onSelectLine={onSelectHierarchyLine}
+            />
           </aside>
 
           <main className="flex-1 bg-white overflow-y-auto min-w-0">

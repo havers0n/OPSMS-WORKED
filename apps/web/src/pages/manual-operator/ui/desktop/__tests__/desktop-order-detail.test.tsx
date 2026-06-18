@@ -49,10 +49,10 @@ describe('DesktopOrderDetail', () => {
               orderId: mockOrderDetail.orderId,
               sku: 'SKU-1',
               description: 'Item 1',
-              category: null,
+              category: 'Frozen',
               quantity: 12,
-              notes: null,
-              zone: null,
+              notes: 'Fragile',
+              zone: 'North',
               sourceSheet: null,
               sourceRows: [1],
               sourceFile: null,
@@ -133,6 +133,46 @@ describe('DesktopOrderDetail', () => {
 
     expect(itemsSection.compareDocumentPosition(secondarySection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(secondarySection.compareDocumentPosition(timesSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('renders additive item metadata when present', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      if (path.endsWith(`/manual-shift-orders/${mockOrderDetail.orderId}`) && (init?.method ?? 'GET') === 'GET') {
+        return {
+          ...mockOrderDetail,
+          lineCount: 1,
+          totalQuantity: 5,
+          items: [
+            {
+              id: '11111111-1111-4111-8111-111111111115',
+              tenantId: 'tenant-1',
+              shiftId: 'shift-1',
+              lineId: mockOrderDetail.lineId,
+              orderId: mockOrderDetail.orderId,
+              sku: 'SKU-4',
+              description: 'Item 4',
+              category: 'Dry',
+              quantity: 5,
+              notes: 'Top shelf',
+              zone: 'South',
+              sourceSheet: null,
+              sourceRows: [1],
+              sourceFile: null,
+              sortOrder: 1,
+              createdAt: '2026-05-27T08:00:00.000Z'
+            }
+          ]
+        };
+      }
+      return [];
+    });
+
+    renderDetail();
+    await waitFor(() => expect(screen.getByTestId('order-items-section')).toBeTruthy());
+    expect(screen.getByText('Dry')).toBeTruthy();
+    expect(screen.getByText('Top shelf')).toBeTruthy();
+    expect(screen.getByText('South')).toBeTruthy();
   });
 
   it('renders order detail fields', () => {

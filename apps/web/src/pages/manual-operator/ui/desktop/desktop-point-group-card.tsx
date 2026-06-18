@@ -18,8 +18,7 @@ export function DesktopPointGroupCard({ point, onClick }: DesktopPointGroupCardP
       <p className="text-sm font-semibold text-gray-900 mb-2">{point.pointName}</p>
       <div className="flex items-baseline gap-3 mb-2 text-xs text-gray-600">
         <span>{point.ordersCount} הזמנה{point.ordersCount !== 1 ? 'ות' : ''}</span>
-        <span>{point.itemLinesCount} פריטים / שורות</span>
-        <span>{point.totalQuantity} יח׳</span>
+        <span>{point.totalQuantity} יח'</span>
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
         {sb.queued > 0 && <span className="text-gray-500">{sb.queued} בתור</span>}

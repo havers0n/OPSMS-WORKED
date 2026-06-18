@@ -99,6 +99,54 @@ const waitingOrder = {
   checkStartedAt: null
 };
 
+const workHierarchy = {
+  shiftId: shift.id,
+  areas: [
+    {
+      areaName: 'south',
+      displayName: 'South',
+      totalLines: 1,
+      totalBuckets: 1,
+      totalOrders: 1,
+      totalQuantity: 5,
+      statusBreakdown: { queued: 0, picking: 0, waitingCheck: 1, returned: 0, done: 0 },
+      lines: [
+        {
+          lineId: line.id,
+          lineGroupName: line.name,
+          distributionArea: 'South',
+          status: 'open',
+          totalBuckets: 1,
+          totalOrders: 1,
+          totalQuantity: 5,
+          statusBreakdown: { queued: 0, picking: 0, waitingCheck: 1, returned: 0, done: 0 },
+          buckets: [
+            {
+              bucketName: 'Point A',
+              displayName: 'Point A',
+              totalOrders: 1,
+              totalQuantity: 5,
+              statusBreakdown: { queued: 0, picking: 0, waitingCheck: 1, returned: 0, done: 0 },
+              orders: [
+                {
+                  orderId: waitingOrder.id,
+                  orderNumber: waitingOrder.orderNumber,
+                  customerName: waitingOrder.customerName,
+                  pointName: waitingOrder.pointName,
+                  status: waitingOrder.status,
+                  totalQuantity: 5,
+                  hasAshlama: false,
+                  hasCheckUnits: false
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+};
+
 function makeQueryClient() {
   return new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
@@ -152,6 +200,7 @@ function mockWorkspaceData(options?: {
   mockedBffRequest.mockImplementation((url: string) => {
     const path = String(url);
     if (path.includes('/api/manual-shifts/by-date')) return Promise.resolve({ shift, lines });
+    if (path.endsWith(`/api/manual-shifts/${shift.id}/work-hierarchy`)) return Promise.resolve(workHierarchy);
     if (path.endsWith(`/api/manual-shifts/${shift.id}/day-summary`)) return Promise.resolve(daySummary);
     if (path.endsWith(`/api/manual-shifts/${shift.id}/orders`)) return Promise.resolve(orders);
     if (path.endsWith(`/api/manual-shifts/${shift.id}/workers`)) return Promise.resolve(workers);
@@ -242,6 +291,16 @@ describe('ManualOperatorPage URL sections', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('location').textContent).toBe(path);
+    });
+  });
+
+  it('desktop work route requests work hierarchy', async () => {
+    isDesktop = true;
+    mockWorkspaceData();
+    renderAt(routes.operatorManualWork);
+
+    await waitFor(() => {
+      expect(mockedBffRequest).toHaveBeenCalledWith(`/api/manual-shifts/${shift.id}/work-hierarchy`);
     });
   });
 });
