@@ -24,7 +24,8 @@ import {
   mockPickers,
   mockShift,
   mockLineHierarchySummaries,
-  mockWorkBucketSummaries
+  mockWorkBucketSummaries,
+  mockAreaSummaries
 } from './fixtures';
 
 const mockedBffRequest = vi.mocked(bffRequest);
@@ -39,15 +40,19 @@ const defaultProps = {
   pickerDetail: null,
   orderDetail: null,
   selectedDetailType: null as 'picker' | 'order' | null,
+  selectedAreaKey: null as string | null,
   selectedLineId: null as string | null,
   selectedWorkBucketName: null as string | null,
+  areaSummaries: mockAreaSummaries,
   lineHierarchySummaries: mockLineHierarchySummaries,
   workBucketSummaries: mockWorkBucketSummaries,
   onSelectPicker: vi.fn(),
   onSelectOrder: vi.fn(),
   onCloseDetail: vi.fn(),
+  onSelectArea: vi.fn(),
   onSelectHierarchyLine: vi.fn(),
   onSelectHierarchyBucket: vi.fn(),
+  onClearArea: vi.fn(),
   onClearHierarchyLine: vi.fn(),
   onClearHierarchyBucket: vi.fn(),
   onCreateShift: vi.fn(),
@@ -131,7 +136,7 @@ describe('DesktopOperatorShell', () => {
 
   it('clicking line summary card calls onSelectHierarchyLine', () => {
     const onSelectHierarchyLine = vi.fn();
-    renderShell({ onSelectHierarchyLine });
+    renderShell({ onSelectHierarchyLine, selectedAreaKey: 'צפון' });
     fireEvent.click(screen.getByTestId('line-summary-card-line-1'));
     expect(onSelectHierarchyLine).toHaveBeenCalledWith('line-1');
   });

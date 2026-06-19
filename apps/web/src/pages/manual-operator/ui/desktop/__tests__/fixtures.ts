@@ -8,7 +8,8 @@ import type {
   PickerDetail,
   OrderDetail,
   LineHierarchySummary,
-  WorkBucketSummary
+  WorkBucketSummary,
+  AreaHierarchySummary
 } from '@/entities/manual-shift/model/shift-selectors';
 import type { ManualShiftSession } from '@wos/domain';
 
@@ -297,5 +298,28 @@ export const mockWorkBucketSummaries: WorkBucketSummary[] = [
         totalQuantity: 0
       }
     ]
+  }
+];
+
+export const mockAreaSummaries: AreaHierarchySummary[] = [
+  {
+    areaKey: 'צפון',
+    displayName: 'צפון',
+    areaName: 'צפון',
+    totalLines: 1,
+    totalBuckets: 2,
+    totalOrders: 10,
+    totalQuantity: 320,
+    statusBreakdown: { queued: 3, picking: 4, waitingCheck: 2, returned: 1, done: 0 }
+  },
+  {
+    areaKey: 'דרום',
+    displayName: 'דרום',
+    areaName: 'דרום',
+    totalLines: 1,
+    totalBuckets: 1,
+    totalOrders: 10,
+    totalQuantity: 0,
+    statusBreakdown: { queued: 10, picking: 0, waitingCheck: 0, returned: 0, done: 0 }
   }
 ];

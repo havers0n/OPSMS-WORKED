@@ -2,6 +2,7 @@ import type { ManualShiftSession } from '@wos/domain';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type {
   ActiveOrder,
+  AreaHierarchySummary,
   CheckQueue,
   LineHierarchySummary,
   OrderDetail,
@@ -28,15 +29,19 @@ export interface DesktopOperatorShellProps {
   pickerDetail: PickerDetail | null;
   orderDetail: OrderDetail | null;
   selectedDetailType: 'picker' | 'order' | null;
+  selectedAreaKey: string | null;
   selectedLineId: string | null;
   selectedWorkBucketName: string | null;
+  areaSummaries: AreaHierarchySummary[];
   lineHierarchySummaries: LineHierarchySummary[];
   workBucketSummaries: WorkBucketSummary[];
   onSelectPicker: (pickerKey: string) => void;
   onSelectOrder: (orderId: string) => void;
   onCloseDetail: () => void;
+  onSelectArea: (areaName: string | null) => void;
   onSelectHierarchyLine: (lineId: string) => void;
   onSelectHierarchyBucket: (workBucketName: string) => void;
+  onClearArea: () => void;
   onClearHierarchyLine: () => void;
   onClearHierarchyBucket: () => void;
   onCreateShift: () => void;
@@ -102,15 +107,19 @@ export function DesktopOperatorShell({
   pickerDetail,
   orderDetail,
   selectedDetailType,
+  selectedAreaKey,
   selectedLineId,
   selectedWorkBucketName,
+  areaSummaries,
   lineHierarchySummaries,
   workBucketSummaries,
   onSelectPicker,
   onSelectOrder,
   onCloseDetail,
+  onSelectArea,
   onSelectHierarchyLine,
   onSelectHierarchyBucket,
+  onClearArea,
   onClearHierarchyLine,
   onClearHierarchyBucket,
   onCreateShift,
@@ -217,13 +226,17 @@ export function DesktopOperatorShell({
 
           <main className="flex-1 bg-white overflow-y-auto min-w-0">
             <DesktopHierarchyPanel
+              selectedAreaKey={selectedAreaKey}
               selectedLineId={selectedLineId}
               selectedWorkBucketName={selectedWorkBucketName}
+              areaSummaries={areaSummaries}
               lineHierarchySummaries={lineHierarchySummaries}
               workBucketSummaries={workBucketSummaries}
+              onSelectArea={onSelectArea}
               onSelectLine={onSelectHierarchyLine}
               onSelectBucket={onSelectHierarchyBucket}
               onSelectOrder={onSelectOrder}
+              onClearArea={onClearArea}
               onClearLine={onClearHierarchyLine}
               onClearBucket={onClearHierarchyBucket}
             />

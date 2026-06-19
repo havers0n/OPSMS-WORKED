@@ -16,7 +16,9 @@ import {
   selectPickerDetail,
   selectPickerWorkloads,
   selectShiftSummary,
+  selectWorkHierarchyAreaSummaries,
   selectWorkHierarchyLineSummaries,
+  selectWorkHierarchyLineSummariesByArea,
   selectWorkHierarchyBucketSummaries
 } from '@/entities/manual-shift/model/shift-selectors';
 import type { ManualOperatorSection } from '@/shared/config/routes';
@@ -84,6 +86,7 @@ export function ManualOperatorWorkSection({
   >(null);
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const [selectedWorkBucketName, setSelectedWorkBucketName] = useState<string | null>(null);
+  const [selectedAreaKey, setSelectedAreaKey] = useState<string | null>(null);
 
   const { data: daySummary, isLoading: isDaySummaryLoading } = useQuery({
     ...daySummaryQueryOptions(shift?.id ?? ''),
@@ -133,10 +136,24 @@ const { data: workHierarchy } = useQuery({
     () => selectWorkHierarchyLineSummaries(workHierarchy),
     [workHierarchy]
   );
+  const areaSummaries = useMemo(
+    () => selectWorkHierarchyAreaSummaries(workHierarchy),
+    [workHierarchy]
+  );
+  const areaLineSummaries = useMemo(
+    () => selectWorkHierarchyLineSummariesByArea(workHierarchy, selectedAreaKey),
+    [workHierarchy, selectedAreaKey]
+  );
   const workBucketSummaries = useMemo(
     () => (selectedLineId ? selectWorkHierarchyBucketSummaries(workHierarchy, selectedLineId) : []),
     [selectedLineId, workHierarchy]
   );
+
+  function handleSelectArea(areaKey: string | null) {
+    setSelectedAreaKey(areaKey);
+    setSelectedLineId(null);
+    setSelectedWorkBucketName(null);
+  }
 
   function handleSelectHierarchyLine(lineId: string) {
     setSelectedLineId(lineId);
@@ -145,6 +162,12 @@ const { data: workHierarchy } = useQuery({
 
   function handleSelectHierarchyBucket(workBucketName: string) {
     setSelectedWorkBucketName(workBucketName);
+  }
+
+  function handleClearArea() {
+    setSelectedAreaKey(null);
+    setSelectedLineId(null);
+    setSelectedWorkBucketName(null);
   }
 
   function handleClearHierarchyLine() {
@@ -168,15 +191,19 @@ const { data: workHierarchy } = useQuery({
         pickerDetail={pickerDetail}
         orderDetail={orderDetail}
         selectedDetailType={selectedDesktopDetail?.type ?? null}
+        selectedAreaKey={selectedAreaKey}
         selectedLineId={selectedLineId}
         selectedWorkBucketName={selectedWorkBucketName}
+        areaSummaries={areaSummaries}
         lineHierarchySummaries={lineHierarchySummaries}
         workBucketSummaries={workBucketSummaries}
         onSelectPicker={(pickerKey) => setSelectedDesktopDetail({ type: 'picker', pickerKey })}
         onSelectOrder={(orderId) => setSelectedDesktopDetail({ type: 'order', orderId })}
         onCloseDetail={() => setSelectedDesktopDetail(null)}
+        onSelectArea={handleSelectArea}
         onSelectHierarchyLine={handleSelectHierarchyLine}
         onSelectHierarchyBucket={handleSelectHierarchyBucket}
+        onClearArea={handleClearArea}
         onClearHierarchyLine={handleClearHierarchyLine}
         onClearHierarchyBucket={handleClearHierarchyBucket}
         selectedDate={selectedDate}

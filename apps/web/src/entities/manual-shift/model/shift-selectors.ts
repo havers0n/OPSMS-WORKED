@@ -792,6 +792,66 @@ export function selectWorkBucketSummaries(
   return result;
 }
 
+export const NO_DISTRIBUTION_AREA_KEY = '__NO_DISTRIBUTION_AREA__';
+
+export interface AreaHierarchySummary {
+  areaKey: string;
+  areaName: string | null;
+  displayName: string;
+  totalLines: number;
+  totalBuckets: number;
+  totalOrders: number;
+  totalQuantity: number;
+  statusBreakdown: StatusBreakdown;
+}
+
+function resolveAreaKey(areaName: string | null): string {
+  return areaName === null ? NO_DISTRIBUTION_AREA_KEY : areaName;
+}
+
+export function selectWorkHierarchyAreaSummaries(
+  hierarchy: ManualShiftWorkHierarchyResponse | undefined
+): AreaHierarchySummary[] {
+  if (!hierarchy) return [];
+
+  return hierarchy.areas.map((area) => ({
+    areaKey: resolveAreaKey(area.areaName),
+    displayName: area.displayName,
+    areaName: area.areaName,
+    totalLines: area.totalLines,
+    totalBuckets: area.totalBuckets,
+    totalOrders: area.totalOrders,
+    totalQuantity: area.totalQuantity,
+    statusBreakdown: area.statusBreakdown
+  }));
+}
+
+export function selectWorkHierarchyLineSummariesByArea(
+  hierarchy: ManualShiftWorkHierarchyResponse | undefined,
+  selectedAreaKey: string | null
+): LineHierarchySummary[] {
+  if (!hierarchy || selectedAreaKey === null) return [];
+
+  const area = hierarchy.areas.find(
+    (a) => resolveAreaKey(a.areaName) === selectedAreaKey
+  );
+  if (!area) return [];
+
+  return area.lines.map((line) => ({
+    lineId: line.lineId,
+    lineName: line.lineGroupName,
+    distributionArea: line.distributionArea,
+    lineStatus: line.status,
+    ordersCount: line.totalOrders,
+    itemLinesCount: line.buckets.reduce(
+      (sum, b) => sum + b.orders.reduce((s, o) => s + o.lineCount, 0),
+      0
+    ),
+    totalQuantity: line.totalQuantity,
+    statusBreakdown: line.statusBreakdown
+  }));
+}
+
 export function selectWorkHierarchyLineSummaries(
   hierarchy: ManualShiftWorkHierarchyResponse | undefined
 ): LineHierarchySummary[] {
