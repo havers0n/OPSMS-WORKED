@@ -10,7 +10,6 @@ import {
   workHierarchyQueryOptions
 } from '@/entities/manual-shift/api/queries';
 import {
-  selectActiveOrders,
   selectCheckQueue,
   selectLineSummaries,
   selectOrderDetail,
@@ -135,7 +134,6 @@ const { data: workHierarchy } = useQuery({
     () => selectLineSummaries(byLine, shiftOrders),
     [byLine, shiftOrders]
   );
-  const activeOrders = useMemo(() => selectActiveOrders(shiftOrders), [shiftOrders]);
   const pickerWorkloads = useMemo(() => selectPickerWorkloads(shiftOrders), [shiftOrders]);
   const checkQueue = useMemo(() => selectCheckQueue(shiftOrders), [shiftOrders]);
   const pickerDetail = useMemo(() => {
@@ -215,7 +213,6 @@ const { data: workHierarchy } = useQuery({
         shift={shift}
         isLoading={isLoading || (!!shift && isDaySummaryLoading)}
         kpi={kpi}
-        activeOrders={activeOrders}
         pickerWorkloads={pickerWorkloads}
         checkQueue={checkQueue}
         pickerDetail={pickerDetail}

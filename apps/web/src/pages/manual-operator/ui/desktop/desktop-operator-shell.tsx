@@ -1,7 +1,6 @@
 import type { BucketProductRollupRow, ManualShiftSession } from '@wos/domain';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type {
-  ActiveOrder,
   AreaHierarchySummary,
   CheckQueue,
   LineHierarchySummary,
@@ -23,7 +22,6 @@ export interface DesktopOperatorShellProps {
   shift: ManualShiftSession | null;
   isLoading: boolean;
   kpi: ShiftSummary | undefined;
-  activeOrders: ActiveOrder[];
   pickerWorkloads: PickerWorkload[];
   checkQueue: CheckQueue;
   pickerDetail: PickerDetail | null;
@@ -106,7 +104,6 @@ export function DesktopOperatorShell({
   shift,
   isLoading,
   kpi,
-  activeOrders: _activeOrders,
   pickerWorkloads,
   checkQueue,
   pickerDetail,
