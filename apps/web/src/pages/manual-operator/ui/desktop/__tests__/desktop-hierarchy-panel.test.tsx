@@ -360,7 +360,7 @@ describe('DesktopHierarchyPanel', () => {
       expect(screen.getByText('קבוצות עבודה')).toBeTruthy();
     });
 
-    it('shows simplified breadcrumb without line segment for single-line area', () => {
+    it('shows route context and simplified breadcrumb without line segment for single-line area', () => {
       renderPanel({
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
@@ -370,7 +370,95 @@ describe('DesktopHierarchyPanel', () => {
       });
       expect(screen.getByText('אזורי הפצה')).toBeTruthy();
       expect(screen.getByText('צפון')).toBeTruthy();
-      expect(screen.queryByText(/קו:/)).toBeNull();
+      expect(screen.getByText('קו הפצה: Line South')).toBeTruthy();
+      expect(screen.queryByText(/קו: /)).toBeNull();
+    });
+
+    it('general bucket displays as "כללי" in auto-skipped single-line area', () => {
+      const workBucketSummaries: WorkBucketSummary[] = [
+        {
+          workBucketName: 'Line South',
+          ordersCount: 1,
+          itemLinesCount: 3,
+          totalQuantity: 15,
+          statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          orders: [
+            {
+              orderId: 'order-99',
+              orderNumber: 'SO-100',
+              customerName: null,
+              status: 'queued',
+              workBucketName: 'Line South',
+              pickerName: null,
+              checkerName: null,
+              lineCount: 3,
+              totalQuantity: 15
+            }
+          ]
+        }
+      ];
+
+      renderPanel({
+        selectedAreaKey: 'צפון',
+        selectedLineId: 'line-1',
+        areaLineSummaries: [mockLineHierarchySummaries[0]],
+        lineHierarchySummaries: mockLineHierarchySummaries,
+        workBucketSummaries
+      });
+
+      expect(screen.getByText('כללי')).toBeTruthy();
+    });
+
+    it('suffix buckets still display unchanged in auto-skipped single-line area', () => {
+      renderPanel({
+        selectedAreaKey: 'צפון',
+        selectedLineId: 'line-1',
+        areaLineSummaries: [mockLineHierarchySummaries[0]],
+        lineHierarchySummaries: mockLineHierarchySummaries,
+        workBucketSummaries: mockWorkBucketSummaries
+      });
+
+      expect(screen.getByText('Point A')).toBeTruthy();
+      expect(screen.getByText('No Point')).toBeTruthy();
+    });
+
+    it('clicking general bucket passes raw bucket identity, not display label', () => {
+      const onSelectBucket = vi.fn();
+      const workBucketSummaries: WorkBucketSummary[] = [
+        {
+          workBucketName: 'Line South',
+          ordersCount: 1,
+          itemLinesCount: 3,
+          totalQuantity: 15,
+          statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          orders: [
+            {
+              orderId: 'order-99',
+              orderNumber: 'SO-100',
+              customerName: null,
+              status: 'queued',
+              workBucketName: 'Line South',
+              pickerName: null,
+              checkerName: null,
+              lineCount: 3,
+              totalQuantity: 15
+            }
+          ]
+        }
+      ];
+
+      renderPanel({
+        selectedAreaKey: 'צפון',
+        selectedLineId: 'line-1',
+        areaLineSummaries: [mockLineHierarchySummaries[0]],
+        lineHierarchySummaries: mockLineHierarchySummaries,
+        workBucketSummaries,
+        onSelectBucket
+      });
+
+      fireEvent.click(screen.getByText('כללי'));
+      expect(onSelectBucket).toHaveBeenCalledWith('Line South');
+      expect(onSelectBucket).not.toHaveBeenCalledWith('כללי');
     });
 
     it('clicking "אזורי הפצה" in auto-skip breadcrumb calls onClearArea', () => {
@@ -530,7 +618,7 @@ describe('DesktopHierarchyPanel', () => {
         workBucketSummaries
       });
 
-      expect(screen.getByText('Line South — כללי')).toBeTruthy();
+      expect(screen.getByText('כללי')).toBeTruthy();
     });
 
     it('keeps original work bucket name when different from line name', () => {

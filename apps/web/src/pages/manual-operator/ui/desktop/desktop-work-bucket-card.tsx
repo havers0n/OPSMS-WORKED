@@ -8,7 +8,7 @@ interface DesktopWorkBucketCardProps {
 
 function bucketDisplayName(workBucketName: string, lineName?: string): string {
   if (lineName && workBucketName === lineName) {
-    return `${lineName} — כללי`;
+    return 'כללי';
   }
   return workBucketName;
 }

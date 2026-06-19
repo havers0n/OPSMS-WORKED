@@ -161,8 +161,11 @@ export function DesktopHierarchyPanel({
           </div>
         ) : (
           <>
-            {isAutoSkippedSingleLine && (
-              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">קבוצות עבודה</h2>
+            {isAutoSkippedSingleLine && !!selectedLine && (
+              <>
+                <p className="text-xs text-gray-500 mb-1">קו הפצה: {selectedLine.lineName}</p>
+                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">קבוצות עבודה</h2>
+              </>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {workBucketSummaries.map((bucket) => (
