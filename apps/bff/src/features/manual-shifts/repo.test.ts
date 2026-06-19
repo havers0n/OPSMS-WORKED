@@ -79,7 +79,7 @@ function makeOrder(overrides: Partial<ManualShiftOrder> = {}): ManualShiftOrder 
 }
 
 describe('buildShiftWorkHierarchy', () => {
-  it('groups orders by pointName into buckets within a line', () => {
+  it('groups orders by pointName (legacy) into work buckets within a line', () => {
     const lineRows = [makeLineRow()];
     const orders = [
       makeOrder({ id: ORDER_1, pointName: 'סלולר', orderNumber: 'SO-1', customerName: 'לקוח א' }),
@@ -101,7 +101,7 @@ describe('buildShiftWorkHierarchy', () => {
     expect(result.areas[0].lines[0].buckets[0].totalQuantity).toBe(15);
   });
 
-  it('separates different pointNames into different buckets', () => {
+  it('separates different pointNames into different work buckets', () => {
     const lineRows = [makeLineRow()];
     const orders = [
       makeOrder({ id: ORDER_1, pointName: 'סלולר', orderNumber: 'SO-1', customerName: 'פז השקמה' }),
@@ -179,7 +179,7 @@ describe('buildShiftWorkHierarchy', () => {
     expect(result.areas[0].displayName).toBe('ללא איזור');
   });
 
-  it('bucketName equals order.pointName (legacy model — will become workBucketName)', () => {
+  it('bucketName equals order.pointName (legacy storage — mapped to workBucketName)', () => {
     const lineRows = [makeLineRow()];
     const orders = [
       makeOrder({ pointName: 'סלולר' }),

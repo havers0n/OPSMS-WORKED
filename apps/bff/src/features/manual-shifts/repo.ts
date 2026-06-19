@@ -1696,6 +1696,7 @@ export function buildShiftWorkHierarchy(
 
     const bucketsMap = new Map<string | null, ManualShiftOrder[]>();
     for (const order of lineOrders) {
+      // pointName is legacy storage for route/work bucket suffix
       const bucketName = order.pointName;
       const list = bucketsMap.get(bucketName) ?? [];
       list.push(order);
