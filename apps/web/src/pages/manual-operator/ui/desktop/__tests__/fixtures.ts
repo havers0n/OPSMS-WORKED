@@ -1,10 +1,7 @@
 import type {
   ShiftSummary,
-  LineSummary,
-  ActiveOrder,
   PickerWorkload,
   CheckQueue,
-  LineDetail,
   PickerDetail,
   OrderDetail,
   LineHierarchySummary,
@@ -35,77 +32,6 @@ export const mockKpi: ShiftSummary = {
   donePercent: 20,
   totalPalletCount: 0
 };
-
-export const mockLines: LineSummary[] = [
-  {
-    lineId: 'line-1',
-    lineName: 'קו צפון',
-    lineStatus: 'in_progress',
-    totalOrders: 10,
-    totalLineCount: 50,
-    totalPalletCount: 20,
-    queued: 3,
-    picking: 4,
-    waitingCheck: 2,
-    returned: 1,
-    done: 0,
-    errorCount: 1,
-    donePercent: 0,
-    wipCount: 7
-  },
-  {
-    lineId: 'line-2',
-    lineName: 'קו דרום',
-    lineStatus: 'open',
-    totalOrders: 10,
-    totalLineCount: 30,
-    totalPalletCount: 10,
-    queued: 10,
-    picking: 0,
-    waitingCheck: 0,
-    returned: 0,
-    done: 0,
-    errorCount: 0,
-    donePercent: 0,
-    wipCount: 0
-  }
-];
-
-export const mockActiveOrders: ActiveOrder[] = [
-  {
-    orderId: 'order-1',
-    orderNumber: 'ORD-001',
-    customerName: null,
-    pointName: 'נקודה א',
-    lineCount: 5,
-    pickerName: 'דוד',
-    lineId: 'line-1',
-    status: 'picking',
-    ageSeconds: 720
-  },
-  {
-    orderId: 'order-2',
-    orderNumber: 'ORD-002',
-    customerName: null,
-    pointName: null,
-    lineCount: null,
-    pickerName: null,
-    lineId: 'line-2',
-    status: 'queued',
-    ageSeconds: 60
-  },
-  {
-    orderId: 'order-3',
-    orderNumber: null,
-    customerName: 'לקוח ב',
-    pointName: null,
-    lineCount: 3,
-    pickerName: 'שרה',
-    lineId: 'line-1',
-    status: 'returned',
-    ageSeconds: null
-  }
-];
 
 export const mockPickers: PickerWorkload[] = [
   {
@@ -174,24 +100,6 @@ export const emptyCheckQueue: CheckQueue = {
   orders: [],
   count: 0,
   oldestOrder: null
-};
-
-export const mockLineDetail: LineDetail = {
-  summary: mockLines[0],
-  orders: [
-    {
-      orderId: 'order-1',
-      status: 'returned',
-      pointName: 'נקודה א',
-      customerName: null,
-      orderNumber: 'ORD-001',
-      pickerName: 'דוד',
-      size: 'M',
-      lineCount: 5,
-      palletCount: 2,
-      ageSeconds: null
-    }
-  ]
 };
 
 export const mockPickerDetail: PickerDetail = {

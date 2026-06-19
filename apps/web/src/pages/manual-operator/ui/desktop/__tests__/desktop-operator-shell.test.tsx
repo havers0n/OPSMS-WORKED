@@ -16,7 +16,6 @@ import { DesktopOperatorShell } from '../desktop-operator-shell';
 import type { DesktopOperatorShellProps } from '../desktop-operator-shell';
 import {
   emptyCheckQueue,
-  mockActiveOrders,
   mockCheckQueue,
   mockKpi,
   mockOrderDetail,
@@ -34,7 +33,6 @@ const defaultProps = {
   shift: mockShift,
   isLoading: false,
   kpi: mockKpi,
-  activeOrders: mockActiveOrders,
   pickerWorkloads: mockPickers,
   checkQueue: emptyCheckQueue,
   pickerDetail: null,
