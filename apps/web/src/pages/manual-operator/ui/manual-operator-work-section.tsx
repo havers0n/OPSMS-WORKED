@@ -242,7 +242,6 @@ const { data: workHierarchy } = useQuery({
         todayDate={todayDate}
         onChangeDate={onChangeDate}
         onOpenDatePicker={onOpenDatePicker}
-        canInteract={!isReadOnly}
         onCreateShift={onCreateShift}
         isCreatingShift={isCreatingShift}
       />

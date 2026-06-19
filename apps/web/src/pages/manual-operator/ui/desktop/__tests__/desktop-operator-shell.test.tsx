@@ -3,10 +3,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 import { bffRequest } from '@/shared/api/bff/client';
 
-vi.mock('../../shift-open-ashlamot-board', () => ({
-  ShiftOpenAshlamotBoard: () => null
-}));
-
 vi.mock('@/shared/api/bff/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/shared/api/bff/client')>();
   return { ...actual, bffRequest: vi.fn() };
@@ -63,8 +59,7 @@ const defaultProps = {
   selectedDate: '2026-05-28',
   todayDate: '2026-05-29',
   onChangeDate: vi.fn(),
-  onOpenDatePicker: vi.fn(),
-  canInteract: true
+  onOpenDatePicker: vi.fn()
 };
 
 function makeQueryClient() {
@@ -194,11 +189,8 @@ describe('DesktopOperatorShell', () => {
     expect(pickerAside).toBeUndefined();
   });
 
-  it('board wrapper div appears in the aside before DesktopPickerPanel', () => {
-    const { container } = renderShell();
-    const boardWrapper = container.querySelector('.p-3.border-b');
-    const pickerHeader = screen.getByText('מלקטים');
-    expect(boardWrapper).toBeTruthy();
-    expect(boardWrapper!.compareDocumentPosition(pickerHeader) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  it('does not render ShiftOpenAshlamotBoard when no detail drawer is open', () => {
+    renderShell();
+    expect(screen.queryByTestId('shift-open-ashlamot-board')).toBeNull();
   });
 });
