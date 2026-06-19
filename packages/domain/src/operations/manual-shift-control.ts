@@ -518,6 +518,7 @@ export const manualShiftWorkHierarchyOrderSchema = z.object({
   customerName: z.string().nullable(),
   pointName: z.string().nullable(),
   status: manualShiftOrderStatusSchema,
+  lineCount: z.number().min(0),
   totalQuantity: z.number().min(0),
   hasAshlama: z.boolean(),
   hasCheckUnits: z.boolean()

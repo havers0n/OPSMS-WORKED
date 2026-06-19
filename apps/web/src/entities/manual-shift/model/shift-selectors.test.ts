@@ -14,6 +14,8 @@ import {
   canCloseOrderFromCheckUnits,
   selectLineHierarchySummaries,
   selectPointSummaries,
+  selectWorkHierarchyLineSummaries,
+  selectWorkHierarchyPointSummaries,
   normalizePointName,
   NO_POINT_LABEL,
   type ShiftListOrder
@@ -22,7 +24,8 @@ import type {
   ManualShiftDaySummary,
   ManualShiftLineSummary,
   ManualShiftOrder,
-  ManualShiftOrderCheckUnit
+  ManualShiftOrderCheckUnit,
+  ManualShiftWorkHierarchyResponse
 } from '@wos/domain';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1029,5 +1032,467 @@ describe('selectPointSummaries', () => {
     expect(result[0].ordersCount).toBe(3);
     expect(result[1].pointName).toBe('קטן');
     expect(result[1].ordersCount).toBe(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// selectWorkHierarchyLineSummaries
+// ─────────────────────────────────────────────────────────────────────────────
+
+function makeHierarchyResponse(
+  overrides: Partial<ManualShiftWorkHierarchyResponse> = {}
+): ManualShiftWorkHierarchyResponse {
+  return {
+    shiftId: SHIFT_ID,
+    areas: [],
+    ...overrides
+  };
+}
+
+describe('selectWorkHierarchyLineSummaries', () => {
+  it('returns empty array for undefined hierarchy', () => {
+    expect(selectWorkHierarchyLineSummaries(undefined)).toEqual([]);
+  });
+
+  it('maps line fields from hierarchy', () => {
+    const hierarchy = makeHierarchyResponse({
+      areas: [
+        {
+          areaName: 'צפון',
+          displayName: 'צפון',
+          totalLines: 1,
+          totalBuckets: 1,
+          totalOrders: 1,
+          totalQuantity: 20,
+          statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          lines: [
+            {
+              lineId: LINE_A,
+              lineGroupName: 'שרון',
+              distributionArea: 'צפון',
+              status: 'in_progress',
+              totalBuckets: 1,
+              totalOrders: 1,
+              totalQuantity: 20,
+              statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              buckets: [
+                {
+                  bucketName: 'תל אביב',
+                  displayName: 'תל אביב',
+                  totalOrders: 1,
+                  totalQuantity: 20,
+                  statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                  orders: [
+                    {
+                      orderId: 'order-0001',
+                      orderNumber: 'SO-1',
+                      customerName: null,
+                      pointName: 'תל אביב',
+                      status: 'queued',
+                      lineCount: 5,
+                      totalQuantity: 20,
+                      hasAshlama: false,
+                      hasCheckUnits: false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    const result = selectWorkHierarchyLineSummaries(hierarchy);
+    expect(result).toHaveLength(1);
+    expect(result[0].lineId).toBe(LINE_A);
+    expect(result[0].lineName).toBe('שרון');
+    expect(result[0].lineStatus).toBe('in_progress');
+    expect(result[0].ordersCount).toBe(1);
+    expect(result[0].itemLinesCount).toBe(5);
+    expect(result[0].totalQuantity).toBe(20);
+  });
+
+  it('computes itemLinesCount as sum of order lineCounts across buckets', () => {
+    const hierarchy = makeHierarchyResponse({
+      areas: [
+        {
+          areaName: 'דרום',
+          displayName: 'דרום',
+          totalLines: 1,
+          totalBuckets: 2,
+          totalOrders: 3,
+          totalQuantity: 50,
+          statusBreakdown: { queued: 3, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          lines: [
+            {
+              lineId: LINE_A,
+              lineGroupName: 'דרום',
+              distributionArea: 'דרום',
+              status: 'open',
+              totalBuckets: 2,
+              totalOrders: 3,
+              totalQuantity: 50,
+              statusBreakdown: { queued: 3, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              buckets: [
+                {
+                  bucketName: 'באר שבע',
+                  displayName: 'באר שבע',
+                  totalOrders: 1,
+                  totalQuantity: 18,
+                  statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                  orders: [
+                    {
+                      orderId: 'order-0001',
+                      orderNumber: 'SO-A',
+                      customerName: null,
+                      pointName: 'באר שבע',
+                      status: 'queued',
+                      lineCount: 3,
+                      totalQuantity: 18,
+                      hasAshlama: false,
+                      hasCheckUnits: false
+                    }
+                  ]
+                },
+                {
+                  bucketName: 'אילת',
+                  displayName: 'אילת',
+                  totalOrders: 2,
+                  totalQuantity: 32,
+                  statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                  orders: [
+                    {
+                      orderId: 'order-0002',
+                      orderNumber: 'SO-B',
+                      customerName: null,
+                      pointName: 'אילת',
+                      status: 'queued',
+                      lineCount: 2,
+                      totalQuantity: 12,
+                      hasAshlama: false,
+                      hasCheckUnits: false
+                    },
+                    {
+                      orderId: 'order-0003',
+                      orderNumber: 'SO-C',
+                      customerName: null,
+                      pointName: 'אילת',
+                      status: 'queued',
+                      lineCount: 4,
+                      totalQuantity: 20,
+                      hasAshlama: false,
+                      hasCheckUnits: false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    const result = selectWorkHierarchyLineSummaries(hierarchy);
+    expect(result[0].itemLinesCount).toBe(9);
+    expect(result[0].ordersCount).toBe(3);
+  });
+
+  it('handles zero lineCount per order', () => {
+    const hierarchy = makeHierarchyResponse({
+      areas: [
+        {
+          areaName: null,
+          displayName: 'ללא איזור',
+          totalLines: 1,
+          totalBuckets: 1,
+          totalOrders: 1,
+          totalQuantity: 5,
+          statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          lines: [
+            {
+              lineId: LINE_A,
+              lineGroupName: 'מרכז',
+              distributionArea: null,
+              status: 'open',
+              totalBuckets: 1,
+              totalOrders: 1,
+              totalQuantity: 5,
+              statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              buckets: [
+                {
+                  bucketName: null,
+                  displayName: 'קו ראשי',
+                  totalOrders: 1,
+                  totalQuantity: 5,
+                  statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                  orders: [
+                    {
+                      orderId: 'order-0001',
+                      orderNumber: null,
+                      customerName: null,
+                      pointName: null,
+                      status: 'queued',
+                      lineCount: 0,
+                      totalQuantity: 5,
+                      hasAshlama: false,
+                      hasCheckUnits: false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    const result = selectWorkHierarchyLineSummaries(hierarchy);
+    expect(result[0].itemLinesCount).toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// selectWorkHierarchyPointSummaries
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('selectWorkHierarchyPointSummaries', () => {
+  it('returns empty array for undefined hierarchy', () => {
+    expect(selectWorkHierarchyPointSummaries(undefined, LINE_A)).toEqual([]);
+  });
+
+  it('returns empty array for falsy lineId', () => {
+    const hierarchy = makeHierarchyResponse();
+    expect(selectWorkHierarchyPointSummaries(hierarchy, '')).toEqual([]);
+  });
+
+  it('returns empty array when line not found', () => {
+    const hierarchy = makeHierarchyResponse({
+      areas: [
+        {
+          areaName: 'צפון',
+          displayName: 'צפון',
+          totalLines: 1,
+          totalBuckets: 1,
+          totalOrders: 1,
+          totalQuantity: 10,
+          statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          lines: [
+            {
+              lineId: LINE_A,
+              lineGroupName: 'שרון',
+              distributionArea: 'צפון',
+              status: 'open',
+              totalBuckets: 1,
+              totalOrders: 1,
+              totalQuantity: 10,
+              statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              buckets: []
+            }
+          ]
+        }
+      ]
+    });
+    const result = selectWorkHierarchyPointSummaries(hierarchy, LINE_B);
+    expect(result).toEqual([]);
+  });
+
+  it('maps order lineCount from work hierarchy', () => {
+    const hierarchy = makeHierarchyResponse({
+      areas: [
+        {
+          areaName: 'צפון',
+          displayName: 'צפון',
+          totalLines: 1,
+          totalBuckets: 1,
+          totalOrders: 2,
+          totalQuantity: 30,
+          statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          lines: [
+            {
+              lineId: LINE_A,
+              lineGroupName: 'שרון',
+              distributionArea: 'צפון',
+              status: 'open',
+              totalBuckets: 1,
+              totalOrders: 2,
+              totalQuantity: 30,
+              statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              buckets: [
+                {
+                  bucketName: 'תל אביב',
+                  displayName: 'תל אביב',
+                  totalOrders: 2,
+                  totalQuantity: 30,
+                  statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                  orders: [
+                    {
+                      orderId: 'order-0001',
+                      orderNumber: 'SO-1',
+                      customerName: 'לקוח א',
+                      pointName: 'תל אביב',
+                      status: 'queued',
+                      lineCount: 3,
+                      totalQuantity: 10,
+                      hasAshlama: false,
+                      hasCheckUnits: false
+                    },
+                    {
+                      orderId: 'order-0002',
+                      orderNumber: 'SO-2',
+                      customerName: 'לקוח ב',
+                      pointName: 'תל אביב',
+                      status: 'queued',
+                      lineCount: 5,
+                      totalQuantity: 20,
+                      hasAshlama: false,
+                      hasCheckUnits: false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    const result = selectWorkHierarchyPointSummaries(hierarchy, LINE_A);
+    expect(result).toHaveLength(1);
+    expect(result[0].orders).toHaveLength(2);
+    expect(result[0].orders[0].lineCount).toBe(3);
+    expect(result[0].orders[0].totalQuantity).toBe(10);
+    expect(result[0].orders[1].lineCount).toBe(5);
+    expect(result[0].orders[1].totalQuantity).toBe(20);
+  });
+
+  it('computes itemLinesCount as sum of child order lineCounts', () => {
+    const hierarchy = makeHierarchyResponse({
+      areas: [
+        {
+          areaName: 'דרום',
+          displayName: 'דרום',
+          totalLines: 1,
+          totalBuckets: 1,
+          totalOrders: 3,
+          totalQuantity: 40,
+          statusBreakdown: { queued: 3, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          lines: [
+            {
+              lineId: LINE_A,
+              lineGroupName: 'דרום',
+              distributionArea: 'דרום',
+              status: 'open',
+              totalBuckets: 1,
+              totalOrders: 3,
+              totalQuantity: 40,
+              statusBreakdown: { queued: 3, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              buckets: [
+                {
+                  bucketName: 'באר שבע',
+                  displayName: 'באר שבע',
+                  totalOrders: 3,
+                  totalQuantity: 40,
+                  statusBreakdown: { queued: 3, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                  orders: [
+                    {
+                      orderId: 'order-0001',
+                      orderNumber: 'SO-1',
+                      customerName: null,
+                      pointName: 'באר שבע',
+                      status: 'queued',
+                      lineCount: 2,
+                      totalQuantity: 10,
+                      hasAshlama: false,
+                      hasCheckUnits: false
+                    },
+                    {
+                      orderId: 'order-0002',
+                      orderNumber: 'SO-2',
+                      customerName: null,
+                      pointName: 'באר שבע',
+                      status: 'queued',
+                      lineCount: 4,
+                      totalQuantity: 12,
+                      hasAshlama: false,
+                      hasCheckUnits: false
+                    },
+                    {
+                      orderId: 'order-0003',
+                      orderNumber: 'SO-3',
+                      customerName: null,
+                      pointName: 'באר שבע',
+                      status: 'queued',
+                      lineCount: 1,
+                      totalQuantity: 18,
+                      hasAshlama: false,
+                      hasCheckUnits: false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    const result = selectWorkHierarchyPointSummaries(hierarchy, LINE_A);
+    expect(result[0].itemLinesCount).toBe(7);
+    expect(result[0].ordersCount).toBe(3);
+  });
+
+  it('handles order with zero lineCount', () => {
+    const hierarchy = makeHierarchyResponse({
+      areas: [
+        {
+          areaName: null,
+          displayName: 'ללא איזור',
+          totalLines: 1,
+          totalBuckets: 1,
+          totalOrders: 1,
+          totalQuantity: 5,
+          statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          lines: [
+            {
+              lineId: LINE_A,
+              lineGroupName: 'מרכז',
+              distributionArea: null,
+              status: 'open',
+              totalBuckets: 1,
+              totalOrders: 1,
+              totalQuantity: 5,
+              statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              buckets: [
+                {
+                  bucketName: null,
+                  displayName: 'קו ראשי',
+                  totalOrders: 1,
+                  totalQuantity: 5,
+                  statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                  orders: [
+                    {
+                      orderId: 'order-0001',
+                      orderNumber: null,
+                      customerName: null,
+                      pointName: null,
+                      status: 'queued',
+                      lineCount: 0,
+                      totalQuantity: 5,
+                      hasAshlama: false,
+                      hasCheckUnits: false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    const result = selectWorkHierarchyPointSummaries(hierarchy, LINE_A);
+    expect(result[0].itemLinesCount).toBe(0);
+    expect(result[0].orders[0].lineCount).toBe(0);
   });
 });

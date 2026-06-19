@@ -1715,6 +1715,7 @@ function buildShiftWorkHierarchy(
           customerName: o.customerName,
           pointName: o.pointName,
           status: o.status,
+          lineCount: rollup ? rollup.lineCount : 0,
           totalQuantity,
           hasAshlama: orderAshlamot.some((a) => a.status === 'open'),
           hasCheckUnits: orderCheckUnits.length > 0

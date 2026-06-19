@@ -42,7 +42,7 @@ export function DesktopOrderMiniCard({ order, onClick }: DesktopOrderMiniCardPro
       {order.customerName && <p className="mb-1 text-xs text-gray-500 truncate">{order.customerName}</p>}
       <div className="flex items-baseline gap-3 text-xs text-gray-600">
         {order.pickerName && <span>מלקט: {order.pickerName}</span>}
-        <span>{order.lineCount} שורות</span>
+        {order.lineCount > 0 && <span>{order.lineCount} שורות</span>}
         <span>{order.totalQuantity} יח׳</span>
       </div>
     </button>

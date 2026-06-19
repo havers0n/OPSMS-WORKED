@@ -799,7 +799,10 @@ export function selectWorkHierarchyLineSummaries(
         distributionArea: line.distributionArea,
         lineStatus: line.status,
         ordersCount: line.totalOrders,
-        itemLinesCount: line.totalBuckets,
+        itemLinesCount: line.buckets.reduce(
+          (sum, b) => sum + b.orders.reduce((s, o) => s + o.lineCount, 0),
+          0
+        ),
         totalQuantity: line.totalQuantity,
         statusBreakdown: line.statusBreakdown
       });
@@ -819,13 +822,8 @@ export function selectWorkHierarchyPointSummaries(
     const line = area.lines.find((entry) => entry.lineId === lineId);
     if (!line) continue;
 
-    return line.buckets.map((bucket) => ({
-      pointName: bucket.displayName,
-      ordersCount: bucket.totalOrders,
-      itemLinesCount: bucket.totalOrders,
-      totalQuantity: bucket.totalQuantity,
-      statusBreakdown: bucket.statusBreakdown,
-      orders: bucket.orders.map((order) => ({
+    return line.buckets.map((bucket) => {
+      const orders: HierarchyOrder[] = bucket.orders.map((order) => ({
         orderId: order.orderId,
         orderNumber: order.orderNumber,
         customerName: order.customerName,
@@ -833,10 +831,18 @@ export function selectWorkHierarchyPointSummaries(
         pointName: toHierarchyPointName(order.pointName, bucket.displayName),
         pickerName: null,
         checkerName: null,
-        lineCount: 0,
+        lineCount: order.lineCount ?? 0,
         totalQuantity: order.totalQuantity
-      }))
-    }));
+      }));
+      return {
+        pointName: bucket.displayName,
+        ordersCount: bucket.totalOrders,
+        itemLinesCount: orders.reduce((sum, o) => sum + o.lineCount, 0),
+        totalQuantity: bucket.totalQuantity,
+        statusBreakdown: bucket.statusBreakdown,
+        orders
+      };
+    });
   }
 
   return [];

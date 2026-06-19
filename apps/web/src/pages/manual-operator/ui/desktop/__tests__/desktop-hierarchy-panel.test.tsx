@@ -170,4 +170,112 @@ describe('DesktopHierarchyPanel', () => {
     fireEvent.click(screen.getByTestId('order-mini-card-order-1'));
     expect(onSelectOrder).toHaveBeenCalledWith('order-1');
   });
+
+  describe('bucket label polish', () => {
+    it('displays general bucket label when point name equals line name', () => {
+      const pointSummaries: PointHierarchySummary[] = [
+        {
+          pointName: 'Line South',
+          ordersCount: 1,
+          itemLinesCount: 3,
+          totalQuantity: 15,
+          statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          orders: [
+            {
+              orderId: 'order-99',
+              orderNumber: 'SO-100',
+              customerName: null,
+              status: 'queued',
+              pointName: 'Line South',
+              pickerName: null,
+              checkerName: null,
+              lineCount: 3,
+              totalQuantity: 15
+            }
+          ]
+        }
+      ];
+
+      renderPanel({
+        selectedLineId: 'line-1',
+        pointSummaries
+      });
+
+      expect(screen.getByText('Line South — כללי')).toBeTruthy();
+    });
+
+    it('keeps original point name when different from line name', () => {
+      renderPanel({
+        selectedLineId: 'line-1',
+        pointSummaries: mockPointSummaries
+      });
+
+      expect(screen.getByText('Point A')).toBeTruthy();
+    });
+  });
+
+  describe('null-safe lineCount display', () => {
+    it('does not render 0 שורות when lineCount is zero', () => {
+      renderPanel({
+        selectedLineId: 'line-1',
+        selectedPointName: 'Point A',
+        pointSummaries: mockPointSummaries
+      });
+
+      expect(screen.queryByText('0 שורות')).toBeNull();
+    });
+
+    it('renders positive lineCount with שורות label', () => {
+      const pointSummaries: PointHierarchySummary[] = [
+        {
+          pointName: 'Point B',
+          ordersCount: 1,
+          itemLinesCount: 4,
+          totalQuantity: 20,
+          statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          orders: [
+            {
+              orderId: 'order-50',
+              orderNumber: 'SO-200',
+              customerName: null,
+              status: 'queued',
+              pointName: 'Point B',
+              pickerName: null,
+              checkerName: null,
+              lineCount: 4,
+              totalQuantity: 20
+            }
+          ]
+        }
+      ];
+
+      renderPanel({
+        selectedLineId: 'line-2',
+        selectedPointName: 'Point B',
+        pointSummaries
+      });
+
+      expect(screen.getByText('4 שורות')).toBeTruthy();
+    });
+
+    it('does not render 0 פריטים / שורות on point cards', () => {
+      const pointSummaries: PointHierarchySummary[] = [
+        {
+          pointName: 'Empty Point',
+          ordersCount: 0,
+          itemLinesCount: 0,
+          totalQuantity: 0,
+          statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          orders: []
+        }
+      ];
+
+      renderPanel({
+        selectedLineId: 'line-1',
+        pointSummaries
+      });
+
+      expect(screen.queryByText(/0 פריטים/)).toBeNull();
+    });
+  });
 });
