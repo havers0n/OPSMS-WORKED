@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../errors.js';
 import { createWarehouseLabelsService } from './service.js';
+import * as warehouseLabelsPdfModule from './pdf.js';
 import type {
   WarehouseLabelCellRow,
   WarehouseLabelLayoutVersionRow,
@@ -1188,21 +1189,29 @@ describe('warehouse label preview service', () => {
         listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
       })
     );
+    const generatePdfSpy = vi
+      .spyOn(warehouseLabelsPdfModule, 'generateWarehouseLabelsPdf')
+      .mockResolvedValue(new Uint8Array([1, 2, 3]));
 
-    const result = await service.generateLabelsPdf({
-      tenantId: ids.tenant,
-      request: {
-        floorId: ids.floor,
-        selection: { mode: 'entire-floor' },
-        labelPreset: 'rack-slot-100x50',
-        layout: { mode: 'single-label-page' },
-        sort: 'address'
-      }
-    });
+    try {
+      const result = await service.generateLabelsPdf({
+        tenantId: ids.tenant,
+        request: {
+          floorId: ids.floor,
+          selection: { mode: 'entire-floor' },
+          labelPreset: 'rack-slot-100x50',
+          layout: { mode: 'single-label-page' },
+          sort: 'address'
+        }
+      });
 
-    expect(result.labelCount).toBe(300);
-    expect(result.bytes).toBeInstanceOf(Uint8Array);
-    expect(result.bytes.length).toBeGreaterThan(0);
+      expect(result.labelCount).toBe(300);
+      expect(result.bytes).toEqual(new Uint8Array([1, 2, 3]));
+      expect(generatePdfSpy).toHaveBeenCalledTimes(1);
+      expect(generatePdfSpy.mock.calls[0]?.[0].labels).toHaveLength(300);
+    } finally {
+      generatePdfSpy.mockRestore();
+    }
   });
 
   it('preview still allows up to the existing preview limit when PDF limit is lower', async () => {
