@@ -2089,6 +2089,7 @@ describe('manual shifts routes', () => {
                         customerName: null,
                         pointName: 'סלולר',
                         status: 'queued' as const,
+                        lineCount: 2,
                         totalQuantity: 10,
                         hasAshlama: false,
                         hasCheckUnits: false
@@ -2108,6 +2109,7 @@ describe('manual shifts routes', () => {
                         customerName: 'לקוח ב',
                         pointName: 'פז השקמה',
                         status: 'waiting_check' as const,
+                        lineCount: 5,
                         totalQuantity: 20,
                         hasAshlama: true,
                         hasCheckUnits: true
@@ -2196,6 +2198,7 @@ describe('manual shifts routes', () => {
                         customerName: null,
                         pointName: null,
                         status: 'queued' as const,
+                        lineCount: 1,
                         totalQuantity: 5,
                         hasAshlama: false,
                         hasCheckUnits: false
@@ -2224,6 +2227,302 @@ describe('manual shifts routes', () => {
       expect(body.areas[0].displayName).toBe('ללא איזור');
       expect(body.areas[0].lines[0].buckets[0].bucketName).toBeNull();
       expect(body.areas[0].lines[0].buckets[0].displayName).toBe('קו ראשי');
+
+      await app.close();
+    });
+
+    it('includes real lineCount from order items', async () => {
+      const hierarchy = {
+        shiftId: ids.shift,
+        areas: [
+          {
+            areaName: 'צפון' as const,
+            displayName: 'צפון',
+            totalLines: 1,
+            totalBuckets: 1,
+            totalOrders: 2,
+            totalQuantity: 110,
+            statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            lines: [
+              {
+                lineId: ids.line,
+                lineGroupName: 'גליל',
+                distributionArea: 'צפון',
+                status: 'open' as const,
+                totalBuckets: 1,
+                totalOrders: 2,
+                totalQuantity: 110,
+                statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                buckets: [
+                  {
+                    bucketName: 'גליל',
+                    displayName: 'גליל',
+                    totalOrders: 2,
+                    totalQuantity: 110,
+                    statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                    orders: [
+                      {
+                        orderId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01',
+                        orderNumber: 'SO26013614',
+                        customerName: 'לקוח א',
+                        pointName: 'גליל',
+                        status: 'queued' as const,
+                        lineCount: 3,
+                        totalQuantity: 6,
+                        hasAshlama: false,
+                        hasCheckUnits: false
+                      },
+                      {
+                        orderId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa02',
+                        orderNumber: 'SO26013615',
+                        customerName: 'לקוח ב',
+                        pointName: 'גליל',
+                        status: 'queued' as const,
+                        lineCount: 7,
+                        totalQuantity: 104,
+                        hasAshlama: false,
+                        hasCheckUnits: false
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      };
+      const service = createServiceMock({
+        getShiftWorkHierarchy: vi.fn(async () => hierarchy)
+      });
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/work-hierarchy`
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      const orders = body.areas[0].lines[0].buckets[0].orders;
+      expect(orders[0].lineCount).toBe(3);
+      expect(orders[0].totalQuantity).toBe(6);
+      expect(orders[1].lineCount).toBe(7);
+      expect(orders[1].totalQuantity).toBe(104);
+
+      await app.close();
+    });
+
+    it('keeps same orderNumber in multiple buckets as separate fragments', async () => {
+      const hierarchy = {
+        shiftId: ids.shift,
+        areas: [
+          {
+            areaName: 'צפון' as const,
+            displayName: 'צפון',
+            totalLines: 1,
+            totalBuckets: 3,
+            totalOrders: 3,
+            totalQuantity: 116,
+            statusBreakdown: { queued: 3, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            lines: [
+              {
+                lineId: ids.line,
+                lineGroupName: 'גליל',
+                distributionArea: 'צפון',
+                status: 'open' as const,
+                totalBuckets: 3,
+                totalOrders: 3,
+                totalQuantity: 116,
+                statusBreakdown: { queued: 3, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                buckets: [
+                  {
+                    bucketName: 'גליל',
+                    displayName: 'גליל',
+                    totalOrders: 1,
+                    totalQuantity: 6,
+                    statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                    orders: [
+                      {
+                        orderId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01',
+                        orderNumber: 'SO26013614',
+                        customerName: 'לקוח א',
+                        pointName: 'גליל',
+                        status: 'queued' as const,
+                        lineCount: 3,
+                        totalQuantity: 6,
+                        hasAshlama: false,
+                        hasCheckUnits: false
+                      }
+                    ]
+                  },
+                  {
+                    bucketName: 'סלולר',
+                    displayName: 'סלולר',
+                    totalOrders: 1,
+                    totalQuantity: 4,
+                    statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                    orders: [
+                      {
+                        orderId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa02',
+                        orderNumber: 'SO26013614',
+                        customerName: 'לקוח א',
+                        pointName: 'סלולר',
+                        status: 'queued' as const,
+                        lineCount: 1,
+                        totalQuantity: 4,
+                        hasAshlama: false,
+                        hasCheckUnits: false
+                      }
+                    ]
+                  },
+                  {
+                    bucketName: 'רכב-פז נהריה',
+                    displayName: 'רכב-פז נהריה',
+                    totalOrders: 1,
+                    totalQuantity: 106,
+                    statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                    orders: [
+                      {
+                        orderId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa03',
+                        orderNumber: 'SO26013614',
+                        customerName: 'לקוח א',
+                        pointName: 'רכב-פז נהריה',
+                        status: 'queued' as const,
+                        lineCount: 9,
+                        totalQuantity: 106,
+                        hasAshlama: false,
+                        hasCheckUnits: false
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      };
+      const service = createServiceMock({
+        getShiftWorkHierarchy: vi.fn(async () => hierarchy)
+      });
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/work-hierarchy`
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      const buckets = body.areas[0].lines[0].buckets;
+      expect(buckets).toHaveLength(3);
+      expect(buckets[0].orders[0].orderNumber).toBe('SO26013614');
+      expect(buckets[1].orders[0].orderNumber).toBe('SO26013614');
+      expect(buckets[2].orders[0].orderNumber).toBe('SO26013614');
+      expect(buckets[0].orders[0].orderId).not.toBe(buckets[1].orders[0].orderId);
+      expect(buckets[1].orders[0].orderId).not.toBe(buckets[2].orders[0].orderId);
+      expect(body.areas[0].totalOrders).toBe(3);
+
+      await app.close();
+    });
+
+    it('preserves correct totalQuantity per order and bucket', async () => {
+      const hierarchy = {
+        shiftId: ids.shift,
+        areas: [
+          {
+            areaName: 'צפון' as const,
+            displayName: 'צפון',
+            totalLines: 1,
+            totalBuckets: 2,
+            totalOrders: 3,
+            totalQuantity: 30,
+            statusBreakdown: { queued: 3, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            lines: [
+              {
+                lineId: ids.line,
+                lineGroupName: 'שרון',
+                distributionArea: 'צפון',
+                status: 'open' as const,
+                totalBuckets: 2,
+                totalOrders: 3,
+                totalQuantity: 30,
+                statusBreakdown: { queued: 3, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                buckets: [
+                  {
+                    bucketName: 'נתניה',
+                    displayName: 'נתניה',
+                    totalOrders: 2,
+                    totalQuantity: 18,
+                    statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                    orders: [
+                      {
+                        orderId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01',
+                        orderNumber: 'SO-10',
+                        customerName: null,
+                        pointName: 'נתניה',
+                        status: 'queued' as const,
+                        lineCount: 2,
+                        totalQuantity: 10,
+                        hasAshlama: false,
+                        hasCheckUnits: false
+                      },
+                      {
+                        orderId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa02',
+                        orderNumber: 'SO-11',
+                        customerName: null,
+                        pointName: 'נתניה',
+                        status: 'queued' as const,
+                        lineCount: 1,
+                        totalQuantity: 8,
+                        hasAshlama: false,
+                        hasCheckUnits: false
+                      }
+                    ]
+                  },
+                  {
+                    bucketName: 'הרצליה',
+                    displayName: 'הרצליה',
+                    totalOrders: 1,
+                    totalQuantity: 12,
+                    statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                    orders: [
+                      {
+                        orderId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa03',
+                        orderNumber: 'SO-12',
+                        customerName: null,
+                        pointName: 'הרצליה',
+                        status: 'queued' as const,
+                        lineCount: 4,
+                        totalQuantity: 12,
+                        hasAshlama: false,
+                        hasCheckUnits: false
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      };
+      const service = createServiceMock({
+        getShiftWorkHierarchy: vi.fn(async () => hierarchy)
+      });
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/work-hierarchy`
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      const line = body.areas[0].lines[0];
+      expect(line.totalQuantity).toBe(30);
+      expect(line.buckets[0].totalQuantity).toBe(18);
+      expect(line.buckets[1].totalQuantity).toBe(12);
+      expect(line.buckets[0].orders[0].lineCount).toBe(2);
+      expect(line.buckets[0].orders[0].totalQuantity).toBe(10);
 
       await app.close();
     });

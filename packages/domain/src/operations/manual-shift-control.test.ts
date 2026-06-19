@@ -358,6 +358,7 @@ describe('manual shift work hierarchy schemas', () => {
                       customerName: 'לקוח א',
                       pointName: 'סלולר',
                       status: 'queued',
+                      lineCount: 2,
                       totalQuantity: 10,
                       hasAshlama: false,
                       hasCheckUnits: true
@@ -368,6 +369,7 @@ describe('manual shift work hierarchy schemas', () => {
                       customerName: 'לקוח ב',
                       pointName: 'סלולר',
                       status: 'waiting_check',
+                      lineCount: 3,
                       totalQuantity: 20,
                       hasAshlama: true,
                       hasCheckUnits: false
@@ -393,6 +395,7 @@ describe('manual shift work hierarchy schemas', () => {
                       customerName: null,
                       pointName: 'פז השקמה',
                       status: 'picking',
+                      lineCount: 1,
                       totalQuantity: 12,
                       hasAshlama: false,
                       hasCheckUnits: false
@@ -464,6 +467,7 @@ describe('manual shift work hierarchy schemas', () => {
                       customerName: null,
                       pointName: null,
                       status: 'queued',
+                      lineCount: 1,
                       totalQuantity: 5,
                       hasAshlama: false,
                       hasCheckUnits: false

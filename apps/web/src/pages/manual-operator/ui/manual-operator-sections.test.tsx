@@ -134,6 +134,7 @@ const workHierarchy = {
                   customerName: waitingOrder.customerName,
                   pointName: waitingOrder.pointName,
                   status: waitingOrder.status,
+                  lineCount: 2,
                   totalQuantity: 5,
                   hasAshlama: false,
                   hasCheckUnits: false
