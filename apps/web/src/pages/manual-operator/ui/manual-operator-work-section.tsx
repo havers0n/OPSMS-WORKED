@@ -17,7 +17,7 @@ import {
   selectPickerWorkloads,
   selectShiftSummary,
   selectWorkHierarchyLineSummaries,
-  selectWorkHierarchyPointSummaries
+  selectWorkHierarchyBucketSummaries
 } from '@/entities/manual-shift/model/shift-selectors';
 import type { ManualOperatorSection } from '@/shared/config/routes';
 import { DesktopOperatorShell } from './desktop/desktop-operator-shell';
@@ -83,7 +83,7 @@ export function ManualOperatorWorkSection({
     | null
   >(null);
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
-  const [selectedPointName, setSelectedPointName] = useState<string | null>(null);
+  const [selectedWorkBucketName, setSelectedWorkBucketName] = useState<string | null>(null);
 
   const { data: daySummary, isLoading: isDaySummaryLoading } = useQuery({
     ...daySummaryQueryOptions(shift?.id ?? ''),
@@ -133,27 +133,27 @@ const { data: workHierarchy } = useQuery({
     () => selectWorkHierarchyLineSummaries(workHierarchy),
     [workHierarchy]
   );
-  const pointSummaries = useMemo(
-    () => (selectedLineId ? selectWorkHierarchyPointSummaries(workHierarchy, selectedLineId) : []),
+  const workBucketSummaries = useMemo(
+    () => (selectedLineId ? selectWorkHierarchyBucketSummaries(workHierarchy, selectedLineId) : []),
     [selectedLineId, workHierarchy]
   );
 
   function handleSelectHierarchyLine(lineId: string) {
     setSelectedLineId(lineId);
-    setSelectedPointName(null);
+    setSelectedWorkBucketName(null);
   }
 
-  function handleSelectHierarchyPoint(pointName: string) {
-    setSelectedPointName(pointName);
+  function handleSelectHierarchyBucket(workBucketName: string) {
+    setSelectedWorkBucketName(workBucketName);
   }
 
   function handleClearHierarchyLine() {
     setSelectedLineId(null);
-    setSelectedPointName(null);
+    setSelectedWorkBucketName(null);
   }
 
-  function handleClearHierarchyPoint() {
-    setSelectedPointName(null);
+  function handleClearHierarchyBucket() {
+    setSelectedWorkBucketName(null);
   }
 
   if (isDesktop) {
@@ -169,16 +169,16 @@ const { data: workHierarchy } = useQuery({
         orderDetail={orderDetail}
         selectedDetailType={selectedDesktopDetail?.type ?? null}
         selectedLineId={selectedLineId}
-        selectedPointName={selectedPointName}
+        selectedWorkBucketName={selectedWorkBucketName}
         lineHierarchySummaries={lineHierarchySummaries}
-        pointSummaries={pointSummaries}
+        workBucketSummaries={workBucketSummaries}
         onSelectPicker={(pickerKey) => setSelectedDesktopDetail({ type: 'picker', pickerKey })}
         onSelectOrder={(orderId) => setSelectedDesktopDetail({ type: 'order', orderId })}
         onCloseDetail={() => setSelectedDesktopDetail(null)}
         onSelectHierarchyLine={handleSelectHierarchyLine}
-        onSelectHierarchyPoint={handleSelectHierarchyPoint}
+        onSelectHierarchyBucket={handleSelectHierarchyBucket}
         onClearHierarchyLine={handleClearHierarchyLine}
-        onClearHierarchyPoint={handleClearHierarchyPoint}
+        onClearHierarchyBucket={handleClearHierarchyBucket}
         selectedDate={selectedDate}
         todayDate={todayDate}
         onChangeDate={onChangeDate}

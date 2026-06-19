@@ -1,33 +1,33 @@
 import type {
   LineHierarchySummary,
-  PointHierarchySummary
+  WorkBucketSummary
 } from '@/entities/manual-shift/model/shift-selectors';
 import { DesktopLineSummaryCard } from './desktop-line-summary-card';
-import { DesktopPointGroupCard } from './desktop-point-group-card';
+import { DesktopWorkBucketCard } from './desktop-work-bucket-card';
 import { DesktopOrderMiniCard } from './desktop-order-mini-card';
 
 interface DesktopHierarchyPanelProps {
   selectedLineId: string | null;
-  selectedPointName: string | null;
+  selectedWorkBucketName: string | null;
   lineHierarchySummaries: LineHierarchySummary[];
-  pointSummaries: PointHierarchySummary[];
+  workBucketSummaries: WorkBucketSummary[];
   onSelectLine: (lineId: string) => void;
-  onSelectPoint: (pointName: string) => void;
+  onSelectBucket: (workBucketName: string) => void;
   onSelectOrder: (orderId: string) => void;
   onClearLine: () => void;
-  onClearPoint: () => void;
+  onClearBucket: () => void;
 }
 
 export function DesktopHierarchyPanel({
   selectedLineId,
-  selectedPointName,
+  selectedWorkBucketName,
   lineHierarchySummaries,
-  pointSummaries,
+  workBucketSummaries,
   onSelectLine,
-  onSelectPoint,
+  onSelectBucket,
   onSelectOrder,
   onClearLine,
-  onClearPoint
+  onClearBucket
 }: DesktopHierarchyPanelProps) {
   if (!selectedLineId) {
     if (lineHierarchySummaries.length === 0) {
@@ -53,7 +53,7 @@ export function DesktopHierarchyPanel({
 
   const selectedLine = lineHierarchySummaries.find((l) => l.lineId === selectedLineId);
 
-  if (!selectedPointName) {
+  if (!selectedWorkBucketName) {
     return (
       <div className="p-4">
         <div className="flex items-center gap-2 mb-3">
@@ -68,14 +68,14 @@ export function DesktopHierarchyPanel({
           <span className="text-xs text-gray-400">&gt;</span>
           <span className="text-xs text-gray-700 font-medium">קו: {selectedLine?.lineName ?? ''}</span>
         </div>
-        {pointSummaries.length === 0 ? (
+        {workBucketSummaries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 px-4 gap-1">
-            <p className="text-sm font-medium text-gray-500">אין נקודות בקו זה</p>
+            <p className="text-sm font-medium text-gray-500">אין קבוצות עבודה בקו זה</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {pointSummaries.map((point) => (
-              <DesktopPointGroupCard key={point.pointName} point={point} lineName={selectedLine?.lineName} onClick={onSelectPoint} />
+            {workBucketSummaries.map((bucket) => (
+              <DesktopWorkBucketCard key={bucket.workBucketName} bucket={bucket} lineName={selectedLine?.lineName} onClick={onSelectBucket} />
             ))}
           </div>
         )}
@@ -83,7 +83,7 @@ export function DesktopHierarchyPanel({
     );
   }
 
-  const selectedPoint = pointSummaries.find((p) => p.pointName === selectedPointName);
+  const selectedBucket = workBucketSummaries.find((p) => p.workBucketName === selectedWorkBucketName);
 
   return (
     <div className="p-4">
@@ -91,8 +91,8 @@ export function DesktopHierarchyPanel({
         <button
           type="button"
           className="text-xs text-blue-600 hover:text-blue-800"
-          onClick={onClearPoint}
-          aria-label="חזרה לנקודות"
+          onClick={onClearBucket}
+          aria-label="חזרה לקבוצות עבודה"
         >
           קווים
         </button>
@@ -100,21 +100,21 @@ export function DesktopHierarchyPanel({
         <button
           type="button"
           className="text-xs text-blue-600 hover:text-blue-800"
-          onClick={onClearPoint}
-          aria-label={`חזרה לנקודות קו ${selectedLine?.lineName ?? ''}`}
+          onClick={onClearBucket}
+          aria-label={`חזרה לקבוצות עבודה קו ${selectedLine?.lineName ?? ''}`}
         >
           קו: {selectedLine?.lineName ?? ''}
         </button>
         <span className="text-xs text-gray-400">&gt;</span>
-        <span className="text-xs text-gray-700 font-medium">נקודה: {selectedPointName}</span>
+        <span className="text-xs text-gray-700 font-medium">קבוצת עבודה: {selectedWorkBucketName}</span>
       </div>
-      {!selectedPoint || selectedPoint.orders.length === 0 ? (
+      {!selectedBucket || selectedBucket.orders.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-32 px-4 gap-1">
-          <p className="text-sm font-medium text-gray-500">אין הזמנות בנקודה זו</p>
+          <p className="text-sm font-medium text-gray-500">אין הזמנות בקבוצת עבודה זו</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {selectedPoint.orders.map((order) => (
+          {selectedBucket.orders.map((order) => (
             <DesktopOrderMiniCard key={order.orderId} order={order} onClick={onSelectOrder} />
           ))}
         </div>

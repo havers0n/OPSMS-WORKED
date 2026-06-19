@@ -13,11 +13,13 @@ import {
   summarizeManualShiftOrderCheckUnits,
   canCloseOrderFromCheckUnits,
   selectLineHierarchySummaries,
-  selectPointSummaries,
+  selectWorkBucketSummaries,
   selectWorkHierarchyLineSummaries,
-  selectWorkHierarchyPointSummaries,
+  selectWorkHierarchyBucketSummaries,
   normalizePointName,
   NO_POINT_LABEL,
+  normalizeWorkBucketName,
+  NO_WORK_BUCKET_LABEL,
   type ShiftListOrder
 } from './shift-selectors';
 import type {
@@ -937,78 +939,80 @@ describe('selectLineHierarchySummaries', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// selectPointSummaries
+// selectWorkBucketSummaries
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('selectPointSummaries', () => {
+describe('selectWorkBucketSummaries', () => {
   it('groups orders by pointName under a line', () => {
     const orders = [
       makeOrder({ id: 'o1', lineId: LINE_A, pointName: 'ג.גפנר', lineCount: 2 }),
       makeOrder({ id: 'o2', lineId: LINE_A, pointName: 'ג.גפנר', lineCount: 3 }),
       makeOrder({ id: 'o3', lineId: LINE_A, pointName: 'ירושלים', lineCount: 5 })
     ];
-    const result = selectPointSummaries(LINE_A, orders);
+    const result = selectWorkBucketSummaries(LINE_A, orders);
     expect(result).toHaveLength(2);
-    const gfenster = result.find((p) => p.pointName === 'ג.גפנר')!;
-    const jerusalem = result.find((p) => p.pointName === 'ירושלים')!;
+    const gfenster = result.find((p) => p.workBucketName === 'ג.גפנר')!;
+    const jerusalem = result.find((p) => p.workBucketName === 'ירושלים')!;
     expect(gfenster.ordersCount).toBe(2);
     expect(gfenster.itemLinesCount).toBe(5);
     expect(jerusalem.ordersCount).toBe(1);
     expect(jerusalem.itemLinesCount).toBe(5);
   });
 
-  it('normalizes null pointName to ללא נקודה', () => {
+  it('normalizes null pointName to ללא קבוצת עבודה', () => {
     const orders = [
       makeOrder({ id: 'o1', lineId: LINE_A, pointName: null }),
       makeOrder({ id: 'o2', lineId: LINE_A, pointName: '' })
     ];
-    const result = selectPointSummaries(LINE_A, orders);
+    const result = selectWorkBucketSummaries(LINE_A, orders);
     expect(result).toHaveLength(1);
-    expect(result[0].pointName).toBe(NO_POINT_LABEL);
+    expect(result[0].workBucketName).toBe(NO_WORK_BUCKET_LABEL);
     expect(result[0].ordersCount).toBe(2);
   });
 
-  it('does not merge duplicate point names across different lines', () => {
+  it('does not merge duplicate bucket names across different lines', () => {
     const orders = [
       makeOrder({ id: 'o1', lineId: LINE_A, pointName: 'תל אביב' }),
       makeOrder({ id: 'o2', lineId: LINE_B, pointName: 'תל אביב' })
     ];
-    const resultA = selectPointSummaries(LINE_A, orders);
-    const resultB = selectPointSummaries(LINE_B, orders);
+    const resultA = selectWorkBucketSummaries(LINE_A, orders);
+    const resultB = selectWorkBucketSummaries(LINE_B, orders);
     expect(resultA).toHaveLength(1);
+    expect(resultA[0].workBucketName).toBe('תל אביב');
     expect(resultA[0].ordersCount).toBe(1);
     expect(resultB).toHaveLength(1);
+    expect(resultB[0].workBucketName).toBe('תל אביב');
     expect(resultB[0].ordersCount).toBe(1);
   });
 
-  it('computes ordersCount, itemLinesCount, totalQuantity for each point', () => {
+  it('computes ordersCount, itemLinesCount, totalQuantity for each work bucket', () => {
     const orders = [
       { ...makeOrder({ id: 'o1', lineId: LINE_A, pointName: 'שרון', lineCount: 2, status: 'picking' }), totalQuantity: 32 },
       { ...makeOrder({ id: 'o2', lineId: LINE_A, pointName: 'שרון', lineCount: 1, status: 'queued' }), totalQuantity: 10 }
     ] as ShiftListOrder[];
-    const result = selectPointSummaries(LINE_A, orders);
+    const result = selectWorkBucketSummaries(LINE_A, orders);
     expect(result[0].ordersCount).toBe(2);
     expect(result[0].itemLinesCount).toBe(3);
     expect(result[0].totalQuantity).toBe(42);
   });
 
-  it('computes status breakdown per point', () => {
+  it('computes status breakdown per work bucket', () => {
     const orders = [
       makeOrder({ id: 'o1', lineId: LINE_A, pointName: 'שרון', status: 'picking' }),
       makeOrder({ id: 'o2', lineId: LINE_A, pointName: 'שרון', status: 'queued' }),
       makeOrder({ id: 'o3', lineId: LINE_A, pointName: 'שרון', status: 'returned' })
     ];
-    const result = selectPointSummaries(LINE_A, orders);
+    const result = selectWorkBucketSummaries(LINE_A, orders);
     expect(result[0].statusBreakdown).toEqual({
       queued: 1, picking: 1, waitingCheck: 0, returned: 1, done: 0
     });
   });
 
-  it('includes orders array in each point summary', () => {
+  it('includes orders array in each work bucket summary', () => {
     const orders = [
       makeOrder({ id: 'o1', lineId: LINE_A, pointName: 'שרון', orderNumber: 'SO-001' })
     ];
-    const result = selectPointSummaries(LINE_A, orders);
+    const result = selectWorkBucketSummaries(LINE_A, orders);
     expect(result[0].orders).toHaveLength(1);
     expect(result[0].orders[0].orderId).toBe('o1');
     expect(result[0].orders[0].orderNumber).toBe('SO-001');
@@ -1016,23 +1020,24 @@ describe('selectPointSummaries', () => {
 
   it('returns empty array when no orders match lineId', () => {
     const orders = [makeOrder({ id: 'o1', lineId: LINE_B })];
-    const result = selectPointSummaries(LINE_A, orders);
+    const result = selectWorkBucketSummaries(LINE_A, orders);
     expect(result).toEqual([]);
   });
 
-  it('sorts points by ordersCount descending', () => {
+  it('sorts work buckets by ordersCount descending', () => {
     const orders = [
       makeOrder({ id: 'o1', lineId: LINE_A, pointName: 'קטן' }),
       makeOrder({ id: 'o2', lineId: LINE_A, pointName: 'גדול' }),
       makeOrder({ id: 'o3', lineId: LINE_A, pointName: 'גדול' }),
       makeOrder({ id: 'o4', lineId: LINE_A, pointName: 'גדול' })
     ];
-    const result = selectPointSummaries(LINE_A, orders);
-    expect(result[0].pointName).toBe('גדול');
+    const result = selectWorkBucketSummaries(LINE_A, orders);
+    expect(result[0].workBucketName).toBe('גדול');
     expect(result[0].ordersCount).toBe(3);
-    expect(result[1].pointName).toBe('קטן');
+    expect(result[1].workBucketName).toBe('קטן');
     expect(result[1].ordersCount).toBe(1);
   });
+});
 
   // ── Work hierarchy selector tests ──────────────────────────────────────────
   // These lock assumptions about the corrected model shape.
@@ -1213,7 +1218,7 @@ describe('selectPointSummaries', () => {
     });
   });
 
-  describe('selectWorkHierarchyPointSummaries', () => {
+  describe('selectWorkHierarchyBucketSummaries', () => {
     const ORDER_A_ID = 'order-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
     const ORDER_B_ID = 'order-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 
@@ -1285,40 +1290,40 @@ describe('selectPointSummaries', () => {
       };
     }
 
-    it('returns buckets as point summaries for matching lineId', () => {
-      const result = selectWorkHierarchyPointSummaries(makeHierarchy(), LINE_A);
+    it('returns buckets as work bucket summaries for matching lineId', () => {
+      const result = selectWorkHierarchyBucketSummaries(makeHierarchy(), LINE_A);
       expect(result).toHaveLength(2);
-      const pointNames = result.map((p) => p.pointName).sort();
-      expect(pointNames).toEqual(['סלולר', 'פז השקמה']);
+      const bucketNames = result.map((p) => p.workBucketName).sort();
+      expect(bucketNames).toEqual(['סלולר', 'פז השקמה']);
     });
 
-    it('preserves customerName on each order in the point summary', () => {
-      const result = selectWorkHierarchyPointSummaries(makeHierarchy(), LINE_A);
-      const bucket = result.find((p) => p.pointName === 'פז השקמה')!;
+    it('preserves customerName on each order in the work bucket summary', () => {
+      const result = selectWorkHierarchyBucketSummaries(makeHierarchy(), LINE_A);
+      const bucket = result.find((p) => p.workBucketName === 'פז השקמה')!;
       expect(bucket.orders[0].customerName).toBe('לקוח א');
-      expect(bucket.orders[0].pointName).toBe('פז השקמה');
+      expect(bucket.orders[0].workBucketName).toBe('פז השקמה');
     });
 
-    it('remaps bucket.displayName to pointName on summary', () => {
-      const result = selectWorkHierarchyPointSummaries(makeHierarchy(), LINE_A);
-      const bucket = result.find((p) => p.pointName === 'סלולר')!;
-      expect(bucket.pointName).toBe('סלולר');
+    it('remaps bucket.displayName to workBucketName on summary', () => {
+      const result = selectWorkHierarchyBucketSummaries(makeHierarchy(), LINE_A);
+      const bucket = result.find((p) => p.workBucketName === 'סלולר')!;
+      expect(bucket.workBucketName).toBe('סלולר');
       expect(bucket.ordersCount).toBe(1);
     });
 
     it('returns empty array for unknown lineId', () => {
-      const result = selectWorkHierarchyPointSummaries(makeHierarchy(), 'unknown-line');
+      const result = selectWorkHierarchyBucketSummaries(makeHierarchy(), 'unknown-line');
       expect(result).toEqual([]);
     });
 
     it('returns empty array for undefined hierarchy', () => {
-      const result = selectWorkHierarchyPointSummaries(undefined, LINE_A);
+      const result = selectWorkHierarchyBucketSummaries(undefined, LINE_A);
       expect(result).toEqual([]);
     });
 
     it('preserves statusBreakdown from bucket', () => {
-      const result = selectWorkHierarchyPointSummaries(makeHierarchy(), LINE_A);
-      const pickingBucket = result.find((p) => p.pointName === 'פז השקמה')!;
+      const result = selectWorkHierarchyBucketSummaries(makeHierarchy(), LINE_A);
+      const pickingBucket = result.find((p) => p.workBucketName === 'פז השקמה')!;
       expect(pickingBucket.statusBreakdown).toEqual({ queued: 0, picking: 1, waitingCheck: 0, returned: 0, done: 0 });
     });
   });
@@ -1542,17 +1547,17 @@ describe('selectWorkHierarchyLineSummaries', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// selectWorkHierarchyPointSummaries
+// selectWorkHierarchyBucketSummaries (extended)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('selectWorkHierarchyPointSummaries', () => {
+describe('selectWorkHierarchyBucketSummaries', () => {
   it('returns empty array for undefined hierarchy', () => {
-    expect(selectWorkHierarchyPointSummaries(undefined, LINE_A)).toEqual([]);
+    expect(selectWorkHierarchyBucketSummaries(undefined, LINE_A)).toEqual([]);
   });
 
   it('returns empty array for falsy lineId', () => {
     const hierarchy = makeHierarchyResponse();
-    expect(selectWorkHierarchyPointSummaries(hierarchy, '')).toEqual([]);
+    expect(selectWorkHierarchyBucketSummaries(hierarchy, '')).toEqual([]);
   });
 
   it('returns empty array when line not found', () => {
@@ -1582,7 +1587,7 @@ describe('selectWorkHierarchyPointSummaries', () => {
         }
       ]
     });
-    const result = selectWorkHierarchyPointSummaries(hierarchy, LINE_B);
+    const result = selectWorkHierarchyBucketSummaries(hierarchy, LINE_B);
     expect(result).toEqual([]);
   });
 
@@ -1646,7 +1651,7 @@ describe('selectWorkHierarchyPointSummaries', () => {
       ]
     });
 
-    const result = selectWorkHierarchyPointSummaries(hierarchy, LINE_A);
+    const result = selectWorkHierarchyBucketSummaries(hierarchy, LINE_A);
     expect(result).toHaveLength(1);
     expect(result[0].orders).toHaveLength(2);
     expect(result[0].orders[0].lineCount).toBe(3);
@@ -1726,7 +1731,7 @@ describe('selectWorkHierarchyPointSummaries', () => {
       ]
     });
 
-    const result = selectWorkHierarchyPointSummaries(hierarchy, LINE_A);
+    const result = selectWorkHierarchyBucketSummaries(hierarchy, LINE_A);
     expect(result[0].itemLinesCount).toBe(7);
     expect(result[0].ordersCount).toBe(3);
   });
@@ -1780,7 +1785,7 @@ describe('selectWorkHierarchyPointSummaries', () => {
       ]
     });
 
-    const result = selectWorkHierarchyPointSummaries(hierarchy, LINE_A);
+    const result = selectWorkHierarchyBucketSummaries(hierarchy, LINE_A);
     expect(result[0].itemLinesCount).toBe(0);
     expect(result[0].orders[0].lineCount).toBe(0);
   });

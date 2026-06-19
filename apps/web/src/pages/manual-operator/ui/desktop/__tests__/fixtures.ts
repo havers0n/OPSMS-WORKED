@@ -8,7 +8,7 @@ import type {
   PickerDetail,
   OrderDetail,
   LineHierarchySummary,
-  PointHierarchySummary
+  WorkBucketSummary
 } from '@/entities/manual-shift/model/shift-selectors';
 import type { ManualShiftSession } from '@wos/domain';
 
@@ -266,9 +266,9 @@ export const mockLineHierarchySummaries: LineHierarchySummary[] = [
   }
 ];
 
-export const mockPointSummaries: PointHierarchySummary[] = [
+export const mockWorkBucketSummaries: WorkBucketSummary[] = [
   {
-    pointName: 'נקודה א',
+    workBucketName: 'Point A',
     ordersCount: 2,
     itemLinesCount: 8,
     totalQuantity: 32,
@@ -279,7 +279,7 @@ export const mockPointSummaries: PointHierarchySummary[] = [
         orderNumber: 'ORD-001',
         customerName: 'לקוח א',
         status: 'picking',
-        pointName: 'נקודה א',
+        workBucketName: 'Point A',
         pickerName: 'דוד',
         checkerName: null,
         lineCount: 5,
@@ -290,7 +290,7 @@ export const mockPointSummaries: PointHierarchySummary[] = [
         orderNumber: null,
         customerName: null,
         status: 'returned',
-        pointName: 'ללא נקודה',
+        workBucketName: 'No Point',
         pickerName: 'שרה',
         checkerName: null,
         lineCount: 3,

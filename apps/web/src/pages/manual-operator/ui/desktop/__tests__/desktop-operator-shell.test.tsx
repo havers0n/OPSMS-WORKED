@@ -24,7 +24,7 @@ import {
   mockPickers,
   mockShift,
   mockLineHierarchySummaries,
-  mockPointSummaries
+  mockWorkBucketSummaries
 } from './fixtures';
 
 const mockedBffRequest = vi.mocked(bffRequest);
@@ -40,16 +40,16 @@ const defaultProps = {
   orderDetail: null,
   selectedDetailType: null as 'picker' | 'order' | null,
   selectedLineId: null as string | null,
-  selectedPointName: null as string | null,
+  selectedWorkBucketName: null as string | null,
   lineHierarchySummaries: mockLineHierarchySummaries,
-  pointSummaries: mockPointSummaries,
+  workBucketSummaries: mockWorkBucketSummaries,
   onSelectPicker: vi.fn(),
   onSelectOrder: vi.fn(),
   onCloseDetail: vi.fn(),
   onSelectHierarchyLine: vi.fn(),
-  onSelectHierarchyPoint: vi.fn(),
+  onSelectHierarchyBucket: vi.fn(),
   onClearHierarchyLine: vi.fn(),
-  onClearHierarchyPoint: vi.fn(),
+  onClearHierarchyBucket: vi.fn(),
   onCreateShift: vi.fn(),
   isCreatingShift: false,
   selectedDate: '2026-05-28',

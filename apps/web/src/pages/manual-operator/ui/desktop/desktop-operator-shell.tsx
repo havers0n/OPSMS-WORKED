@@ -7,7 +7,7 @@ import type {
   OrderDetail,
   PickerDetail,
   PickerWorkload,
-  PointHierarchySummary,
+  WorkBucketSummary,
   ShiftSummary
 } from '@/entities/manual-shift/model/shift-selectors';
 import { DesktopDetailDrawer } from './desktop-detail-drawer';
@@ -29,16 +29,16 @@ export interface DesktopOperatorShellProps {
   orderDetail: OrderDetail | null;
   selectedDetailType: 'picker' | 'order' | null;
   selectedLineId: string | null;
-  selectedPointName: string | null;
+  selectedWorkBucketName: string | null;
   lineHierarchySummaries: LineHierarchySummary[];
-  pointSummaries: PointHierarchySummary[];
+  workBucketSummaries: WorkBucketSummary[];
   onSelectPicker: (pickerKey: string) => void;
   onSelectOrder: (orderId: string) => void;
   onCloseDetail: () => void;
   onSelectHierarchyLine: (lineId: string) => void;
-  onSelectHierarchyPoint: (pointName: string) => void;
+  onSelectHierarchyBucket: (workBucketName: string) => void;
   onClearHierarchyLine: () => void;
-  onClearHierarchyPoint: () => void;
+  onClearHierarchyBucket: () => void;
   onCreateShift: () => void;
   isCreatingShift: boolean;
   selectedDate: string;
@@ -103,16 +103,16 @@ export function DesktopOperatorShell({
   orderDetail,
   selectedDetailType,
   selectedLineId,
-  selectedPointName,
+  selectedWorkBucketName,
   lineHierarchySummaries,
-  pointSummaries,
+  workBucketSummaries,
   onSelectPicker,
   onSelectOrder,
   onCloseDetail,
   onSelectHierarchyLine,
-  onSelectHierarchyPoint,
+  onSelectHierarchyBucket,
   onClearHierarchyLine,
-  onClearHierarchyPoint,
+  onClearHierarchyBucket,
   onCreateShift,
   isCreatingShift,
   selectedDate,
@@ -218,14 +218,14 @@ export function DesktopOperatorShell({
           <main className="flex-1 bg-white overflow-y-auto min-w-0">
             <DesktopHierarchyPanel
               selectedLineId={selectedLineId}
-              selectedPointName={selectedPointName}
+              selectedWorkBucketName={selectedWorkBucketName}
               lineHierarchySummaries={lineHierarchySummaries}
-              pointSummaries={pointSummaries}
+              workBucketSummaries={workBucketSummaries}
               onSelectLine={onSelectHierarchyLine}
-              onSelectPoint={onSelectHierarchyPoint}
+              onSelectBucket={onSelectHierarchyBucket}
               onSelectOrder={onSelectOrder}
               onClearLine={onClearHierarchyLine}
-              onClearPoint={onClearHierarchyPoint}
+              onClearBucket={onClearHierarchyBucket}
             />
           </main>
 

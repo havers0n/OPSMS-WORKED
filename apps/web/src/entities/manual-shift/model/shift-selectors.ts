@@ -647,7 +647,7 @@ export function selectPickerDetail(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Hierarchy selectors (Line → Point → Order drill-down)
+// Hierarchy selectors (Line → WorkBucket → Order drill-down)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type ShiftListOrder = ManualShiftOrder & { totalQuantity?: number };
@@ -657,6 +657,13 @@ export const NO_POINT_LABEL = 'ללא נקודה';
 export function normalizePointName(pointName: string | null | undefined): string {
   if (pointName === null || pointName === undefined || pointName.trim() === '') return NO_POINT_LABEL;
   return pointName.trim();
+}
+
+export const NO_WORK_BUCKET_LABEL = 'ללא קבוצת עבודה';
+
+export function normalizeWorkBucketName(name: string | null | undefined): string {
+  if (name === null || name === undefined || name.trim() === '') return NO_WORK_BUCKET_LABEL;
+  return name.trim();
 }
 
 export interface StatusBreakdown {
@@ -683,15 +690,15 @@ export interface HierarchyOrder {
   orderNumber: string | null;
   customerName?: string | null;
   status: ManualShiftOrderStatus;
-  pointName: string;
+  workBucketName: string;
   pickerName: string | null;
   checkerName: string | null;
   lineCount: number;
   totalQuantity: number;
 }
 
-export interface PointHierarchySummary {
-  pointName: string;
+export interface WorkBucketSummary {
+  workBucketName: string;
   ordersCount: number;
   itemLinesCount: number;
   totalQuantity: number;
@@ -699,8 +706,8 @@ export interface PointHierarchySummary {
   orders: HierarchyOrder[];
 }
 
-function toHierarchyPointName(pointName: string | null | undefined, displayName: string): string {
-  return normalizePointName(pointName ?? displayName);
+function toHierarchyBucketName(name: string | null | undefined, displayName: string): string {
+  return normalizeWorkBucketName(name ?? displayName);
 }
 
 export function selectLineHierarchySummaries(
@@ -731,25 +738,25 @@ export function selectLineHierarchySummaries(
   }));
 }
 
-export function selectPointSummaries(
+export function selectWorkBucketSummaries(
   lineId: string,
   orders: ShiftListOrder[]
-): PointHierarchySummary[] {
+): WorkBucketSummary[] {
   const lineOrders = orders.filter((o) => o.lineId === lineId);
-  const byPoint = new Map<string, ShiftListOrder[]>();
+  const byBucket = new Map<string, ShiftListOrder[]>();
   for (const order of lineOrders) {
-    const pn = normalizePointName(order.pointName);
-    const bucket = byPoint.get(pn);
+    const bucketName = normalizeWorkBucketName(order.pointName);
+    const bucket = byBucket.get(bucketName);
     if (bucket) bucket.push(order);
-    else byPoint.set(pn, [order]);
+    else byBucket.set(bucketName, [order]);
   }
 
-  const result: PointHierarchySummary[] = [];
-  for (const [pointName, pointOrders] of byPoint) {
+  const result: WorkBucketSummary[] = [];
+  for (const [workBucketName, bucketOrders] of byBucket) {
     let queued = 0, picking = 0, waitingCheck = 0, returned = 0, done = 0;
     let itemLinesCount = 0, totalQuantity = 0;
     const hierarchyOrders: HierarchyOrder[] = [];
-    for (const o of pointOrders) {
+    for (const o of bucketOrders) {
       switch (o.status) {
         case 'queued': queued++; break;
         case 'picking': picking++; break;
@@ -764,7 +771,7 @@ export function selectPointSummaries(
         orderNumber: o.orderNumber,
         customerName: o.customerName,
         status: o.status,
-        pointName: normalizePointName(o.pointName),
+        workBucketName: normalizeWorkBucketName(o.pointName),
         pickerName: o.pickerName,
         checkerName: o.checkerName,
         lineCount: o.lineCount ?? 0,
@@ -772,8 +779,8 @@ export function selectPointSummaries(
       });
     }
     result.push({
-      pointName,
-      ordersCount: pointOrders.length,
+      workBucketName,
+      ordersCount: bucketOrders.length,
       itemLinesCount,
       totalQuantity,
       statusBreakdown: { queued, picking, waitingCheck, returned, done },
@@ -812,10 +819,10 @@ export function selectWorkHierarchyLineSummaries(
   return result;
 }
 
-export function selectWorkHierarchyPointSummaries(
+export function selectWorkHierarchyBucketSummaries(
   hierarchy: ManualShiftWorkHierarchyResponse | undefined,
   lineId: string
-): PointHierarchySummary[] {
+): WorkBucketSummary[] {
   if (!hierarchy || !lineId) return [];
 
   for (const area of hierarchy.areas) {
@@ -828,14 +835,14 @@ export function selectWorkHierarchyPointSummaries(
         orderNumber: order.orderNumber,
         customerName: order.customerName,
         status: order.status,
-        pointName: toHierarchyPointName(order.pointName, bucket.displayName),
+        workBucketName: toHierarchyBucketName(order.pointName, bucket.displayName),
         pickerName: null,
         checkerName: null,
         lineCount: order.lineCount ?? 0,
         totalQuantity: order.totalQuantity
       }));
       return {
-        pointName: bucket.displayName,
+        workBucketName: bucket.displayName,
         ordersCount: bucket.totalOrders,
         itemLinesCount: orders.reduce((sum, o) => sum + o.lineCount, 0),
         totalQuantity: bucket.totalQuantity,

@@ -1,10 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import type { LineHierarchySummary, WorkBucketSummary } from '@/entities/manual-shift/model/shift-selectors';
 import { DesktopHierarchyPanel } from '../desktop-hierarchy-panel';
-import type {
-  LineHierarchySummary,
-  PointHierarchySummary
-} from '@/entities/manual-shift/model/shift-selectors';
 
 const mockLineHierarchySummaries: LineHierarchySummary[] = [
   {
@@ -15,7 +12,7 @@ const mockLineHierarchySummaries: LineHierarchySummary[] = [
     ordersCount: 5,
     itemLinesCount: 12,
     totalQuantity: 64,
-    statusBreakdown: { queued: 2, picking: 1, waitingCheck: 1, returned: 0, done: 1 }
+    statusBreakdown: { queued: 2, picking: 1, waitingCheck: 0, returned: 0, done: 1 }
   },
   {
     lineId: 'line-2',
@@ -29,9 +26,9 @@ const mockLineHierarchySummaries: LineHierarchySummary[] = [
   }
 ];
 
-const mockPointSummaries: PointHierarchySummary[] = [
+const mockWorkBucketSummaries: WorkBucketSummary[] = [
   {
-    pointName: 'Point A',
+    workBucketName: 'Point A',
     ordersCount: 2,
     itemLinesCount: 2,
     totalQuantity: 32,
@@ -42,7 +39,7 @@ const mockPointSummaries: PointHierarchySummary[] = [
         orderNumber: 'SO26015545',
         customerName: 'Customer A',
         status: 'picking',
-        pointName: 'Point A',
+        workBucketName: 'Point A',
         pickerName: 'David',
         checkerName: null,
         lineCount: 0,
@@ -53,7 +50,7 @@ const mockPointSummaries: PointHierarchySummary[] = [
         orderNumber: 'SO26015546',
         customerName: null,
         status: 'returned',
-        pointName: 'Point A',
+        workBucketName: 'Point A',
         pickerName: null,
         checkerName: null,
         lineCount: 0,
@@ -62,7 +59,7 @@ const mockPointSummaries: PointHierarchySummary[] = [
     ]
   },
   {
-    pointName: 'No Point',
+    workBucketName: 'No Point',
     ordersCount: 1,
     itemLinesCount: 1,
     totalQuantity: 10,
@@ -73,7 +70,7 @@ const mockPointSummaries: PointHierarchySummary[] = [
         orderNumber: null,
         customerName: null,
         status: 'queued',
-        pointName: 'No Point',
+        workBucketName: 'No Point',
         pickerName: null,
         checkerName: null,
         lineCount: 0,
@@ -90,14 +87,14 @@ describe('DesktopHierarchyPanel', () => {
     return render(
       <DesktopHierarchyPanel
         selectedLineId={null}
-        selectedPointName={null}
+        selectedWorkBucketName={null}
         lineHierarchySummaries={mockLineHierarchySummaries}
-        pointSummaries={[]}
+        workBucketSummaries={[]}
         onSelectLine={noop}
-        onSelectPoint={noop}
+        onSelectBucket={noop}
         onSelectOrder={noop}
         onClearLine={noop}
-        onClearPoint={noop}
+        onClearBucket={noop}
         {...overrides}
       />
     );
@@ -121,28 +118,28 @@ describe('DesktopHierarchyPanel', () => {
     expect(onSelectLine).toHaveBeenCalledWith('line-1');
   });
 
-  it('shows point groups when a line is selected', () => {
+  it('shows work bucket cards when a line is selected', () => {
     renderPanel({
       selectedLineId: 'line-1',
-      pointSummaries: mockPointSummaries
+      workBucketSummaries: mockWorkBucketSummaries
     });
     expect(screen.getByText('Point A')).toBeTruthy();
     expect(screen.getByText('No Point')).toBeTruthy();
   });
 
-  it('shows empty state when no points exist in the selected line', () => {
+  it('shows empty state when no work buckets exist in the selected line', () => {
     renderPanel({
       selectedLineId: 'line-1',
-      pointSummaries: []
+      workBucketSummaries: []
     });
-    expect(screen.getByText('אין נקודות בקו זה')).toBeTruthy();
+    expect(screen.getByText('אין קבוצות עבודה בקו זה')).toBeTruthy();
   });
 
-  it('shows order cards for the selected point', () => {
+  it('shows order cards for the selected work bucket', () => {
     renderPanel({
       selectedLineId: 'line-1',
-      selectedPointName: 'Point A',
-      pointSummaries: mockPointSummaries
+      selectedWorkBucketName: 'Point A',
+      workBucketSummaries: mockWorkBucketSummaries
     });
     expect(screen.getByTestId('order-mini-card-order-1')).toBeTruthy();
     expect(screen.getByTestId('order-mini-card-order-2')).toBeTruthy();
@@ -151,8 +148,8 @@ describe('DesktopHierarchyPanel', () => {
   it('renders customer name when present and stays safe when absent', () => {
     renderPanel({
       selectedLineId: 'line-1',
-      selectedPointName: 'Point A',
-      pointSummaries: mockPointSummaries
+      selectedWorkBucketName: 'Point A',
+      workBucketSummaries: mockWorkBucketSummaries
     });
     expect(screen.getByText('Customer A')).toBeTruthy();
     expect(screen.queryByText('null')).toBeNull();
@@ -163,8 +160,8 @@ describe('DesktopHierarchyPanel', () => {
     const onSelectOrder = vi.fn();
     renderPanel({
       selectedLineId: 'line-1',
-      selectedPointName: 'Point A',
-      pointSummaries: mockPointSummaries,
+      selectedWorkBucketName: 'Point A',
+      workBucketSummaries: mockWorkBucketSummaries,
       onSelectOrder
     });
     fireEvent.click(screen.getByTestId('order-mini-card-order-1'));
