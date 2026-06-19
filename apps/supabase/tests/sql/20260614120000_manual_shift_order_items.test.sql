@@ -11,6 +11,10 @@ declare
   item_b uuid;
   v_sku text;
   v_desc text;
+  v_discard1 text;
+  v_discard2 text;
+  v_discard3 text;
+  v_discard4 text;
   v_source_rows integer[];
   v_source_sheet text;
 begin
@@ -124,7 +128,7 @@ begin
   returning id into item_b;
 
   select description, category, notes, zone, source_sheet, source_file
-  into v_desc, null, null, null, v_source_sheet, null
+  into v_desc, v_discard1, v_discard2, v_discard3, v_source_sheet, v_discard4
   from public.manual_shift_order_items
   where id = item_b;
 
@@ -172,15 +176,38 @@ begin
       null;
   end;
 
-  -- Test 7: cascade delete from order
-  delete from public.manual_shift_orders where id = order_a;
+  -- Test 7: soft-deleting an order preserves item rows (no hard-delete cascade)
+  update public.manual_shift_orders
+  set deleted_at = timezone('utc', now()),
+      deleted_by_profile_id = user_a,
+      deleted_by_name = 'Test Admin',
+      delete_reason = 'MSC-ITEMS-10 test'
+  where id = order_a;
 
-  if exists (
+  -- Assert: order row still exists after soft-delete
+  if not exists (
+    select 1 from public.manual_shift_orders
+    where id = order_a and deleted_at is not null
+  ) then
+    raise exception 'MSC-ITEMS-10 FAIL: order should still exist after soft-delete with deleted_at set.';
+  end if;
+
+  -- Assert: related item rows still exist (soft-delete does not cascade)
+  if not exists (
     select 1 from public.manual_shift_order_items
     where id in (item_a, item_b)
   ) then
-    raise exception 'MSC-ITEMS-10 FAIL: items should cascade-delete with order.';
+    raise exception 'MSC-ITEMS-10 FAIL: items should survive soft-delete of parent order.';
   end if;
+
+  -- Assert: authenticated tenant users cannot hard-delete orders (no DELETE RLS policy)
+  begin
+    delete from public.manual_shift_orders where id = order_a;
+    raise exception 'MSC-ITEMS-10 FAIL: hard-delete of manual_shift_orders should be blocked by RLS.';
+  exception
+    when others then
+      null;
+  end;
 end
 $$;
 

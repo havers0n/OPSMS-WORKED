@@ -180,7 +180,9 @@ export const manualShiftMonthlyApplyOrderSchema = z.object({
   sortOrder: z.number().int().min(1),
   items: z.array(manualShiftMonthlyApplyItemSchema).min(1),
   workBucketName: z.string().nullable(),
-  workBucketType: workBucketTypeSchema.nullable()
+  workBucketType: workBucketTypeSchema.nullable(),
+  rawRouteLine: z.string().nullable().optional(),
+  routeBase: z.string().nullable().optional()
 });
 export type ManualShiftMonthlyApplyOrder = z.infer<typeof manualShiftMonthlyApplyOrderSchema>;
 
@@ -871,7 +873,9 @@ export function planManualShiftMonthlyImportApply(
       sortOrder: lineOrders.size + 1,
       items: [item],
       workBucketName: group.workBucketName,
-      workBucketType: group.workBucketType
+      workBucketType: group.workBucketType,
+      rawRouteLine: group.rawRouteLine,
+      routeBase: group.routeBase
     });
   }
 

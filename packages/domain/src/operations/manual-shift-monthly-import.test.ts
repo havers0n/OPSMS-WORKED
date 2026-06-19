@@ -1061,6 +1061,8 @@ describe('manual shift monthly import parser', () => {
     const plan = planManualShiftMonthlyImportApply(result);
     expect(plan.lines[0].orders[0].workBucketName).toBeNull();
     expect(plan.lines[0].orders[0].workBucketType).toBeNull();
+    expect(plan.lines[0].orders[0].rawRouteLine).toBe('חיפה');
+    expect(plan.lines[0].orders[0].routeBase).toBe('חיפה');
   });
 
   it('C(b): slash route with category bucket produces canonical fields with workBucketType=unknown', () => {
@@ -1088,6 +1090,8 @@ describe('manual shift monthly import parser', () => {
     const plan = planManualShiftMonthlyImportApply(result);
     expect(plan.lines[0].orders[0].workBucketName).toBe('סלולר');
     expect(plan.lines[0].orders[0].workBucketType).toBe('unknown');
+    expect(plan.lines[0].orders[0].rawRouteLine).toBe('דרום/סלולר');
+    expect(plan.lines[0].orders[0].routeBase).toBe('דרום');
   });
 
   it('C(c): slash route with customer-like bucket preserves workBucketName separately from customerName', () => {
@@ -1150,11 +1154,15 @@ describe('manual shift monthly import parser', () => {
     expect(bucket1.workBucketType).toBe('unknown');
     expect(bucket1.orderNumber).toBe('SO-1');
     expect(bucket1.customerName).toBe('לקוח א');
+    expect(bucket1.rawRouteLine).toBe('דרום/סלולר');
+    expect(bucket1.routeBase).toBe('דרום');
 
     expect(bucket2.workBucketName).toBe('פז השקמה');
     expect(bucket2.workBucketType).toBe('unknown');
     expect(bucket2.orderNumber).toBe('SO-1');
     expect(bucket2.customerName).toBe('לקוח א');
+    expect(bucket2.rawRouteLine).toBe('דרום/פז השקמה');
+    expect(bucket2.routeBase).toBe('דרום');
   });
 
   it('C(e): regression — legacy lineName/pointName fallback still works and all PR A/PR B assertions hold', () => {

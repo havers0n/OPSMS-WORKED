@@ -18,7 +18,6 @@ import {
   selectWorkHierarchyBucketSummaries,
   normalizePointName,
   NO_POINT_LABEL,
-  normalizeWorkBucketName,
   NO_WORK_BUCKET_LABEL,
   type ShiftListOrder
 } from './shift-selectors';
@@ -1085,7 +1084,8 @@ describe('selectWorkBucketSummaries', () => {
                       status: 'queued',
                       totalQuantity: 10,
                       hasAshlama: false,
-                      hasCheckUnits: false
+                      hasCheckUnits: false,
+                      lineCount: 0
                     }]
                   },
                   {
@@ -1102,7 +1102,8 @@ describe('selectWorkBucketSummaries', () => {
                       status: 'queued',
                       totalQuantity: 20,
                       hasAshlama: false,
-                      hasCheckUnits: false
+                      hasCheckUnits: false,
+                      lineCount: 0
                     }]
                   }
                 ]
@@ -1168,7 +1169,8 @@ describe('selectWorkBucketSummaries', () => {
                   status: 'queued',
                   totalQuantity: 10,
                   hasAshlama: false,
-                  hasCheckUnits: false
+                  hasCheckUnits: false,
+                  lineCount: 0
                 }]
               }]
             }]
@@ -1204,7 +1206,8 @@ describe('selectWorkBucketSummaries', () => {
                   status: 'queued',
                   totalQuantity: 5,
                   hasAshlama: false,
-                  hasCheckUnits: false
+                  hasCheckUnits: false,
+                  lineCount: 0
                 }]
               }]
             }]
@@ -1261,7 +1264,8 @@ describe('selectWorkBucketSummaries', () => {
                       status: 'queued',
                       totalQuantity: 10,
                       hasAshlama: false,
-                      hasCheckUnits: false
+                      hasCheckUnits: false,
+                      lineCount: 0
                     }]
                   },
                   {
@@ -1278,7 +1282,8 @@ describe('selectWorkBucketSummaries', () => {
                       status: 'picking',
                       totalQuantity: 20,
                       hasAshlama: true,
-                      hasCheckUnits: false
+                      hasCheckUnits: false,
+                      lineCount: 0
                     }]
                   }
                 ]
@@ -1327,7 +1332,6 @@ describe('selectWorkBucketSummaries', () => {
       expect(pickingBucket.statusBreakdown).toEqual({ queued: 0, picking: 1, waitingCheck: 0, returned: 0, done: 0 });
     });
   });
-});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // selectWorkHierarchyLineSummaries
