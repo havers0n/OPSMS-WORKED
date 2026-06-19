@@ -45,6 +45,7 @@ import {
   manualShiftMonthlyApplyResponseSchema,
   manualShiftMonthlyReplaceSafetySchema,
   manualShiftWorkHierarchyResponseSchema,
+  bucketProductRollupResponseSchema,
   applyManualShiftImportRequestSchema,
   applyManualShiftImportResponseSchema,
   manualShiftDeleteRestoreBodySchema,
@@ -1185,6 +1186,29 @@ export function registerManualShiftsRoutes(
     }).id;
     const hierarchy = await getManualShiftsService(auth).getShiftWorkHierarchy({ tenantId, shiftId });
     return parseOrThrow(manualShiftWorkHierarchyResponseSchema, hierarchy);
+  });
+
+  app.get('/api/manual-shifts/:shiftId/buckets/product-rollup', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const shiftId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { shiftId: string }).shiftId
+    }).id;
+    const query = request.query as { lineId?: string; bucketName?: string };
+    const lineId = parseOrThrow(idResponseSchema, {
+      id: query.lineId ?? ''
+    }).id;
+    const bucketName = query.bucketName ?? '';
+
+    const rollup = await getManualShiftsService(auth).getBucketProductRollup({
+      tenantId,
+      shiftId,
+      lineId,
+      bucketName
+    });
+    return parseOrThrow(bucketProductRollupResponseSchema, rollup);
   });
 
   // ── Pick bridge ──────────────────────────────────────────────────────────────

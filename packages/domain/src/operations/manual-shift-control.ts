@@ -204,6 +204,23 @@ export const manualShiftOrderDetailSchema = manualShiftOrderSchema
   });
 export type ManualShiftOrderDetail = z.infer<typeof manualShiftOrderDetailSchema>;
 
+export const bucketProductRollupRowSchema = z.object({
+  sku: z.string(),
+  description: z.string().nullable(),
+  category: z.string().nullable(),
+  totalQuantity: z.number().int().min(0),
+  orderCount: z.number().int().min(0)
+});
+export type BucketProductRollupRow = z.infer<typeof bucketProductRollupRowSchema>;
+
+export const bucketProductRollupResponseSchema = z.object({
+  shiftId: z.string().uuid(),
+  lineId: z.string().uuid(),
+  bucketName: z.string(),
+  products: z.array(bucketProductRollupRowSchema)
+});
+export type BucketProductRollupResponse = z.infer<typeof bucketProductRollupResponseSchema>;
+
 export const manualShiftOrderAshlamaSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),

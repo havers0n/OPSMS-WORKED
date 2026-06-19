@@ -349,6 +349,12 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     getDaySummary: vi.fn(async () => daySummary),
     listBindableUsers: vi.fn(async () => [] as BindableUser[]),
     getShiftWorkHierarchy: vi.fn(async () => ({ shiftId: '', areas: [] })),
+    getBucketProductRollup: vi.fn(async () => ({
+      shiftId: ids.shift,
+      lineId: ids.line,
+      bucketName: '',
+      products: []
+    })),
     ...overrides
   };
 }
@@ -2523,6 +2529,99 @@ describe('manual shifts routes', () => {
       expect(line.buckets[1].totalQuantity).toBe(12);
       expect(line.buckets[0].orders[0].lineCount).toBe(2);
       expect(line.buckets[0].orders[0].totalQuantity).toBe(10);
+
+      await app.close();
+    });
+  });
+
+  describe('bucket-product-rollup', () => {
+    it('returns product rollup for a valid shift+line+bucket', async () => {
+      const rollup = {
+        shiftId: ids.shift,
+        lineId: ids.line,
+        bucketName: 'סלולר',
+        products: [
+          { sku: 'SKU-1', description: 'מוצר א', category: 'cat-a', totalQuantity: 24, orderCount: 2 },
+          { sku: 'SKU-2', description: 'מוצר ב', category: 'cat-b', totalQuantity: 10, orderCount: 1 }
+        ]
+      };
+      const service = createServiceMock({
+        getBucketProductRollup: vi.fn(async () => rollup)
+      });
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/buckets/product-rollup?lineId=${ids.line}&bucketName=%D7%A1%D7%9C%D7%95%D7%9C%D7%A8`
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        shiftId: ids.shift,
+        lineId: ids.line,
+        bucketName: 'סלולר',
+        products: [
+          { sku: 'SKU-1', description: 'מוצר א', category: 'cat-a', totalQuantity: 24, orderCount: 2 },
+          { sku: 'SKU-2', description: 'מוצר ב', category: 'cat-b', totalQuantity: 10, orderCount: 1 }
+        ]
+      });
+      expect(service.getBucketProductRollup).toHaveBeenCalledWith({
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        lineId: ids.line,
+        bucketName: 'סלולר'
+      });
+
+      await app.close();
+    });
+
+    it('returns empty products array for empty bucket', async () => {
+      const rollup = {
+        shiftId: ids.shift,
+        lineId: ids.line,
+        bucketName: 'ריק',
+        products: []
+      };
+      const service = createServiceMock({
+        getBucketProductRollup: vi.fn(async () => rollup)
+      });
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/buckets/product-rollup?lineId=${ids.line}&bucketName=%D7%A8%D7%99%D7%A7`
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().products).toEqual([]);
+
+      await app.close();
+    });
+
+    it('rejects missing lineId query param', async () => {
+      const service = createServiceMock();
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/buckets/product-rollup`
+      });
+
+      expect(response.statusCode).toBe(400);
+
+      await app.close();
+    });
+
+    it('rejects invalid lineId format', async () => {
+      const service = createServiceMock();
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/buckets/product-rollup?lineId=not-a-uuid`
+      });
+
+      expect(response.statusCode).toBe(400);
 
       await app.close();
     });

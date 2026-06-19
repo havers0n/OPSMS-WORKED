@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import type { ManualShiftLineSummary, ManualShiftSession } from '@wos/domain';
 import {
+  bucketProductRollupQueryOptions,
   daySummaryQueryOptions,
   monthlyReplaceSafetyQueryOptions,
   shiftOrdersQueryOptions,
@@ -87,6 +88,7 @@ export function ManualOperatorWorkSection({
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const [selectedWorkBucketName, setSelectedWorkBucketName] = useState<string | null>(null);
   const [selectedAreaKey, setSelectedAreaKey] = useState<string | null>(null);
+  const [workBucketView, setWorkBucketView] = useState<'products' | 'orders'>('products');
 
   const { data: daySummary, isLoading: isDaySummaryLoading } = useQuery({
     ...daySummaryQueryOptions(shift?.id ?? ''),
@@ -99,6 +101,23 @@ export function ManualOperatorWorkSection({
 const { data: workHierarchy } = useQuery({
     ...workHierarchyQueryOptions(shift?.id ?? ''),
     enabled: !!shift?.id && isDesktop
+  });
+
+  const selectedWorkBucketRawName: string = useMemo(() => {
+    if (!selectedLineId || !selectedWorkBucketName || !workHierarchy) return '';
+    for (const area of workHierarchy.areas) {
+      const line = area.lines.find((l) => l.lineId === selectedLineId);
+      if (!line) continue;
+      const bucket = line.buckets.find((b) => b.displayName === selectedWorkBucketName);
+      if (!bucket) continue;
+      return bucket.bucketName ?? '';
+    }
+    return '';
+  }, [selectedLineId, selectedWorkBucketName, workHierarchy]);
+
+  const { data: productRollup, isLoading: isProductRollupLoading } = useQuery({
+    ...bucketProductRollupQueryOptions(shift?.id ?? '', selectedLineId ?? '', selectedWorkBucketRawName),
+    enabled: !!shift?.id && !!selectedLineId && selectedWorkBucketRawName !== null && workBucketView === 'products'
   });
 
   const canFetchReplaceSafety = canMonthlyImport && hasExistingWork && !!shift?.id;
@@ -172,6 +191,7 @@ const { data: workHierarchy } = useQuery({
 
   function handleSelectHierarchyBucket(workBucketName: string) {
     setSelectedWorkBucketName(workBucketName);
+    setWorkBucketView('products');
   }
 
   function handleClearArea() {
@@ -217,6 +237,10 @@ const { data: workHierarchy } = useQuery({
         onClearArea={handleClearArea}
         onClearHierarchyLine={handleClearHierarchyLine}
         onClearHierarchyBucket={handleClearHierarchyBucket}
+        workBucketView={workBucketView}
+        productRollup={productRollup?.products}
+        productRollupLoading={isProductRollupLoading}
+        onSetWorkBucketView={setWorkBucketView}
         selectedDate={selectedDate}
         todayDate={todayDate}
         onChangeDate={onChangeDate}

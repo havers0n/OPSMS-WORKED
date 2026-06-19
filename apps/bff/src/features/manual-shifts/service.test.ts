@@ -632,7 +632,8 @@ function createRepo() {
     listBindableUsers: vi.fn(async (_tenantId: string) => []),
     listShiftCheckUnits: vi.fn(async (_shiftId: string) => []),
     listShiftAshlamot: vi.fn(async (_shiftId: string) => []),
-    listShiftWorkHierarchy: vi.fn(async (_shiftId: string) => ({ shiftId: '', areas: [] }))
+    listShiftWorkHierarchy: vi.fn(async (_shiftId: string) => ({ shiftId: '', areas: [] })),
+    listBucketProductRollup: vi.fn(async () => [])
   };
  
   return { repo, state };

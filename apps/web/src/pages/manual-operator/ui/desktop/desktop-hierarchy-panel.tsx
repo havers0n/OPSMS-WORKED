@@ -3,10 +3,12 @@ import type {
   LineHierarchySummary,
   WorkBucketSummary
 } from '@/entities/manual-shift/model/shift-selectors';
+import type { BucketProductRollupRow } from '@wos/domain';
 import { DesktopAreaCard } from './desktop-area-card';
 import { DesktopLineSummaryCard } from './desktop-line-summary-card';
 import { DesktopWorkBucketCard } from './desktop-work-bucket-card';
 import { DesktopOrderMiniCard } from './desktop-order-mini-card';
+import { DesktopBucketProductTable } from './desktop-bucket-product-table';
 
 interface DesktopHierarchyPanelProps {
   selectedAreaKey: string | null;
@@ -23,6 +25,10 @@ interface DesktopHierarchyPanelProps {
   onClearArea: () => void;
   onClearLine: () => void;
   onClearBucket: () => void;
+  workBucketView: 'products' | 'orders';
+  productRollup: BucketProductRollupRow[] | undefined;
+  productRollupLoading: boolean;
+  onSetWorkBucketView: (view: 'products' | 'orders') => void;
 }
 
 export function DesktopHierarchyPanel({
@@ -39,7 +45,11 @@ export function DesktopHierarchyPanel({
   onSelectOrder,
   onClearArea,
   onClearLine,
-  onClearBucket
+  onClearBucket,
+  workBucketView,
+  productRollup,
+  productRollupLoading,
+  onSetWorkBucketView
 }: DesktopHierarchyPanelProps) {
   if (!selectedAreaKey) {
     if (areaSummaries.length === 0) {
@@ -212,7 +222,43 @@ export function DesktopHierarchyPanel({
         <span className="text-xs text-gray-400">&gt;</span>
         <span className="text-xs text-gray-700 font-medium">קבוצת עבודה: {selectedWorkBucketName}</span>
       </div>
-      {!selectedBucket || selectedBucket.orders.length === 0 ? (
+
+      <div className="flex gap-2 mb-4">
+        <button
+          type="button"
+          className={`px-3 py-1 text-xs rounded-full font-medium transition-colors ${
+            workBucketView === 'products'
+              ? 'bg-blue-100 text-blue-700'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+          onClick={() => onSetWorkBucketView('products')}
+          data-testid="tab-products"
+        >
+          מוצרים
+        </button>
+        <button
+          type="button"
+          className={`px-3 py-1 text-xs rounded-full font-medium transition-colors ${
+            workBucketView === 'orders'
+              ? 'bg-blue-100 text-blue-700'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+          onClick={() => onSetWorkBucketView('orders')}
+          data-testid="tab-orders"
+        >
+          הזמנות
+        </button>
+      </div>
+
+      {workBucketView === 'products' ? (
+        productRollupLoading ? (
+          <div className="flex items-center justify-center h-32">
+            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <DesktopBucketProductTable products={productRollup ?? []} />
+        )
+      ) : !selectedBucket || selectedBucket.orders.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-32 px-4 gap-1">
           <p className="text-sm font-medium text-gray-500">אין הזמנות בקבוצת עבודה זו</p>
         </div>

@@ -27,7 +27,8 @@ import type {
   ManualShiftWorker,
   ManualShiftWorkerRole,
   ManualShiftWorkHierarchyResponse,
-  OpenAshlamaBoardItem
+  OpenAshlamaBoardItem,
+  BucketProductRollupResponse
 } from '@wos/domain';
 import {
   calculateSizeFromLineCount,
@@ -267,6 +268,12 @@ export type ManualShiftsService = {
     tenantId: string;
     shiftId: string;
   }): Promise<ManualShiftWorkHierarchyResponse>;
+  getBucketProductRollup(input: {
+    tenantId: string;
+    shiftId: string;
+    lineId: string;
+    bucketName: string;
+  }): Promise<BucketProductRollupResponse>;
 };
 
 function formatLocalDate(date: Date, timeZone: string) {
@@ -1818,6 +1825,26 @@ export function createManualShiftsServiceFromRepo(
       }
 
       return repo.listShiftWorkHierarchy(input.shiftId);
+    },
+
+    async getBucketProductRollup(input) {
+      const shift = await requireShift(input.shiftId);
+      if (shift.tenantId !== input.tenantId) {
+        throw manualShiftNotFound(input.shiftId);
+      }
+
+      const products = await repo.listBucketProductRollup({
+        shiftId: input.shiftId,
+        lineId: input.lineId,
+        bucketName: input.bucketName
+      });
+
+      return {
+        shiftId: input.shiftId,
+        lineId: input.lineId,
+        bucketName: input.bucketName,
+        products
+      };
     }
   };
 }

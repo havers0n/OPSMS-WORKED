@@ -151,6 +151,10 @@ describe('DesktopHierarchyPanel', () => {
         onClearArea={noop}
         onClearLine={noop}
         onClearBucket={noop}
+        workBucketView="products"
+        productRollup={undefined}
+        productRollupLoading={false}
+        onSetWorkBucketView={noop}
         {...overrides}
       />
     );
@@ -410,7 +414,8 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-1',
         selectedWorkBucketName: 'Point A',
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: mockWorkBucketSummaries
+        workBucketSummaries: mockWorkBucketSummaries,
+        workBucketView: 'orders'
       });
       expect(screen.getByTestId('order-mini-card-order-1')).toBeTruthy();
       expect(screen.getByTestId('order-mini-card-order-2')).toBeTruthy();
@@ -422,7 +427,8 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-1',
         selectedWorkBucketName: 'Point A',
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: mockWorkBucketSummaries
+        workBucketSummaries: mockWorkBucketSummaries,
+        workBucketView: 'orders'
       });
       expect(screen.getByText('אזורי הפצה')).toBeTruthy();
       expect(screen.getByText('צפון')).toBeTruthy();
@@ -436,7 +442,8 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-1',
         selectedWorkBucketName: 'Point A',
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: mockWorkBucketSummaries
+        workBucketSummaries: mockWorkBucketSummaries,
+        workBucketView: 'orders'
       });
       expect(screen.getByText('Customer A')).toBeTruthy();
       expect(screen.queryByText('null')).toBeNull();
@@ -451,7 +458,8 @@ describe('DesktopHierarchyPanel', () => {
         selectedWorkBucketName: 'Point A',
         lineHierarchySummaries: mockLineHierarchySummaries,
         workBucketSummaries: mockWorkBucketSummaries,
-        onSelectOrder
+        onSelectOrder,
+        workBucketView: 'orders'
       });
       fireEvent.click(screen.getByTestId('order-mini-card-order-1'));
       expect(onSelectOrder).toHaveBeenCalledWith('order-1');
@@ -470,7 +478,8 @@ describe('DesktopHierarchyPanel', () => {
           totalQuantity: 0,
           statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
           orders: []
-        }]
+        }],
+        workBucketView: 'orders'
       });
       expect(screen.getByText('אין הזמנות בקבוצת עבודה זו')).toBeTruthy();
     });
@@ -578,7 +587,8 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-2',
         selectedWorkBucketName: 'Bucket B',
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries
+        workBucketSummaries,
+        workBucketView: 'orders'
       });
 
       expect(screen.getByText('4 שורות')).toBeTruthy();

@@ -23,7 +23,8 @@ import type {
   ManualShiftWorkHierarchyLine,
   ManualShiftWorkHierarchyOrder,
   ManualShiftWorkHierarchyResponse,
-  OpenAshlamaBoardItem
+  OpenAshlamaBoardItem,
+  BucketProductRollupRow
 } from '@wos/domain';
 import { deriveManualShiftLineStatus } from '@wos/domain';
 
@@ -698,6 +699,11 @@ export type ManualShiftsRepo = {
   listShiftCheckUnits(shiftId: string): Promise<ManualShiftOrderCheckUnit[]>;
   listShiftAshlamot(shiftId: string): Promise<ManualShiftOrderAshlama[]>;
   listShiftWorkHierarchy(shiftId: string): Promise<ManualShiftWorkHierarchyResponse>;
+  listBucketProductRollup(input: {
+    shiftId: string;
+    lineId: string;
+    bucketName: string;
+  }): Promise<BucketProductRollupRow[]>;
 };
 
 export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRepo {
@@ -1641,6 +1647,93 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         : new Map<string, { lineCount: number; totalQuantity: number }>();
 
       return buildShiftWorkHierarchy(shiftId, lineRows, orders, rollups, checkUnits, ashlamot);
+    },
+
+    async listBucketProductRollup({ shiftId, lineId, bucketName }) {
+      let ordersQuery = supabase
+        .from('manual_shift_orders')
+        .select('id')
+        .eq('shift_id', shiftId)
+        .eq('line_id', lineId)
+        .is('deleted_at', null);
+
+      if (bucketName === '') {
+        ordersQuery = ordersQuery.is('point_name', null);
+      } else {
+        ordersQuery = ordersQuery.eq('point_name', bucketName);
+      }
+
+      const { data: bucketOrders, error: ordersError } = await ordersQuery;
+
+      if (ordersError) throw ordersError;
+
+      const orderIds = (bucketOrders ?? []).map((row: { id: string }) => row.id);
+      if (orderIds.length === 0) return [];
+
+      const productMap = new Map<
+        string,
+        { sku: string; description: string | null; category: string | null; totalQuantity: number; orderIds: Set<string> }
+      >();
+      const PAGE_SIZE = 1000;
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('manual_shift_order_items')
+          .select('sku, description, category, quantity, order_id')
+          .in('order_id', orderIds)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) throw error;
+
+        const rows = (data ?? []) as Array<{
+          sku: string;
+          description: string | null;
+          category: string | null;
+          quantity: number;
+          order_id: string;
+        }>;
+
+        for (const row of rows) {
+          const key = row.sku;
+          let entry = productMap.get(key);
+          if (!entry) {
+            entry = { sku: row.sku, description: row.description, category: row.category, totalQuantity: 0, orderIds: new Set() };
+            productMap.set(key, entry);
+          }
+          entry.totalQuantity += row.quantity;
+          entry.orderIds.add(row.order_id);
+          if (entry.description === null && row.description !== null) {
+            entry.description = row.description;
+          }
+          if (entry.category === null && row.category !== null) {
+            entry.category = row.category;
+          }
+        }
+
+        hasMore = rows.length === PAGE_SIZE;
+        offset += PAGE_SIZE;
+      }
+
+      const result: BucketProductRollupRow[] = [];
+      for (const entry of productMap.values()) {
+        result.push({
+          sku: entry.sku,
+          description: entry.description,
+          category: entry.category,
+          totalQuantity: entry.totalQuantity,
+          orderCount: entry.orderIds.size
+        });
+      }
+
+      result.sort((a, b) => {
+        const qtyDiff = b.totalQuantity - a.totalQuantity;
+        if (qtyDiff !== 0) return qtyDiff;
+        return a.sku.localeCompare(b.sku);
+      });
+
+      return result;
     }
   };
 }

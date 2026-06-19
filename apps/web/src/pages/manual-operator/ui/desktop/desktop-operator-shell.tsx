@@ -1,4 +1,4 @@
-import type { ManualShiftSession } from '@wos/domain';
+import type { BucketProductRollupRow, ManualShiftSession } from '@wos/domain';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type {
   ActiveOrder,
@@ -45,6 +45,10 @@ export interface DesktopOperatorShellProps {
   onClearArea: () => void;
   onClearHierarchyLine: () => void;
   onClearHierarchyBucket: () => void;
+  workBucketView: 'products' | 'orders';
+  productRollup: BucketProductRollupRow[] | undefined;
+  productRollupLoading: boolean;
+  onSetWorkBucketView: (view: 'products' | 'orders') => void;
   onCreateShift: () => void;
   isCreatingShift: boolean;
   selectedDate: string;
@@ -124,6 +128,10 @@ export function DesktopOperatorShell({
   onClearArea,
   onClearHierarchyLine,
   onClearHierarchyBucket,
+  workBucketView,
+  productRollup,
+  productRollupLoading,
+  onSetWorkBucketView,
   onCreateShift,
   isCreatingShift,
   selectedDate,
@@ -242,6 +250,10 @@ export function DesktopOperatorShell({
               onClearArea={onClearArea}
               onClearLine={onClearHierarchyLine}
               onClearBucket={onClearHierarchyBucket}
+              workBucketView={workBucketView}
+              productRollup={productRollup}
+              productRollupLoading={productRollupLoading}
+              onSetWorkBucketView={onSetWorkBucketView}
             />
           </main>
 

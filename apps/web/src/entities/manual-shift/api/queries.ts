@@ -11,7 +11,8 @@ import type {
   ManualShiftWorker,
   ManualShiftWorkHierarchyResponse,
   ManualShiftMonthlyReplaceSafety,
-  OpenAshlamaBoardItem
+  OpenAshlamaBoardItem,
+  BucketProductRollupResponse
 } from '@wos/domain';
 import { queryOptions } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
@@ -36,7 +37,9 @@ export const manualShiftKeys = {
     [...manualShiftKeys.all, 'shift-open-ashlamot', shiftId] as const,
   bindableUsers: () => [...manualShiftKeys.all, 'bindable-users'] as const,
   monthlyReplaceSafety: (shiftId: string) =>
-    [...manualShiftKeys.all, 'monthly-replace-safety', shiftId] as const
+    [...manualShiftKeys.all, 'monthly-replace-safety', shiftId] as const,
+  bucketProductRollup: (shiftId: string, lineId: string, bucketName: string) =>
+    [...manualShiftKeys.all, 'bucket-product-rollup', shiftId, lineId, bucketName] as const
 };
 
 async function fetchTodayShift(): Promise<ManualShiftTodayResponse> {
@@ -229,6 +232,30 @@ export function monthlyReplaceSafetyQueryOptions(shiftId: string) {
     queryKey: manualShiftKeys.monthlyReplaceSafety(shiftId),
     queryFn: () => fetchMonthlyReplaceSafety(shiftId),
     enabled: !!shiftId,
+    staleTime: 10_000
+  });
+}
+
+async function fetchBucketProductRollup(
+  shiftId: string,
+  lineId: string,
+  bucketName: string
+): Promise<BucketProductRollupResponse> {
+  const params = new URLSearchParams({ lineId, bucketName });
+  return bffRequest<BucketProductRollupResponse>(
+    `/api/manual-shifts/${shiftId}/buckets/product-rollup?${params}`
+  );
+}
+
+export function bucketProductRollupQueryOptions(
+  shiftId: string,
+  lineId: string,
+  bucketName: string
+) {
+  return queryOptions({
+    queryKey: manualShiftKeys.bucketProductRollup(shiftId, lineId, bucketName),
+    queryFn: () => fetchBucketProductRollup(shiftId, lineId, bucketName),
+    enabled: !!shiftId && !!lineId,
     staleTime: 10_000
   });
 }
