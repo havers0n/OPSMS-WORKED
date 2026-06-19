@@ -64,6 +64,7 @@ export function DesktopHierarchyPanel({
   }
 
   const selectedArea = areaSummaries.find((a) => a.areaKey === selectedAreaKey);
+  const isAutoSkippedSingleLine = selectedLineId !== null && areaLineSummaries.length === 1;
 
   if (!selectedLineId) {
     if (areaLineSummaries.length === 0) {
@@ -127,27 +128,38 @@ export function DesktopHierarchyPanel({
             אזורי הפצה
           </button>
           <span className="text-xs text-gray-400">&gt;</span>
-          <button
-            type="button"
-            className="text-xs text-blue-600 hover:text-blue-800"
-            onClick={onClearArea}
-            aria-label={`חזרה לקווים באזור ${selectedArea?.displayName ?? ''}`}
-          >
-            {selectedArea?.displayName ?? ''}
-          </button>
-          <span className="text-xs text-gray-400">&gt;</span>
-          <span className="text-xs text-gray-700 font-medium">קו: {selectedLine?.lineName ?? ''}</span>
+          {isAutoSkippedSingleLine ? (
+            <span className="text-xs text-gray-700 font-medium">{selectedArea?.displayName ?? ''}</span>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="text-xs text-blue-600 hover:text-blue-800"
+                onClick={onClearArea}
+                aria-label={`חזרה לקווים באזור ${selectedArea?.displayName ?? ''}`}
+              >
+                {selectedArea?.displayName ?? ''}
+              </button>
+              <span className="text-xs text-gray-400">&gt;</span>
+              <span className="text-xs text-gray-700 font-medium">קו: {selectedLine?.lineName ?? ''}</span>
+            </>
+          )}
         </div>
         {workBucketSummaries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 px-4 gap-1">
             <p className="text-sm font-medium text-gray-500">אין קבוצות עבודה בקו זה</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {workBucketSummaries.map((bucket) => (
-              <DesktopWorkBucketCard key={bucket.workBucketName} bucket={bucket} lineName={selectedLine?.lineName} onClick={onSelectBucket} />
-            ))}
-          </div>
+          <>
+            {isAutoSkippedSingleLine && (
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">קבוצות עבודה</h2>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {workBucketSummaries.map((bucket) => (
+                <DesktopWorkBucketCard key={bucket.workBucketName} bucket={bucket} lineName={selectedLine?.lineName} onClick={onSelectBucket} />
+              ))}
+            </div>
+          </>
         )}
       </div>
     );
@@ -167,23 +179,36 @@ export function DesktopHierarchyPanel({
           אזורי הפצה
         </button>
         <span className="text-xs text-gray-400">&gt;</span>
-        <button
-          type="button"
-          className="text-xs text-blue-600 hover:text-blue-800"
-          onClick={onClearArea}
-          aria-label={`חזרה לקווים באזור ${selectedArea?.displayName ?? ''}`}
-        >
-          {selectedArea?.displayName ?? ''}
-        </button>
-        <span className="text-xs text-gray-400">&gt;</span>
-        <button
-          type="button"
-          className="text-xs text-blue-600 hover:text-blue-800"
-          onClick={onClearLine}
-          aria-label={`חזרה לקבוצות עבודה קו ${selectedLine?.lineName ?? ''}`}
-        >
-          קו: {selectedLine?.lineName ?? ''}
-        </button>
+        {isAutoSkippedSingleLine ? (
+          <button
+            type="button"
+            className="text-xs text-blue-600 hover:text-blue-800"
+            onClick={onClearBucket}
+            aria-label={`חזרה לקבוצות עבודה באזור ${selectedArea?.displayName ?? ''}`}
+          >
+            {selectedArea?.displayName ?? ''}
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="text-xs text-blue-600 hover:text-blue-800"
+              onClick={onClearArea}
+              aria-label={`חזרה לקווים באזור ${selectedArea?.displayName ?? ''}`}
+            >
+              {selectedArea?.displayName ?? ''}
+            </button>
+            <span className="text-xs text-gray-400">&gt;</span>
+            <button
+              type="button"
+              className="text-xs text-blue-600 hover:text-blue-800"
+              onClick={onClearLine}
+              aria-label={`חזרה לקבוצות עבודה קו ${selectedLine?.lineName ?? ''}`}
+            >
+              קו: {selectedLine?.lineName ?? ''}
+            </button>
+          </>
+        )}
         <span className="text-xs text-gray-400">&gt;</span>
         <span className="text-xs text-gray-700 font-medium">קבוצת עבודה: {selectedWorkBucketName}</span>
       </div>

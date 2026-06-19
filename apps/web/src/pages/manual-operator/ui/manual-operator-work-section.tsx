@@ -151,8 +151,18 @@ const { data: workHierarchy } = useQuery({
 
   function handleSelectArea(areaKey: string | null) {
     setSelectedAreaKey(areaKey);
-    setSelectedLineId(null);
     setSelectedWorkBucketName(null);
+
+    if (areaKey !== null) {
+      const areaLines = selectWorkHierarchyLineSummariesByArea(workHierarchy, areaKey);
+      if (areaLines.length === 1) {
+        setSelectedLineId(areaLines[0].lineId);
+      } else {
+        setSelectedLineId(null);
+      }
+    } else {
+      setSelectedLineId(null);
+    }
   }
 
   function handleSelectHierarchyLine(lineId: string) {

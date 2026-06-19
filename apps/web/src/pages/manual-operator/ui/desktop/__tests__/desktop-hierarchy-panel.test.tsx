@@ -330,6 +330,79 @@ describe('DesktopHierarchyPanel', () => {
     });
   });
 
+  describe('auto-skipped single-line area', () => {
+    it('shows work bucket cards without line cards when area has exactly one line', () => {
+      renderPanel({
+        selectedAreaKey: 'צפון',
+        selectedLineId: 'line-1',
+        areaLineSummaries: [mockLineHierarchySummaries[0]],
+        lineHierarchySummaries: mockLineHierarchySummaries,
+        workBucketSummaries: mockWorkBucketSummaries
+      });
+      expect(screen.getByText('Point A')).toBeTruthy();
+      expect(screen.getByText('No Point')).toBeTruthy();
+      expect(screen.queryByText('קווים')).toBeNull();
+      expect(screen.queryByText('קו: Line South')).toBeNull();
+    });
+
+    it('shows title "קבוצות עבודה" for auto-skipped area', () => {
+      renderPanel({
+        selectedAreaKey: 'צפון',
+        selectedLineId: 'line-1',
+        areaLineSummaries: [mockLineHierarchySummaries[0]],
+        lineHierarchySummaries: mockLineHierarchySummaries,
+        workBucketSummaries: mockWorkBucketSummaries
+      });
+      expect(screen.getByText('קבוצות עבודה')).toBeTruthy();
+    });
+
+    it('shows simplified breadcrumb without line segment for single-line area', () => {
+      renderPanel({
+        selectedAreaKey: 'צפון',
+        selectedLineId: 'line-1',
+        areaLineSummaries: [mockLineHierarchySummaries[0]],
+        lineHierarchySummaries: mockLineHierarchySummaries,
+        workBucketSummaries: mockWorkBucketSummaries
+      });
+      expect(screen.getByText('אזורי הפצה')).toBeTruthy();
+      expect(screen.getByText('צפון')).toBeTruthy();
+      expect(screen.queryByText(/קו:/)).toBeNull();
+    });
+
+    it('clicking "אזורי הפצה" in auto-skip breadcrumb calls onClearArea', () => {
+      const onClearArea = vi.fn();
+      renderPanel({
+        selectedAreaKey: 'צפון',
+        selectedLineId: 'line-1',
+        areaLineSummaries: [mockLineHierarchySummaries[0]],
+        lineHierarchySummaries: mockLineHierarchySummaries,
+        workBucketSummaries: mockWorkBucketSummaries,
+        onClearArea
+      });
+      fireEvent.click(screen.getByText('אזורי הפצה'));
+      expect(onClearArea).toHaveBeenCalled();
+    });
+
+    it('auto-skipped area with bucket selected shows simplified breadcrumb and area click calls onClearBucket', () => {
+      const onClearBucket = vi.fn();
+      renderPanel({
+        selectedAreaKey: 'צפון',
+        selectedLineId: 'line-1',
+        selectedWorkBucketName: 'Point A',
+        areaLineSummaries: [mockLineHierarchySummaries[0]],
+        lineHierarchySummaries: mockLineHierarchySummaries,
+        workBucketSummaries: mockWorkBucketSummaries,
+        onClearBucket
+      });
+      expect(screen.getByText('אזורי הפצה')).toBeTruthy();
+      expect(screen.getByText('צפון')).toBeTruthy();
+      expect(screen.getByText('קבוצת עבודה: Point A')).toBeTruthy();
+      expect(screen.queryByText(/קו:/)).toBeNull();
+      fireEvent.click(screen.getByText('צפון'));
+      expect(onClearBucket).toHaveBeenCalled();
+    });
+  });
+
   describe('order level (bucket selected)', () => {
     it('shows order cards for the selected work bucket', () => {
       renderPanel({
