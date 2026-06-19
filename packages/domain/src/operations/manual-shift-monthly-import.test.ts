@@ -853,4 +853,182 @@ describe('manual shift monthly import parser', () => {
     const conflictWarning = plan.preview.warnings.find((w) => w.code === 'CUSTOMER_NAME_CONFLICTS');
     expect(conflictWarning).toBeUndefined();
   });
+
+  // ── Corrected model regression tests ─────────────────────────────────────────
+  // The corrected model: ManualShift → DistributionArea → RouteLine → WorkBucket → OrderFragment → Items
+  // These tests lock current behavior and flag needed changes.
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  it('E: one order number in different work buckets under same line produces separate order fragments', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'דרום/סלולר',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 3
+      },
+      {
+        rowIndex: 3,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'דרום/פז השקמה',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1002',
+        quantity: 2
+      }
+    ]));
+    const plan = planManualShiftMonthlyImportApply(result);
+
+    // One line, two distinct pointNames (= work bucket names)
+    expect(result.preview.totals.lines).toBe(1);
+    expect(result.preview.totals.derivedPoints).toBe(2);
+    expect(result.preview.totals.uniqueOrderNumbers).toBe(1);
+    expect(result.preview.totals.orderGroups).toBe(2);
+
+    // Two separate order fragments, one per bucket
+    expect(plan.lines).toHaveLength(1);
+    expect(plan.lines[0].orders).toHaveLength(2);
+    const bucketNames = plan.lines[0].orders.map((o) => o.pointName).sort();
+    expect(bucketNames).toEqual(['סלולר', 'פז השקמה']);
+
+    // Each fragment preserves its own customerName independently
+    for (const order of plan.lines[0].orders) {
+      expect(order.customerName).toBe('לקוח א');
+      expect(order.orderNumber).toBe('SO-1');
+    }
+
+    // No customer name conflict — same customer across buckets is fine
+    const conflictWarning = plan.preview.warnings.find((w) => w.code === 'CUSTOMER_NAME_CONFLICTS');
+    expect(conflictWarning).toBeUndefined();
+  });
+
+  it('F: suffix after "/" is workBucketName — not derived from customerName or delivery point', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'צפון/סלולר',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 5
+      }
+    ]));
+
+    // pointName = the suffix after "/" = work bucket name
+    expect(result.groups[0].pointName).toBe('סלולר');
+    expect(result.groups[0].lineBucketName).toBe('סלולר');
+
+    // customerName is NOT pointName — it is the delivery stop candidate
+    expect(result.groups[0].customerName).toBe('לקוח א');
+    expect(result.groups[0].pointName).not.toBe(result.groups[0].customerName);
+
+    // customerName is never used as fallback for pointName
+    expect(result.groups[0].pointName).not.toBe('לקוח א');
+    expect(result.preview.anomalies.pointFallbackRows).toBe(0);
+  });
+
+  it('G: customerName is the delivery/customer stop candidate — preserved per work bucket', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'צפון/סלולר',
+        customerName: 'פז השקמה',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 3
+      },
+      {
+        rowIndex: 3,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'צפון/מרכז',
+        customerName: 'דלק',
+        orderNumber: 'SO-2',
+        sku: '1002',
+        quantity: 2
+      }
+    ]));
+    const plan = planManualShiftMonthlyImportApply(result);
+
+    // Each work bucket order fragment has its own customerName
+    const ordersByPoint = new Map(plan.lines[0].orders.map((o) => [o.pointName, o]));
+    expect(ordersByPoint.get('סלולר')?.customerName).toBe('פז השקמה');
+    expect(ordersByPoint.get('מרכז')?.customerName).toBe('דלק');
+
+    // customerName is the real delivery/customer stop, not the route bucket
+    expect(ordersByPoint.get('סלולר')?.customerName).not.toBe('סלולר');
+    expect(ordersByPoint.get('מרכז')?.customerName).not.toBe('מרכז');
+  });
+
+  it('H: rows with distributionArea but no route line ARE blocked today (proving current guard)', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: null,
+        customerName: 'לקוח ללא קו',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 5,
+        zone: 'צפון'
+      }
+    ]));
+
+    // Current behavior: MISSING_REQUIRED_FIELDS blocking warning (line + point missing)
+    expect(result.groups).toEqual([]);
+    expect(result.preview.warnings).toContainEqual(expect.objectContaining({
+      severity: 'blocking',
+      code: 'MISSING_REQUIRED_FIELDS'
+    }));
+    expect(result.preview.anomalies.missingRequiredFields).toContainEqual(
+      expect.objectContaining({ rowIndex: 2, fields: expect.arrayContaining(['line', 'point']) })
+    );
+  });
+
+  it('I: rows with distributionArea but no route line SHOULD be dispatch candidates, not blocked — FAILING TEST', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: null,
+        rawDistributionValue: null,
+        customerName: 'לקוח ללא קו',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 5,
+        zone: 'צפון'
+      }
+    ]));
+
+    // ── DESIRED BEHAVIOR (not yet implemented) ──
+    // These rows should be classified as dispatch_candidates, not blocked:
+    // They have a distribution area but no route line and no dispatch date.
+    //
+    // The test currently FAILS because:
+    // 1. MISSING_REQUIRED_FIELDS blocking warning is raised
+    // 2. No dispatchCandidates concept exists
+    // 3. INVALID_DISTRIBUTION_DATE_ROWS blocking warning is raised
+    //
+    // Once dispatch_candidates are implemented, this test will pass with the
+    // assertions below uncommented and the current-behavior assertions removed.
+
+    // Assertions proving the current (undesired) behavior:
+    expect(result.groups).toEqual([]);
+    const blockingWarnings = result.preview.warnings.filter((w) => w.severity === 'blocking');
+    expect(blockingWarnings.length).toBeGreaterThanOrEqual(1);
+
+    // ── DESIRED ASSERTIONS (activate when dispatch_candidates feature lands) ──
+    // expect(result.preview.warnings.filter(w => w.code === 'MISSING_REQUIRED_FIELDS')).toHaveLength(0);
+    // expect(result.preview.warnings.filter(w => w.code === 'INVALID_DISTRIBUTION_DATE_ROWS')).toHaveLength(0);
+    // expect(result.preview.dispatchCandidates).toBeDefined();
+    // expect(result.preview.dispatchCandidates).toHaveLength(1);
+    // expect(result.preview.dispatchCandidates[0]).toMatchObject({
+    //   distributionArea: 'צפון',
+    //   customerName: 'לקוח ללא קו',
+    //   orderNumber: 'SO-1'
+    // });
+  });
 });

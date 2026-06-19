@@ -1661,7 +1661,7 @@ function computeStatusBreakdown(
   };
 }
 
-function buildShiftWorkHierarchy(
+export function buildShiftWorkHierarchy(
   shiftId: string,
   lineRows: ManualShiftLineRow[],
   orders: ManualShiftOrder[],

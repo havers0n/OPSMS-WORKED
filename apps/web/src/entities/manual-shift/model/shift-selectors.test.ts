@@ -1033,6 +1033,295 @@ describe('selectPointSummaries', () => {
     expect(result[1].pointName).toBe('קטן');
     expect(result[1].ordersCount).toBe(1);
   });
+
+  // ── Work hierarchy selector tests ──────────────────────────────────────────
+  // These lock assumptions about the corrected model shape.
+
+  describe('selectWorkHierarchyLineSummaries', () => {
+    const ORDER_A_ID = 'order-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    const ORDER_B_ID = 'order-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+
+    function makeHierarchy(
+      overrides: Partial<ManualShiftWorkHierarchyResponse> = {}
+    ): ManualShiftWorkHierarchyResponse {
+      return {
+        shiftId: SHIFT_ID,
+        areas: [
+          {
+            areaName: 'דרום',
+            displayName: 'דרום',
+            totalLines: 1,
+            totalBuckets: 2,
+            totalOrders: 2,
+            totalQuantity: 30,
+            statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            lines: [
+              {
+                lineId: LINE_A,
+                lineGroupName: 'קו דרום',
+                distributionArea: 'דרום',
+                status: 'open',
+                totalBuckets: 2,
+                totalOrders: 2,
+                totalQuantity: 30,
+                statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                buckets: [
+                  {
+                    bucketName: 'סלולר',
+                    displayName: 'סלולר',
+                    totalOrders: 1,
+                    totalQuantity: 10,
+                    statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                    orders: [{
+                      orderId: ORDER_A_ID,
+                      orderNumber: 'SO-1',
+                      customerName: 'לקוח א',
+                      pointName: 'סלולר',
+                      status: 'queued',
+                      totalQuantity: 10,
+                      hasAshlama: false,
+                      hasCheckUnits: false
+                    }]
+                  },
+                  {
+                    bucketName: 'פז השקמה',
+                    displayName: 'פז השקמה',
+                    totalOrders: 1,
+                    totalQuantity: 20,
+                    statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                    orders: [{
+                      orderId: ORDER_B_ID,
+                      orderNumber: 'SO-1',
+                      customerName: 'לקוח א',
+                      pointName: 'פז השקמה',
+                      status: 'queued',
+                      totalQuantity: 20,
+                      hasAshlama: false,
+                      hasCheckUnits: false
+                    }]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        ...overrides
+      };
+    }
+
+    it('flattens areas into line summaries', () => {
+      const result = selectWorkHierarchyLineSummaries(makeHierarchy());
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        lineId: LINE_A,
+        lineName: 'קו דרום',
+        distributionArea: 'דרום'
+      });
+    });
+
+    it('preserves distributionArea on each line summary', () => {
+      const result = selectWorkHierarchyLineSummaries(makeHierarchy());
+      expect(result[0].distributionArea).toBe('דרום');
+    });
+
+    it('returns empty array for undefined hierarchy', () => {
+      expect(selectWorkHierarchyLineSummaries(undefined)).toEqual([]);
+    });
+
+    it('flattens lines from multiple areas', () => {
+      const lineB = 'line-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+      const hierarchy = makeHierarchy({
+        areas: [
+          {
+            areaName: 'דרום',
+            displayName: 'דרום',
+            totalLines: 1,
+            totalBuckets: 1,
+            totalOrders: 1,
+            totalQuantity: 10,
+            statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            lines: [{
+              lineId: LINE_A,
+              lineGroupName: 'קו דרום',
+              distributionArea: 'דרום',
+              status: 'open',
+              totalBuckets: 1,
+              totalOrders: 1,
+              totalQuantity: 10,
+              statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              buckets: [{
+                bucketName: 'סלולר',
+                displayName: 'סלולר',
+                totalOrders: 1,
+                totalQuantity: 10,
+                statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                orders: [{
+                  orderId: ORDER_A_ID,
+                  orderNumber: 'SO-1',
+                  customerName: 'לקוח א',
+                  pointName: 'סלולר',
+                  status: 'queued',
+                  totalQuantity: 10,
+                  hasAshlama: false,
+                  hasCheckUnits: false
+                }]
+              }]
+            }]
+          },
+          {
+            areaName: 'צפון',
+            displayName: 'צפון',
+            totalLines: 1,
+            totalBuckets: 1,
+            totalOrders: 1,
+            totalQuantity: 5,
+            statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            lines: [{
+              lineId: lineB,
+              lineGroupName: 'קו צפון',
+              distributionArea: 'צפון',
+              status: 'open',
+              totalBuckets: 1,
+              totalOrders: 1,
+              totalQuantity: 5,
+              statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              buckets: [{
+                bucketName: 'מרכז',
+                displayName: 'מרכז',
+                totalOrders: 1,
+                totalQuantity: 5,
+                statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                orders: [{
+                  orderId: ORDER_B_ID,
+                  orderNumber: 'SO-2',
+                  customerName: 'לקוח ב',
+                  pointName: 'מרכז',
+                  status: 'queued',
+                  totalQuantity: 5,
+                  hasAshlama: false,
+                  hasCheckUnits: false
+                }]
+              }]
+            }]
+          }
+        ]
+      });
+      const result = selectWorkHierarchyLineSummaries(hierarchy);
+      expect(result).toHaveLength(2);
+      expect(result[0].distributionArea).toBe('דרום');
+      expect(result[1].distributionArea).toBe('צפון');
+    });
+  });
+
+  describe('selectWorkHierarchyPointSummaries', () => {
+    const ORDER_A_ID = 'order-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    const ORDER_B_ID = 'order-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+
+    function makeHierarchy(
+      overrides: Partial<ManualShiftWorkHierarchyResponse> = {}
+    ): ManualShiftWorkHierarchyResponse {
+      return {
+        shiftId: SHIFT_ID,
+        areas: [
+          {
+            areaName: 'דרום',
+            displayName: 'דרום',
+            totalLines: 1,
+            totalBuckets: 2,
+            totalOrders: 2,
+            totalQuantity: 30,
+            statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            lines: [
+              {
+                lineId: LINE_A,
+                lineGroupName: 'קו דרום',
+                distributionArea: 'דרום',
+                status: 'open',
+                totalBuckets: 2,
+                totalOrders: 2,
+                totalQuantity: 30,
+                statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                buckets: [
+                  {
+                    bucketName: 'סלולר',
+                    displayName: 'סלולר',
+                    totalOrders: 1,
+                    totalQuantity: 10,
+                    statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                    orders: [{
+                      orderId: ORDER_A_ID,
+                      orderNumber: 'SO-1',
+                      customerName: 'לקוח א',
+                      pointName: 'סלולר',
+                      status: 'queued',
+                      totalQuantity: 10,
+                      hasAshlama: false,
+                      hasCheckUnits: false
+                    }]
+                  },
+                  {
+                    bucketName: 'פז השקמה',
+                    displayName: 'פז השקמה',
+                    totalOrders: 1,
+                    totalQuantity: 20,
+                    statusBreakdown: { queued: 0, picking: 1, waitingCheck: 0, returned: 0, done: 0 },
+                    orders: [{
+                      orderId: ORDER_B_ID,
+                      orderNumber: 'SO-1',
+                      customerName: 'לקוח א',
+                      pointName: 'פז השקמה',
+                      status: 'picking',
+                      totalQuantity: 20,
+                      hasAshlama: true,
+                      hasCheckUnits: false
+                    }]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        ...overrides
+      };
+    }
+
+    it('returns buckets as point summaries for matching lineId', () => {
+      const result = selectWorkHierarchyPointSummaries(makeHierarchy(), LINE_A);
+      expect(result).toHaveLength(2);
+      const pointNames = result.map((p) => p.pointName).sort();
+      expect(pointNames).toEqual(['סלולר', 'פז השקמה']);
+    });
+
+    it('preserves customerName on each order in the point summary', () => {
+      const result = selectWorkHierarchyPointSummaries(makeHierarchy(), LINE_A);
+      const bucket = result.find((p) => p.pointName === 'פז השקמה')!;
+      expect(bucket.orders[0].customerName).toBe('לקוח א');
+      expect(bucket.orders[0].pointName).toBe('פז השקמה');
+    });
+
+    it('remaps bucket.displayName to pointName on summary', () => {
+      const result = selectWorkHierarchyPointSummaries(makeHierarchy(), LINE_A);
+      const bucket = result.find((p) => p.pointName === 'סלולר')!;
+      expect(bucket.pointName).toBe('סלולר');
+      expect(bucket.ordersCount).toBe(1);
+    });
+
+    it('returns empty array for unknown lineId', () => {
+      const result = selectWorkHierarchyPointSummaries(makeHierarchy(), 'unknown-line');
+      expect(result).toEqual([]);
+    });
+
+    it('returns empty array for undefined hierarchy', () => {
+      const result = selectWorkHierarchyPointSummaries(undefined, LINE_A);
+      expect(result).toEqual([]);
+    });
+
+    it('preserves statusBreakdown from bucket', () => {
+      const result = selectWorkHierarchyPointSummaries(makeHierarchy(), LINE_A);
+      const pickingBucket = result.find((p) => p.pointName === 'פז השקמה')!;
+      expect(pickingBucket.statusBreakdown).toEqual({ queued: 0, picking: 1, waitingCheck: 0, returned: 0, done: 0 });
+    });
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
