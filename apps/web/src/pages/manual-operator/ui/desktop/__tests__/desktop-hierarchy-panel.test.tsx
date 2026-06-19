@@ -169,10 +169,10 @@ describe('DesktopHierarchyPanel', () => {
   });
 
   describe('bucket label polish', () => {
-    it('displays general bucket label when point name equals line name', () => {
-      const pointSummaries: PointHierarchySummary[] = [
+    it('displays general bucket label when work bucket name equals line name', () => {
+      const workBucketSummaries: WorkBucketSummary[] = [
         {
-          pointName: 'Line South',
+          workBucketName: 'Line South',
           ordersCount: 1,
           itemLinesCount: 3,
           totalQuantity: 15,
@@ -183,7 +183,7 @@ describe('DesktopHierarchyPanel', () => {
               orderNumber: 'SO-100',
               customerName: null,
               status: 'queued',
-              pointName: 'Line South',
+              workBucketName: 'Line South',
               pickerName: null,
               checkerName: null,
               lineCount: 3,
@@ -195,16 +195,16 @@ describe('DesktopHierarchyPanel', () => {
 
       renderPanel({
         selectedLineId: 'line-1',
-        pointSummaries
+        workBucketSummaries
       });
 
       expect(screen.getByText('Line South — כללי')).toBeTruthy();
     });
 
-    it('keeps original point name when different from line name', () => {
+    it('keeps original work bucket name when different from line name', () => {
       renderPanel({
         selectedLineId: 'line-1',
-        pointSummaries: mockPointSummaries
+        workBucketSummaries: mockWorkBucketSummaries
       });
 
       expect(screen.getByText('Point A')).toBeTruthy();
@@ -215,17 +215,17 @@ describe('DesktopHierarchyPanel', () => {
     it('does not render 0 שורות when lineCount is zero', () => {
       renderPanel({
         selectedLineId: 'line-1',
-        selectedPointName: 'Point A',
-        pointSummaries: mockPointSummaries
+        selectedWorkBucketName: 'Point A',
+        workBucketSummaries: mockWorkBucketSummaries
       });
 
       expect(screen.queryByText('0 שורות')).toBeNull();
     });
 
     it('renders positive lineCount with שורות label', () => {
-      const pointSummaries: PointHierarchySummary[] = [
+      const workBucketSummaries: WorkBucketSummary[] = [
         {
-          pointName: 'Point B',
+          workBucketName: 'Bucket B',
           ordersCount: 1,
           itemLinesCount: 4,
           totalQuantity: 20,
@@ -236,7 +236,7 @@ describe('DesktopHierarchyPanel', () => {
               orderNumber: 'SO-200',
               customerName: null,
               status: 'queued',
-              pointName: 'Point B',
+              workBucketName: 'Bucket B',
               pickerName: null,
               checkerName: null,
               lineCount: 4,
@@ -248,17 +248,17 @@ describe('DesktopHierarchyPanel', () => {
 
       renderPanel({
         selectedLineId: 'line-2',
-        selectedPointName: 'Point B',
-        pointSummaries
+        selectedWorkBucketName: 'Bucket B',
+        workBucketSummaries
       });
 
       expect(screen.getByText('4 שורות')).toBeTruthy();
     });
 
-    it('does not render 0 פריטים / שורות on point cards', () => {
-      const pointSummaries: PointHierarchySummary[] = [
+    it('does not render 0 פריטים / שורות on work bucket cards', () => {
+      const workBucketSummaries: WorkBucketSummary[] = [
         {
-          pointName: 'Empty Point',
+          workBucketName: 'Empty Bucket',
           ordersCount: 0,
           itemLinesCount: 0,
           totalQuantity: 0,
@@ -269,7 +269,7 @@ describe('DesktopHierarchyPanel', () => {
 
       renderPanel({
         selectedLineId: 'line-1',
-        pointSummaries
+        workBucketSummaries
       });
 
       expect(screen.queryByText(/0 פריטים/)).toBeNull();
