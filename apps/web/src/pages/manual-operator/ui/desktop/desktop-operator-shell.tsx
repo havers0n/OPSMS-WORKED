@@ -14,7 +14,6 @@ import { DesktopDetailDrawer } from './desktop-detail-drawer';
 import { DesktopEmptyState } from './desktop-empty-state';
 import { DesktopHierarchyPanel } from './desktop-hierarchy-panel';
 import { DesktopKpiRow } from './desktop-kpi-row';
-import { DesktopLinePanel } from './desktop-line-panel';
 import { DesktopPickerPanel } from './desktop-picker-panel';
 import { ShiftOpenAshlamotBoard } from '../shift-open-ashlamot-board';
 
@@ -65,7 +64,6 @@ function LoadingSkeleton() {
         ))}
       </div>
       <div className="flex flex-1 gap-px">
-        <div className="w-72 bg-gray-100 rounded" />
         <div className="flex-1 bg-gray-100 rounded" />
         <div className="w-72 bg-gray-100 rounded" />
       </div>
@@ -223,14 +221,6 @@ export function DesktopOperatorShell({
         </div>
       ) : (
         <div className="flex flex-1 overflow-hidden gap-px">
-          <aside className="w-72 bg-white overflow-y-auto shrink-0">
-            <DesktopLinePanel
-              lines={lineHierarchySummaries}
-              selectedLineId={selectedLineId}
-              onSelectLine={onSelectHierarchyLine}
-            />
-          </aside>
-
           <main className="flex-1 bg-white overflow-y-auto min-w-0">
             <DesktopHierarchyPanel
               selectedAreaKey={selectedAreaKey}
