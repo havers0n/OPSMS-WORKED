@@ -14,6 +14,7 @@ interface DesktopHierarchyPanelProps {
   selectedWorkBucketName: string | null;
   areaSummaries: AreaHierarchySummary[];
   lineHierarchySummaries: LineHierarchySummary[];
+  areaLineSummaries: LineHierarchySummary[];
   workBucketSummaries: WorkBucketSummary[];
   onSelectArea: (areaKey: string | null) => void;
   onSelectLine: (lineId: string) => void;
@@ -30,6 +31,7 @@ export function DesktopHierarchyPanel({
   selectedWorkBucketName,
   areaSummaries,
   lineHierarchySummaries,
+  areaLineSummaries,
   workBucketSummaries,
   onSelectArea,
   onSelectLine,
@@ -64,7 +66,7 @@ export function DesktopHierarchyPanel({
   const selectedArea = areaSummaries.find((a) => a.areaKey === selectedAreaKey);
 
   if (!selectedLineId) {
-    if (lineHierarchySummaries.length === 0) {
+    if (areaLineSummaries.length === 0) {
       return (
         <div className="p-4">
           <div className="flex items-center gap-2 mb-3">
@@ -102,7 +104,7 @@ export function DesktopHierarchyPanel({
         </div>
         <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">קווים</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {lineHierarchySummaries.map((line) => (
+          {areaLineSummaries.map((line) => (
             <DesktopLineSummaryCard key={line.lineId} line={line} onClick={onSelectLine} />
           ))}
         </div>

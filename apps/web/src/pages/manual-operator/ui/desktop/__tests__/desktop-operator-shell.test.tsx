@@ -45,6 +45,7 @@ const defaultProps = {
   selectedWorkBucketName: null as string | null,
   areaSummaries: mockAreaSummaries,
   lineHierarchySummaries: mockLineHierarchySummaries,
+  areaLineSummaries: mockLineHierarchySummaries,
   workBucketSummaries: mockWorkBucketSummaries,
   onSelectPicker: vi.fn(),
   onSelectOrder: vi.fn(),

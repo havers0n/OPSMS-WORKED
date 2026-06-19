@@ -196,6 +196,7 @@ const { data: workHierarchy } = useQuery({
         selectedWorkBucketName={selectedWorkBucketName}
         areaSummaries={areaSummaries}
         lineHierarchySummaries={lineHierarchySummaries}
+        areaLineSummaries={areaLineSummaries}
         workBucketSummaries={workBucketSummaries}
         onSelectPicker={(pickerKey) => setSelectedDesktopDetail({ type: 'picker', pickerKey })}
         onSelectOrder={(orderId) => setSelectedDesktopDetail({ type: 'order', orderId })}

@@ -34,6 +34,7 @@ export interface DesktopOperatorShellProps {
   selectedWorkBucketName: string | null;
   areaSummaries: AreaHierarchySummary[];
   lineHierarchySummaries: LineHierarchySummary[];
+  areaLineSummaries: LineHierarchySummary[];
   workBucketSummaries: WorkBucketSummary[];
   onSelectPicker: (pickerKey: string) => void;
   onSelectOrder: (orderId: string) => void;
@@ -112,6 +113,7 @@ export function DesktopOperatorShell({
   selectedWorkBucketName,
   areaSummaries,
   lineHierarchySummaries,
+  areaLineSummaries,
   workBucketSummaries,
   onSelectPicker,
   onSelectOrder,
@@ -231,6 +233,7 @@ export function DesktopOperatorShell({
               selectedWorkBucketName={selectedWorkBucketName}
               areaSummaries={areaSummaries}
               lineHierarchySummaries={lineHierarchySummaries}
+              areaLineSummaries={areaLineSummaries}
               workBucketSummaries={workBucketSummaries}
               onSelectArea={onSelectArea}
               onSelectLine={onSelectHierarchyLine}

@@ -2113,4 +2113,64 @@ describe('selectWorkHierarchyLineSummariesByArea', () => {
     expect(result[0].lineId).toBe(LINE_A);
     expect(result[0].lineName).toBe('קו כללי');
   });
+
+  it('selecting an area with one line returns only that line', () => {
+    const LINE_GALIL = 'line-galil-1111-1111-111111111111';
+    const LINE_JERUSALEM = 'line-jeru-2222-2222-222222222222';
+    const LINE_AMAKIM = 'line-amak-3333-3333-333333333333';
+    const LINE_CHITA = 'line-chit-4444-4444-444444444444';
+    const LINE_TZAFON = 'line-tzfn-5555-5555-555555555555';
+    const LINE_SHFELA2 = 'line-shf2-6666-6666-666666666666';
+    const LINE_SHFELA_DAROM = 'line-shfd-7777-7777-777777777777';
+    const makeLine = (id: string, name: string, area: string) => ({
+      lineId: id,
+      lineGroupName: name,
+      distributionArea: area,
+      status: 'open' as const,
+      totalBuckets: 1,
+      totalOrders: 5,
+      totalQuantity: 100,
+      statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+      buckets: [{ bucketName: 'נ׳צ', displayName: 'נ׳צ', totalOrders: 5, totalQuantity: 100, statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, orders: [] }]
+    });
+    const hierarchy: ManualShiftWorkHierarchyResponse = {
+      shiftId: SHIFT_ID,
+      areas: [
+        { areaName: 'גליל', displayName: 'גליל', totalLines: 1, totalBuckets: 1, totalOrders: 5, totalQuantity: 100, statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, lines: [makeLine(LINE_GALIL, 'גליל', 'גליל')] },
+        { areaName: 'ירושלים', displayName: 'ירושלים', totalLines: 1, totalBuckets: 1, totalOrders: 5, totalQuantity: 100, statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, lines: [makeLine(LINE_JERUSALEM, 'ירושלים', 'ירושלים')] },
+        { areaName: 'עמקים', displayName: 'עמקים', totalLines: 1, totalBuckets: 1, totalOrders: 5, totalQuantity: 100, statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, lines: [makeLine(LINE_AMAKIM, 'עמקים', 'עמקים')] },
+        { areaName: 'צפון', displayName: 'צפון', totalLines: 1, totalBuckets: 1, totalOrders: 5, totalQuantity: 100, statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, lines: [makeLine(LINE_TZAFON, 'צפון', 'צפון')] },
+        { areaName: 'שפלה 2', displayName: 'שפלה 2', totalLines: 1, totalBuckets: 1, totalOrders: 5, totalQuantity: 100, statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, lines: [makeLine(LINE_SHFELA2, 'שפלה 2', 'שפלה 2')] },
+        { areaName: 'שפלה דרומית', displayName: 'שפלה דרומית', totalLines: 1, totalBuckets: 1, totalOrders: 5, totalQuantity: 100, statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, lines: [makeLine(LINE_SHFELA_DAROM, 'שפלה דרומית', 'שפלה דרומית')] },
+      ]
+    };
+
+    const result = selectWorkHierarchyLineSummariesByArea(hierarchy, 'גליל');
+    expect(result).toHaveLength(1);
+    expect(result[0].lineId).toBe(LINE_GALIL);
+    expect(result[0].lineName).toBe('גליל');
+  });
+
+  it('unrelated lines are not visible after selecting a specific area', () => {
+    const hierarchy: ManualShiftWorkHierarchyResponse = {
+      shiftId: SHIFT_ID,
+      areas: [
+        { areaName: 'גליל', displayName: 'גליל', totalLines: 1, totalBuckets: 1, totalOrders: 5, totalQuantity: 100, statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, lines: [{ lineId: 'line-galil', lineGroupName: 'גליל', distributionArea: 'גליל', status: 'open', totalBuckets: 1, totalOrders: 5, totalQuantity: 100, statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, buckets: [{ bucketName: 'נ׳צ', displayName: 'נ׳צ', totalOrders: 5, totalQuantity: 100, statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, orders: [] }] }] },
+        { areaName: 'צפון', displayName: 'צפון', totalLines: 2, totalBuckets: 2, totalOrders: 10, totalQuantity: 200, statusBreakdown: { queued: 10, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, lines: [
+          { lineId: 'line-tzafon', lineGroupName: 'צפון', distributionArea: 'צפון', status: 'open', totalBuckets: 1, totalOrders: 5, totalQuantity: 100, statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, buckets: [{ bucketName: 'נ׳צ', displayName: 'נ׳צ', totalOrders: 5, totalQuantity: 100, statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, orders: [] }] },
+          { lineId: 'line-chita', lineGroupName: "צ'יטה", distributionArea: 'צפון', status: 'open', totalBuckets: 1, totalOrders: 5, totalQuantity: 100, statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, buckets: [{ bucketName: 'נ׳צ', displayName: 'נ׳צ', totalOrders: 5, totalQuantity: 100, statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, orders: [] }] }
+        ]},
+        { areaName: 'שפלה דרומית', displayName: 'שפלה דרומית', totalLines: 1, totalBuckets: 1, totalOrders: 5, totalQuantity: 100, statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, lines: [{ lineId: 'line-shfela', lineGroupName: 'שפלה דרומית', distributionArea: 'שפלה דרומית', status: 'open', totalBuckets: 1, totalOrders: 5, totalQuantity: 100, statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, buckets: [{ bucketName: 'נ׳צ', displayName: 'נ׳צ', totalOrders: 5, totalQuantity: 100, statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, orders: [] }] }] }
+      ]
+    };
+
+    const result = selectWorkHierarchyLineSummariesByArea(hierarchy, 'גליל');
+    expect(result).toHaveLength(1);
+    expect(result[0].lineName).toBe('גליל');
+
+    const allLineNames = result.map((l) => l.lineName);
+    expect(allLineNames).not.toContain('צפון');
+    expect(allLineNames).not.toContain("צ'יטה");
+    expect(allLineNames).not.toContain('שפלה דרומית');
+  });
 });

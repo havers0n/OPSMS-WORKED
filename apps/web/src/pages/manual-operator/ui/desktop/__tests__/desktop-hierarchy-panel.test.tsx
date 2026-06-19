@@ -142,6 +142,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedWorkBucketName={null}
         areaSummaries={mockAreaSummaries}
         lineHierarchySummaries={[]}
+        areaLineSummaries={mockLineHierarchySummaries}
         workBucketSummaries={[]}
         onSelectArea={noop}
         onSelectLine={noop}
@@ -212,7 +213,8 @@ describe('DesktopHierarchyPanel', () => {
       renderPanel({
         selectedAreaKey: NO_DISTRIBUTION_AREA_KEY,
         areaSummaries: mockAreaSummariesWithNullArea,
-        lineHierarchySummaries: [mockLineHierarchySummaries[1]]
+        lineHierarchySummaries: [mockLineHierarchySummaries[1]],
+        areaLineSummaries: [mockLineHierarchySummaries[1]]
       });
       expect(screen.getByText('קווים')).toBeTruthy();
       expect(screen.getByText('ללא איזור')).toBeTruthy();
@@ -223,11 +225,12 @@ describe('DesktopHierarchyPanel', () => {
     it('shows lines and title "קווים" after selecting area', () => {
       renderPanel({
         selectedAreaKey: 'צפון',
-        lineHierarchySummaries: mockLineHierarchySummaries
+        lineHierarchySummaries: mockLineHierarchySummaries,
+        areaLineSummaries: [mockLineHierarchySummaries[0]]
       });
       expect(screen.getByText('קווים')).toBeTruthy();
       expect(screen.getByTestId('line-summary-card-line-1')).toBeTruthy();
-      expect(screen.getByTestId('line-summary-card-line-2')).toBeTruthy();
+      expect(screen.queryByTestId('line-summary-card-line-2')).toBeNull();
     });
 
     it('shows breadcrumb "אזורי הפצה > צפון"', () => {
@@ -264,7 +267,8 @@ describe('DesktopHierarchyPanel', () => {
     it('shows empty state when no lines exist in selected area', () => {
       renderPanel({
         selectedAreaKey: 'צפון',
-        lineHierarchySummaries: []
+        lineHierarchySummaries: [],
+        areaLineSummaries: []
       });
       expect(screen.getByText('אין קווים באזור זה')).toBeTruthy();
     });

@@ -238,4 +238,61 @@ describe('buildShiftWorkHierarchy', () => {
     expect(bucket.orders.find((o) => o.orderId === ORDER_1)?.totalQuantity).toBe(7);
     expect(bucket.orders.find((o) => o.orderId === ORDER_2)?.totalQuantity).toBe(13);
   });
+
+  it('uses item-derived totalQuantity from rollups even when order-level lineCount is null', () => {
+    const lineRows = [makeLineRow()];
+    const orders = [
+      makeOrder({ id: ORDER_1, pointName: 'סלולר', lineCount: null }),
+      makeOrder({ id: ORDER_2, pointName: 'סלולר', lineCount: null })
+    ];
+    const rollups = new Map<string, { lineCount: number; totalQuantity: number }>();
+    rollups.set(ORDER_1, { lineCount: 0, totalQuantity: 10 });
+    rollups.set(ORDER_2, { lineCount: 0, totalQuantity: 5 });
+
+    const result = buildShiftWorkHierarchy(SHIFT_ID, lineRows, orders, rollups, [], []);
+
+    const bucket = result.areas[0].lines[0].buckets[0];
+    expect(bucket.totalQuantity).toBe(15);
+    expect(result.areas[0].lines[0].totalQuantity).toBe(15);
+    expect(result.areas[0].totalQuantity).toBe(15);
+  });
+
+  it('propagates item-derived totals through all hierarchy levels', () => {
+    const LINE_B = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    const ORDER_3 = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+    const lineRows = [
+      makeLineRow({ id: LINE_A, name: 'קו גליל', distribution_area: 'גליל' }),
+      makeLineRow({ id: LINE_B, name: 'קו צפון', distribution_area: 'צפון' })
+    ];
+    const orders = [
+      makeOrder({ id: ORDER_1, lineId: LINE_A, pointName: 'דבאח עין המפרץ', orderNumber: 'SO26014230', lineCount: null }),
+      makeOrder({ id: ORDER_2, lineId: LINE_A, pointName: 'דבאח עין המפרץ', orderNumber: 'SO-OTHER', lineCount: null }),
+      makeOrder({ id: ORDER_3, lineId: LINE_B, pointName: 'סלולר', orderNumber: 'SO-NORTH', lineCount: null })
+    ];
+    const rollups = new Map<string, { lineCount: number; totalQuantity: number }>();
+    rollups.set(ORDER_1, { lineCount: 7, totalQuantity: 88 });
+    rollups.set(ORDER_2, { lineCount: 3, totalQuantity: 12 });
+    rollups.set(ORDER_3, { lineCount: 2, totalQuantity: 40 });
+
+    const result = buildShiftWorkHierarchy(SHIFT_ID, lineRows, orders, rollups, [], []);
+
+    expect(result.areas).toHaveLength(2);
+
+    const galilArea = result.areas.find((a) => a.areaName === 'גליל')!;
+    expect(galilArea.totalOrders).toBe(2);
+    expect(galilArea.totalQuantity).toBe(100);
+
+    const galilLine = galilArea.lines[0];
+    expect(galilLine.totalOrders).toBe(2);
+    expect(galilLine.totalQuantity).toBe(100);
+
+    const bucket = galilLine.buckets[0];
+    expect(bucket.totalOrders).toBe(2);
+    expect(bucket.totalQuantity).toBe(100);
+
+    const order1 = bucket.orders.find((o) => o.orderId === ORDER_1)!;
+    expect(order1.orderNumber).toBe('SO26014230');
+    expect(order1.totalQuantity).toBe(88);
+    expect(order1.lineCount).toBe(7);
+  });
 });

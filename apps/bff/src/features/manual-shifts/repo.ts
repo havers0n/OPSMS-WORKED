@@ -1104,24 +1104,33 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
     async listOrdersItemRollups(orderIds) {
       if (orderIds.length === 0) return new Map();
 
-      const { data, error } = await supabase
-        .from('manual_shift_order_items')
-        .select('order_id, quantity')
-        .in('order_id', orderIds);
-
-      if (error) throw error;
-
-      const rows = (data ?? []) as Array<{ order_id: string; quantity: number }>;
       const rollups = new Map<string, { lineCount: number; totalQuantity: number }>();
+      const PAGE_SIZE = 1000;
+      let offset = 0;
+      let hasMore = true;
 
-      for (const row of rows) {
-        let entry = rollups.get(row.order_id);
-        if (!entry) {
-          entry = { lineCount: 0, totalQuantity: 0 };
-          rollups.set(row.order_id, entry);
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('manual_shift_order_items')
+          .select('order_id, quantity')
+          .in('order_id', orderIds)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) throw error;
+
+        const rows = (data ?? []) as Array<{ order_id: string; quantity: number }>;
+        for (const row of rows) {
+          let entry = rollups.get(row.order_id);
+          if (!entry) {
+            entry = { lineCount: 0, totalQuantity: 0 };
+            rollups.set(row.order_id, entry);
+          }
+          entry.lineCount += 1;
+          entry.totalQuantity += row.quantity;
         }
-        entry.lineCount += 1;
-        entry.totalQuantity += row.quantity;
+
+        hasMore = rows.length === PAGE_SIZE;
+        offset += PAGE_SIZE;
       }
 
       return rollups;
