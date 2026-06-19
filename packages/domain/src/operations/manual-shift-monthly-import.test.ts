@@ -1031,4 +1031,176 @@ describe('manual shift monthly import parser', () => {
     //   orderNumber: 'SO-1'
     // });
   });
+
+  // ── PR C: canonical route/work bucket fields ────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  it('C(a): no-slash route produces rawRouteLine/routeBase but null workBucketName/workBucketType', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'חיפה',
+        customerName: 'דור אלון - דלית אל כרמל',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2,
+        zone: 'חיפה'
+      }
+    ]));
+
+    const group = result.groups[0];
+    expect(group.rawRouteLine).toBe('חיפה');
+    expect(group.routeBase).toBe('חיפה');
+    expect(group.workBucketName).toBeNull();
+    expect(group.workBucketType).toBeNull();
+    expect(group.lineName).toBe('חיפה');
+    expect(group.pointName).toBe('חיפה');
+    expect(group.pointName).toBe(group.lineName);
+
+    const plan = planManualShiftMonthlyImportApply(result);
+    expect(plan.lines[0].orders[0].workBucketName).toBeNull();
+    expect(plan.lines[0].orders[0].workBucketType).toBeNull();
+  });
+
+  it('C(b): slash route with category bucket produces canonical fields with workBucketType=unknown', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'דרום/סלולר',
+        customerName: 'לקוח',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 3
+      }
+    ]));
+
+    const group = result.groups[0];
+    expect(group.rawRouteLine).toBe('דרום/סלולר');
+    expect(group.routeBase).toBe('דרום');
+    expect(group.workBucketName).toBe('סלולר');
+    expect(group.workBucketType).toBe('unknown');
+    expect(group.lineName).toBe('דרום');
+    expect(group.pointName).toBe('סלולר');
+    expect(group.lineBucketName).toBe('סלולר');
+
+    const plan = planManualShiftMonthlyImportApply(result);
+    expect(plan.lines[0].orders[0].workBucketName).toBe('סלולר');
+    expect(plan.lines[0].orders[0].workBucketType).toBe('unknown');
+  });
+
+  it('C(c): slash route with customer-like bucket preserves workBucketName separately from customerName', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'צפון/פז השקמה',
+        customerName: 'דלק',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2
+      }
+    ]));
+
+    const group = result.groups[0];
+    expect(group.rawRouteLine).toBe('צפון/פז השקמה');
+    expect(group.routeBase).toBe('צפון');
+    expect(group.workBucketName).toBe('פז השקמה');
+    expect(group.workBucketType).toBe('unknown');
+    expect(group.customerName).toBe('דלק');
+    expect(group.workBucketName).not.toBe(group.customerName);
+    expect(group.pointName).toBe('פז השקמה');
+  });
+
+  it('C(d): same SO split across multiple workBucketName values produces separate fragments with correct canonical fields', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'דרום/סלולר',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 3
+      },
+      {
+        rowIndex: 3,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'דרום/פז השקמה',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1002',
+        quantity: 2
+      }
+    ]));
+
+    expect(result.preview.totals.lines).toBe(1);
+    expect(result.preview.totals.derivedPoints).toBe(2);
+
+    const plan = planManualShiftMonthlyImportApply(result);
+    expect(plan.lines).toHaveLength(1);
+    expect(plan.lines[0].orders).toHaveLength(2);
+
+    const orderByBucket = new Map(plan.lines[0].orders.map((o) => [o.pointName, o]));
+    const bucket1 = orderByBucket.get('סלולר')!;
+    const bucket2 = orderByBucket.get('פז השקמה')!;
+
+    expect(bucket1.workBucketName).toBe('סלולר');
+    expect(bucket1.workBucketType).toBe('unknown');
+    expect(bucket1.orderNumber).toBe('SO-1');
+    expect(bucket1.customerName).toBe('לקוח א');
+
+    expect(bucket2.workBucketName).toBe('פז השקמה');
+    expect(bucket2.workBucketType).toBe('unknown');
+    expect(bucket2.orderNumber).toBe('SO-1');
+    expect(bucket2.customerName).toBe('לקוח א');
+  });
+
+  it('C(e): regression — legacy lineName/pointName fallback still works and all PR A/PR B assertions hold', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'עמקים/נקודה א',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        description: 'מוצר א',
+        category: 'cat',
+        quantity: 2,
+        notes: 'איסוף',
+        zone: 'north'
+      },
+      {
+        rowIndex: 3,
+        distributionDateRaw: '14.06.26',
+        rawDistributionValue: 'עמקים/נקודה א',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        description: 'מוצר א',
+        category: 'cat',
+        quantity: 3,
+        notes: 'איסוף',
+        zone: 'north'
+      }
+    ]));
+
+    expect(result.preview.selectedDate).toEqual({ raw: '14.06.26', normalized: '2026-06-14' });
+    expect(result.preview.totals).toMatchObject({ lines: 1, rawDistributionValues: 1, derivedPoints: 1 });
+    expect(result.groups).toEqual([
+      expect.objectContaining({
+        lineName: 'עמקים',
+        pointName: 'נקודה א',
+        totalQuantity: 5,
+        sourceRows: [2, 3],
+        notes: ['איסוף'],
+        rawRouteLine: 'עמקים/נקודה א',
+        routeBase: 'עמקים',
+        workBucketName: 'נקודה א',
+        workBucketType: 'unknown'
+      })
+    ]);
+  });
 });

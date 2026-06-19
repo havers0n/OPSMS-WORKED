@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+export const workBucketTypeSchema = z.enum(['unknown']);
+export type WorkBucketType = z.infer<typeof workBucketTypeSchema>;
+
 export const manualShiftMonthlyWarningSeveritySchema = z.enum(['info', 'warning', 'blocking']);
 export type ManualShiftMonthlyWarningSeverity = z.infer<typeof manualShiftMonthlyWarningSeveritySchema>;
 
@@ -102,7 +105,11 @@ export const manualShiftMonthlyParsedRowSchema = z.object({
   category: z.string().nullable().optional(),
   quantity: z.union([z.string(), z.number()]).nullable().optional(),
   notes: z.string().nullable().optional(),
-  zone: z.string().nullable().optional()
+  zone: z.string().nullable().optional(),
+  rawRouteLine: z.string().nullable().optional(),
+  routeBase: z.string().nullable().optional(),
+  workBucketName: z.string().nullable().optional(),
+  workBucketType: workBucketTypeSchema.nullable().optional()
 });
 export type ManualShiftMonthlyParsedRow = z.infer<typeof manualShiftMonthlyParsedRowSchema>;
 
@@ -138,7 +145,11 @@ export const manualShiftMonthlyAggregatedGroupSchema = z.object({
   lineGroupName: z.string().nullable(),
   lineBucketName: z.string().nullable(),
   isPickupRow: z.boolean(),
-  customerName: z.string().nullable().optional()
+  customerName: z.string().nullable().optional(),
+  rawRouteLine: z.string().nullable(),
+  routeBase: z.string().nullable(),
+  workBucketName: z.string().nullable(),
+  workBucketType: workBucketTypeSchema.nullable()
 });
 export type ManualShiftMonthlyAggregatedGroup = z.infer<typeof manualShiftMonthlyAggregatedGroupSchema>;
 
@@ -167,7 +178,9 @@ export const manualShiftMonthlyApplyOrderSchema = z.object({
   totalQuantity: z.number().positive(),
   sourceRows: z.array(z.number().int().min(1)).min(1),
   sortOrder: z.number().int().min(1),
-  items: z.array(manualShiftMonthlyApplyItemSchema).min(1)
+  items: z.array(manualShiftMonthlyApplyItemSchema).min(1),
+  workBucketName: z.string().nullable(),
+  workBucketType: workBucketTypeSchema.nullable()
 });
 export type ManualShiftMonthlyApplyOrder = z.infer<typeof manualShiftMonthlyApplyOrderSchema>;
 
@@ -339,6 +352,10 @@ type WorkingRow = {
   lineBucketName: string | null;
   isPickupRow: boolean;
   customerName: string | null;
+  rawRouteLine: string | null;
+  routeBase: string | null;
+  workBucketName: string | null;
+  workBucketType: WorkBucketType | null;
 };
 
 function buildWorkingRow(row: ManualShiftMonthlyParsedRow): WorkingRow {
@@ -359,8 +376,13 @@ function buildWorkingRow(row: ManualShiftMonthlyParsedRow): WorkingRow {
   let usedPointFallback = false;
   let lineGroupName: string | null = null;
   let lineBucketName: string | null = null;
+  let rawRouteLine: string | null = null;
+  let routeBase: string | null = null;
+  let workBucketName: string | null = null;
+  let workBucketType: WorkBucketType | null = null;
 
   if (rawDistributionValue) {
+    rawRouteLine = rawDistributionValue;
     const slashIndex = rawDistributionValue.indexOf('/');
     if (slashIndex >= 0) {
       hadSlash = true;
@@ -368,11 +390,17 @@ function buildWorkingRow(row: ManualShiftMonthlyParsedRow): WorkingRow {
       pointName = normalizeTrimmedString(rawDistributionValue.slice(slashIndex + 1));
       lineGroupName = lineName;
       lineBucketName = pointName;
+      routeBase = lineName;
+      workBucketName = pointName;
+      workBucketType = 'unknown';
     } else {
       lineName = rawDistributionValue;
       pointName = rawDistributionValue;
       lineGroupName = rawDistributionValue;
       lineBucketName = rawDistributionValue;
+      routeBase = rawDistributionValue;
+      workBucketName = null;
+      workBucketType = null;
     }
   }
 
@@ -396,7 +424,11 @@ function buildWorkingRow(row: ManualShiftMonthlyParsedRow): WorkingRow {
     lineGroupName,
     lineBucketName,
     isPickupRow: (normalizeTrimmedString(row.notes)?.includes('איסוף')) ?? false,
-    customerName
+    customerName,
+    rawRouteLine,
+    routeBase,
+    workBucketName,
+    workBucketType
   };
 }
 
@@ -552,7 +584,11 @@ export function parseManualShiftMonthlyPreview(
         lineGroupName: row.lineGroupName,
         lineBucketName: row.lineBucketName,
         isPickupRow: row.isPickupRow,
-        customerName: row.customerName
+        customerName: row.customerName,
+        rawRouteLine: row.rawRouteLine,
+        routeBase: row.routeBase,
+        workBucketName: row.workBucketName,
+        workBucketType: row.workBucketType
       });
     }
 
@@ -833,7 +869,9 @@ export function planManualShiftMonthlyImportApply(
       totalQuantity: itemQuantity,
       sourceRows,
       sortOrder: lineOrders.size + 1,
-      items: [item]
+      items: [item],
+      workBucketName: group.workBucketName,
+      workBucketType: group.workBucketType
     });
   }
 
