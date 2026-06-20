@@ -165,6 +165,47 @@ describe('manual shift monthly import parser', () => {
     expect(result.preview.totals.orderGroups).toBe(2);
   });
 
+  it('documents the current monthly aggregation collision risk when zone differs but all other key fields match', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'שפלה 2/סלולר',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2,
+        zone: 'שפלה 2'
+      },
+      {
+        rowIndex: 3,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'שפלה 2/סלולר',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 3,
+        zone: 'שפלה אמצעי'
+      }
+    ]));
+
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0]).toMatchObject({
+      lineName: 'שפלה 2',
+      pointName: 'סלולר',
+      orderNumber: 'SO-1',
+      sku: '1001',
+      totalQuantity: 5,
+      sourceRows: [2, 3]
+    });
+    expect(result.preview.totals.aggregatedSkuGroups).toBe(1);
+    expect(result.preview.lines[0]).toMatchObject({
+      lineName: 'שפלה 2',
+      itemRows: 2,
+      aggregatedSkuGroups: 1
+    });
+  });
+
   it('counts negative quantity and note anomalies', () => {
     const result = parseManualShiftMonthlyPreview(buildInput([
       {

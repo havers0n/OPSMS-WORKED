@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { classifyRouteFragments, type RouteFragmentInput } from '@wos/domain';
 import type {
+  ManualShiftLine,
   ManualShiftOrder,
   ManualShiftOrderCheckUnit,
   ManualShiftOrderAshlama,
+  ManualShiftOrderItem,
   ManualShiftWorkHierarchyResponse
 } from '@wos/domain';
-import { buildShiftWorkHierarchy } from './repo.js';
+import { buildManualShiftSourceZoneDiagnostics, buildShiftWorkHierarchy } from './repo.js';
 
 type ManualShiftLineRow = {
   id: string;
@@ -71,6 +73,47 @@ function makeOrder(overrides: Partial<ManualShiftOrder> = {}): ManualShiftOrder 
     comment: null,
     createdAt: '2026-06-14T06:00:00.000Z',
     updatedAt: '2026-06-14T06:00:00.000Z',
+    deletedAt: null,
+    deletedByProfileId: null,
+    deletedByName: null,
+    deleteReason: null,
+    ...overrides
+  };
+}
+
+function makeItem(overrides: Partial<ManualShiftOrderItem> & { id: string; orderId: string; lineId: string }): ManualShiftOrderItem {
+  const { id, orderId, lineId, ...rest } = overrides;
+  return {
+    id,
+    tenantId: 't1',
+    shiftId: SHIFT_ID,
+    lineId,
+    orderId,
+    sku: 'SKU-1',
+    description: null,
+    category: null,
+    quantity: 1,
+    notes: null,
+    zone: null,
+    sourceSheet: 'יוני 26',
+    sourceRows: [2],
+    sourceFile: 'monthly.xlsx',
+    sortOrder: 1,
+    createdAt: '2026-06-14T06:00:00.000Z',
+    ...rest
+  };
+}
+
+function makeLineEntity(overrides: Partial<ManualShiftLine> = {}): ManualShiftLine {
+  return {
+    id: LINE_A,
+    tenantId: 't1',
+    shiftId: SHIFT_ID,
+    name: 'שפלה 2',
+    distributionArea: 'שפלה אמצעי',
+    sortOrder: 1,
+    status: 'open',
+    createdAt: '2026-06-14T06:00:00.000Z',
     deletedAt: null,
     deletedByProfileId: null,
     deletedByName: null,
@@ -295,6 +338,163 @@ describe('buildShiftWorkHierarchy', () => {
     expect(order1.orderNumber).toBe('SO26014230');
     expect(order1.totalQuantity).toBe(88);
     expect(order1.lineCount).toBe(7);
+  });
+});
+
+describe('buildManualShiftSourceZoneDiagnostics', () => {
+  it('reports שפלה 2 split zones across item rows', () => {
+    const line = makeLineEntity({
+      id: '11111111-1111-4111-8111-111111111111',
+      name: 'שפלה 2',
+      distributionArea: 'שפלה אמצעי'
+    });
+    const fragments = [
+      { id: '21111111-1111-4111-8111-111111111111', route: 'שפלה 2', pointName: 'שפלה 2', workBucketName: null, zone: 'שפלה 2' },
+      { id: '21111111-1111-4111-8111-111111111112', route: 'שפלה 2/סלולר', pointName: 'סלולר', workBucketName: 'סלולר', zone: 'שפלה 2' },
+      { id: '21111111-1111-4111-8111-111111111113', route: 'שפלה 2/רכב-פז גדרה', pointName: 'רכב-פז גדרה', workBucketName: 'רכב-פז גדרה', zone: 'שפלה אמצעי' },
+      { id: '21111111-1111-4111-8111-111111111114', route: 'שפלה 2/דור אלון טל שחר', pointName: 'דור אלון טל שחר', workBucketName: 'דור אלון טל שחר', zone: 'שפלה אמצעי' },
+      { id: '21111111-1111-4111-8111-111111111115', route: 'שפלה 2/סדש גדרה', pointName: 'סדש גדרה', workBucketName: 'סדש גדרה', zone: 'שפלה 2' },
+      { id: '21111111-1111-4111-8111-111111111116', route: 'שפלה 2/כוורת חצור משפחות', pointName: 'כוורת חצור משפחות', workBucketName: 'כוורת חצור משפחות', zone: 'שפלה אמצעי' },
+      { id: '21111111-1111-4111-8111-111111111117', route: 'שפלה 2/מנטה מסמיה', pointName: 'מנטה מסמיה', workBucketName: 'מנטה מסמיה', zone: 'שפלה 2' },
+      { id: '21111111-1111-4111-8111-111111111118', route: 'שפלה 2/פז ברורים', pointName: 'פז ברורים', workBucketName: 'פז ברורים', zone: 'שפלה אמצעי' },
+      { id: '21111111-1111-4111-8111-111111111119', route: 'שפלה 2/תפוז עד הלום', pointName: 'תפוז עד הלום', workBucketName: 'תפוז עד הלום', zone: 'שפלה 2' }
+    ] as const;
+
+    const orders = fragments.map((fragment, index) => makeOrder({
+      id: fragment.id,
+      lineId: line.id,
+      orderNumber: `SO-SH-${index + 1}`,
+      customerName: `לקוח ${index + 1}`,
+      pointName: fragment.pointName,
+      rawRouteLine: fragment.route,
+      routeBase: 'שפלה 2',
+      workBucketName: fragment.workBucketName,
+      workBucketType: fragment.workBucketName === null ? null : 'unknown'
+    }));
+    const items = fragments.map((fragment, index) => makeItem({
+      id: `31111111-1111-4111-8111-11111111111${index}`,
+      lineId: line.id,
+      orderId: orders[index].id,
+      sku: `SKU-${index + 1}`,
+      zone: fragment.zone,
+      sourceRows: [index + 2]
+    }));
+
+    const result = buildManualShiftSourceZoneDiagnostics({ lines: [line], orders, items });
+    const lineDiag = result.lines.find((entry) => entry.lineName === 'שפלה 2');
+
+    expect(lineDiag).toMatchObject({
+      lineName: 'שפלה 2',
+      distributionArea: 'שפלה אמצעי',
+      itemZones: ['שפלה 2', 'שפלה אמצעי'],
+      hasMultipleItemZones: true,
+      message: 'line שפלה 2 has multiple item zones: שפלה 2, שפלה אמצעי',
+      distributionAreaMessage: 'line.distribution_area = שפלה אמצעי does not represent all orders/items'
+    });
+    expect(lineDiag?.orderNumbers).toHaveLength(9);
+    expect(result.orders).toHaveLength(9);
+    expect(result.mismatches).toHaveLength(5);
+  });
+
+  it('reports ירושלים split zones and coarse distribution area coverage', () => {
+    const line = makeLineEntity({
+      id: '22222222-2222-4222-8222-222222222222',
+      name: 'ירושלים',
+      distributionArea: 'ירושלים אמצעי'
+    });
+    const fragments = [
+      { id: '22111111-1111-4111-8111-111111111111', route: 'ירושלים 1', pointName: 'ירושלים 1', workBucketName: null, zone: 'ירושלים 1' },
+      { id: '22111111-1111-4111-8111-111111111112', route: 'ירושלים 2', pointName: 'ירושלים 2', workBucketName: null, zone: 'ירושלים 2' },
+      { id: '22111111-1111-4111-8111-111111111113', route: 'ירושלים אמצעי', pointName: 'ירושלים אמצעי', workBucketName: null, zone: 'ירושלים אמצעי' }
+    ] as const;
+
+    const orders = fragments.map((fragment, index) => makeOrder({
+      id: fragment.id,
+      lineId: line.id,
+      orderNumber: `SO-J-${index + 1}`,
+      customerName: `לקוח י-${index + 1}`,
+      pointName: fragment.pointName,
+      rawRouteLine: fragment.route,
+      routeBase: 'ירושלים',
+      workBucketName: fragment.workBucketName,
+      workBucketType: null
+    }));
+    const items = fragments.map((fragment, index) => makeItem({
+      id: `32111111-1111-4111-8111-11111111111${index}`,
+      lineId: line.id,
+      orderId: orders[index].id,
+      sku: `J-SKU-${index + 1}`,
+      zone: fragment.zone,
+      sourceRows: [index + 10]
+    }));
+
+    const result = buildManualShiftSourceZoneDiagnostics({ lines: [line], orders, items });
+    const lineDiag = result.lines.find((entry) => entry.lineName === 'ירושלים');
+
+    expect(lineDiag).toMatchObject({
+      lineName: 'ירושלים',
+      distributionArea: 'ירושלים אמצעי',
+      itemZones: ['ירושלים 1', 'ירושלים 2', 'ירושלים אמצעי'],
+      hasMultipleItemZones: true,
+      message: 'line ירושלים has multiple item zones: ירושלים 1, ירושלים 2, ירושלים אמצעי',
+      distributionAreaMessage: 'line.distribution_area = ירושלים אמצעי does not represent all orders/items'
+    });
+    expect(result.orders).toHaveLength(3);
+    expect(result.mismatches).toHaveLength(2);
+  });
+
+  it(`reports צ'יטה as a source-zone mismatch candidate rather than a normal geographic area`, () => {
+    const line = makeLineEntity({
+      id: '33333333-3333-4333-8333-333333333333',
+      name: `צ'יטה`,
+      distributionArea: `צ'יטה`
+    });
+    const order = makeOrder({
+      id: '66666666-6666-4666-8666-666666666666',
+      lineId: line.id,
+      orderNumber: 'SO-CHITA-1',
+      customerName: 'לקוח צ׳יטה',
+      pointName: `צ'יטה`,
+      rawRouteLine: `צ'יטה`,
+      routeBase: `צ'יטה`,
+      workBucketName: null,
+      workBucketType: null
+    });
+    const items = [
+      makeItem({
+        id: '73111111-1111-4111-8111-111111111111',
+        lineId: line.id,
+        orderId: order.id,
+        sku: 'CH-1',
+        zone: 'שפלה 1',
+        sourceRows: [20]
+      })
+    ];
+
+    const result = buildManualShiftSourceZoneDiagnostics({ lines: [line], orders: [order], items });
+
+    expect(result.orders[0]).toMatchObject({
+      lineName: `צ'יטה`,
+      orderNumber: 'SO-CHITA-1',
+      routeBase: `צ'יטה`,
+      itemZones: ['שפלה 1'],
+      hasMixedItemZones: false,
+      message: `routeBase צ'יטה can have source zone different from צ'יטה`
+    });
+    expect(result.lines[0]).toMatchObject({
+      lineName: `צ'יטה`,
+      distributionArea: `צ'יטה`,
+      itemZones: ['שפלה 1'],
+      message: `line צ'יטה has item zone: שפלה 1`,
+      distributionAreaMessage: `צ'יטה should not be assumed to be a normal geographic אזור הפצה`
+    });
+    expect(result.mismatches).toHaveLength(1);
+    expect(result.mismatches[0]).toMatchObject({
+      lineName: `צ'יטה`,
+      orderNumber: 'SO-CHITA-1',
+      itemZone: 'שפלה 1',
+      message: `routeBase צ'יטה can have source zone different from צ'יטה`
+    });
   });
 });
 

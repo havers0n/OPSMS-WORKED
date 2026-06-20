@@ -1778,6 +1778,266 @@ function computeStatusBreakdown(
   };
 }
 
+export type ManualShiftSourceZoneLineDiagnostic = {
+  lineId: string;
+  lineName: string;
+  distributionArea: string | null;
+  itemZones: string[];
+  orderNumbers: string[];
+  rowIndexes: number[];
+  hasMultipleItemZones: boolean;
+  message: string;
+  distributionAreaMessage: string | null;
+};
+
+export type ManualShiftSourceZoneOrderDiagnostic = {
+  orderId: string;
+  orderNumber: string;
+  lineId: string;
+  lineName: string;
+  distributionArea: string | null;
+  routeBase: string | null;
+  rawRouteLine: string | null;
+  pointName: string | null;
+  itemZones: string[];
+  rowIndexes: number[];
+  hasMixedItemZones: boolean;
+  message: string;
+};
+
+export type ManualShiftSourceZoneMismatchDiagnostic = {
+  orderId: string;
+  orderNumber: string;
+  lineId: string;
+  lineName: string;
+  distributionArea: string | null;
+  routeBase: string | null;
+  rawRouteLine: string | null;
+  pointName: string | null;
+  itemZone: string;
+  rowIndexes: number[];
+  message: string;
+};
+
+export type ManualShiftSourceZoneDiagnostics = {
+  lines: ManualShiftSourceZoneLineDiagnostic[];
+  orders: ManualShiftSourceZoneOrderDiagnostic[];
+  mismatches: ManualShiftSourceZoneMismatchDiagnostic[];
+};
+
+type ManualShiftSourceZoneLineStats = {
+  lineId: string;
+  lineName: string;
+  distributionArea: string | null;
+  itemZones: Set<string>;
+  orderNumbers: Set<string>;
+  rowIndexes: Set<number>;
+};
+
+type ManualShiftSourceZoneOrderStats = {
+  orderId: string;
+  orderNumber: string;
+  lineId: string;
+  lineName: string;
+  distributionArea: string | null;
+  routeBase: string | null;
+  rawRouteLine: string | null;
+  pointName: string | null;
+  itemZones: Set<string>;
+  rowIndexes: Set<number>;
+};
+
+type ManualShiftSourceZoneMismatchStats = {
+  orderId: string;
+  orderNumber: string;
+  lineId: string;
+  lineName: string;
+  distributionArea: string | null;
+  routeBase: string | null;
+  rawRouteLine: string | null;
+  pointName: string | null;
+  itemZone: string;
+  rowIndexes: Set<number>;
+};
+
+function compareMaybeString(a: string | null, b: string | null): number {
+  if (a === b) return 0;
+  if (a === null) return -1;
+  if (b === null) return 1;
+  return a.localeCompare(b, 'he');
+}
+
+function normalizeOptionalString(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export function buildManualShiftSourceZoneDiagnostics(input: {
+  lines: ManualShiftLine[];
+  orders: ManualShiftOrder[];
+  items: ManualShiftOrderItem[];
+}): ManualShiftSourceZoneDiagnostics {
+  const lineLookup = new Map(input.lines.map((line) => [line.id, line] as const));
+  const orderLookup = new Map(input.orders.map((order) => [order.id, order] as const));
+
+  const lines = new Map<string, ManualShiftSourceZoneLineStats>();
+  const orders = new Map<string, ManualShiftSourceZoneOrderStats>();
+  const mismatches = new Map<string, ManualShiftSourceZoneMismatchStats>();
+
+  for (const item of input.items) {
+    const itemZone = normalizeOptionalString(item.zone);
+    if (!itemZone) continue;
+
+    const line = lineLookup.get(item.lineId);
+    const order = orderLookup.get(item.orderId);
+    if (!line || !order) continue;
+
+    const lineEntry = lines.get(line.id) ?? {
+      lineId: line.id,
+      lineName: line.name,
+      distributionArea: line.distributionArea,
+      itemZones: new Set<string>(),
+      orderNumbers: new Set<string>(),
+      rowIndexes: new Set<number>()
+    };
+    lineEntry.distributionArea ??= line.distributionArea;
+    lineEntry.itemZones.add(itemZone);
+    lineEntry.orderNumbers.add(order.orderNumber ?? '');
+    for (const rowIndex of item.sourceRows ?? []) {
+      lineEntry.rowIndexes.add(rowIndex);
+    }
+    lines.set(line.id, lineEntry);
+
+    const orderEntry = orders.get(order.id) ?? {
+      orderId: order.id,
+      orderNumber: order.orderNumber ?? '',
+      lineId: line.id,
+      lineName: line.name,
+      distributionArea: line.distributionArea,
+      routeBase: order.routeBase ?? null,
+      rawRouteLine: order.rawRouteLine ?? null,
+      pointName: order.pointName ?? null,
+      itemZones: new Set<string>(),
+      rowIndexes: new Set<number>()
+    };
+    orderEntry.distributionArea ??= line.distributionArea;
+    orderEntry.routeBase ??= order.routeBase ?? null;
+    orderEntry.rawRouteLine ??= order.rawRouteLine ?? null;
+    orderEntry.pointName ??= order.pointName ?? null;
+    orderEntry.itemZones.add(itemZone);
+    for (const rowIndex of item.sourceRows ?? []) {
+      orderEntry.rowIndexes.add(rowIndex);
+    }
+    orders.set(order.id, orderEntry);
+
+    if (line.distributionArea && itemZone !== line.distributionArea) {
+      const mismatchKey = `${line.id}\u0001${order.id}\u0001${itemZone}\u0001${line.distributionArea}`;
+      const mismatchEntry = mismatches.get(mismatchKey) ?? {
+        orderId: order.id,
+        orderNumber: order.orderNumber ?? '',
+        lineId: line.id,
+        lineName: line.name,
+        distributionArea: line.distributionArea,
+        routeBase: order.routeBase ?? null,
+        rawRouteLine: order.rawRouteLine ?? null,
+        pointName: order.pointName ?? null,
+        itemZone,
+        rowIndexes: new Set<number>()
+      };
+      for (const rowIndex of item.sourceRows ?? []) {
+        mismatchEntry.rowIndexes.add(rowIndex);
+      }
+      mismatches.set(mismatchKey, mismatchEntry);
+    }
+  }
+
+  const lineDiagnostics = Array.from(lines.values())
+    .map((entry) => {
+      const itemZones = Array.from(entry.itemZones).sort((a, b) => a.localeCompare(b, 'he'));
+      const hasMultipleItemZones = itemZones.length > 1;
+      const distributionAreaMessage =
+        itemZones.length > 1
+          ? (entry.distributionArea && itemZones.includes(entry.distributionArea)
+              ? `line.distribution_area = ${entry.distributionArea} does not represent all orders/items`
+              : 'line.distribution_area is too coarse to be authoritative')
+          : (entry.distributionArea && itemZones[0] !== entry.distributionArea
+              ? (entry.lineName === entry.distributionArea
+                  ? `${entry.lineName} should not be assumed to be a normal geographic אזור הפצה`
+                  : `line.distribution_area = ${entry.distributionArea} does not represent this item`)
+              : null);
+
+      return {
+        lineId: entry.lineId,
+        lineName: entry.lineName,
+        distributionArea: entry.distributionArea,
+        itemZones,
+        orderNumbers: Array.from(entry.orderNumbers).sort((a, b) => a.localeCompare(b, 'he')),
+        rowIndexes: Array.from(entry.rowIndexes).sort((a, b) => a - b),
+        hasMultipleItemZones,
+        message: hasMultipleItemZones
+          ? `line ${entry.lineName} has multiple item zones: ${itemZones.join(', ')}`
+          : `line ${entry.lineName} has item zone: ${itemZones[0] ?? 'unknown'}`,
+        distributionAreaMessage
+      } satisfies ManualShiftSourceZoneLineDiagnostic;
+    })
+    .sort((a, b) => a.lineName.localeCompare(b.lineName, 'he'));
+
+  const orderDiagnostics = Array.from(orders.values())
+    .map((entry) => {
+      const itemZones = Array.from(entry.itemZones).sort((a, b) => a.localeCompare(b, 'he'));
+      const hasMixedItemZones = itemZones.length > 1;
+
+      return {
+        orderId: entry.orderId,
+        orderNumber: entry.orderNumber,
+        lineId: entry.lineId,
+        lineName: entry.lineName,
+        distributionArea: entry.distributionArea,
+        routeBase: entry.routeBase,
+        rawRouteLine: entry.rawRouteLine,
+        pointName: entry.pointName,
+        itemZones,
+        rowIndexes: Array.from(entry.rowIndexes).sort((a, b) => a - b),
+        hasMixedItemZones,
+        message: hasMixedItemZones
+          ? `order ${entry.orderNumber} has mixed item zones: ${itemZones.join(', ')}`
+          : `routeBase ${entry.routeBase ?? entry.lineName} can have source zone different from ${entry.distributionArea ?? entry.lineName}`
+      } satisfies ManualShiftSourceZoneOrderDiagnostic;
+    })
+    .sort((a, b) => a.lineName.localeCompare(b.lineName, 'he') || a.orderNumber.localeCompare(b.orderNumber, 'he'));
+
+  const mismatchDiagnostics = Array.from(mismatches.values())
+    .map((entry) => ({
+      orderId: entry.orderId,
+      orderNumber: entry.orderNumber,
+      lineId: entry.lineId,
+      lineName: entry.lineName,
+      distributionArea: entry.distributionArea,
+      routeBase: entry.routeBase,
+      rawRouteLine: entry.rawRouteLine,
+      pointName: entry.pointName,
+      itemZone: entry.itemZone,
+      rowIndexes: Array.from(entry.rowIndexes).sort((a, b) => a - b),
+      message: `routeBase ${entry.routeBase ?? entry.lineName} can have source zone different from ${entry.distributionArea ?? entry.lineName}`
+    }))
+    .sort((a, b) =>
+      a.lineName.localeCompare(b.lineName, 'he') ||
+      a.orderNumber.localeCompare(b.orderNumber, 'he') ||
+      a.itemZone.localeCompare(b.itemZone, 'he') ||
+      compareMaybeString(a.distributionArea, b.distributionArea)
+    );
+
+  return {
+    lines: lineDiagnostics,
+    orders: orderDiagnostics,
+    mismatches: mismatchDiagnostics
+  };
+}
+
 const CONFIDENCE_RANK: Record<ClassificationConfidence, number> = {
   high: 3,
   medium: 2,
