@@ -282,9 +282,12 @@ export function DesktopHierarchyPanel({
   }
 
   // ── State 6: Work bucket selected → products/orders ──────────────────────
+  // selectedRouteGroupWorkBucket is the single source of truth for routeGroups mode.
+  // It is derived in the parent from the same routeGroupWorkBucketSummaries list
+  // and selectedWorkBucketKey.  Do not add a secondary find fallback here —
+  // the Products tab pointName derivation and showProductRollupDeferred in the
+  // parent depend on exactly the same bucket object.
   const selectedBucketLegacy = workBucketSummaries.find((p) => p.workBucketName === selectedWorkBucketName);
-  const selectedBucketRouteGroup = selectedRouteGroupWorkBucket
-    ?? routeGroupWorkBucketSummaries.find((wb) => wb.workBucketKey === selectedWorkBucketKey);
 
   const isRouteGroupBucket = hasRouteGroups && !!selectedRouteGroupKey;
   const selectedRouteGroup = isRouteGroupBucket
@@ -292,7 +295,7 @@ export function DesktopHierarchyPanel({
     : undefined;
 
   const bucketOrders = isRouteGroupBucket
-    ? (selectedBucketRouteGroup?.orders ?? [])
+    ? (selectedRouteGroupWorkBucket?.orders ?? [])
     : (selectedBucketLegacy?.orders ?? []);
 
   return (

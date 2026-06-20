@@ -769,7 +769,7 @@ describe('DesktopHierarchyPanel', () => {
     ];
 
     const mockSelectedGalilBucket = mockRouteGroupWorkBucketSummaries[0];
-    const mockSelectedSellularBucket = mockRouteGroupWorkBucketSummaries[1];
+    const _mockSelectedSellularBucket = mockRouteGroupWorkBucketSummaries[1];
 
     it('does NOT render deferred message when showProductRollupDeferred=false', () => {
       renderPanel({
@@ -886,6 +886,370 @@ describe('DesktopHierarchyPanel', () => {
       });
 
       expect(screen.getByTestId('order-mini-card-d-1')).toBeTruthy();
+    });
+  });
+
+  describe('selectedRouteGroupWorkBucket as single source of truth', () => {
+    const mockGalilArea = {
+      areaKey: 'גליל', displayName: 'גליל', areaName: 'גליל',
+      totalLines: 1, totalBuckets: 2, totalOrders: 4, totalQuantity: 100,
+      statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 }
+    };
+
+    const mockGalilLineSummary = {
+      lineId: 'line-galil', lineName: 'גליל', distributionArea: 'גליל',
+      lineStatus: 'open' as const, ordersCount: 4, itemLinesCount: 10, totalQuantity: 100,
+      statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 }
+    };
+
+    const mockGalilRouteGroup: RouteGroupSummary = {
+      routeGroupKey: 'galil-general', routeGroupName: 'גליל כללי',
+      classificationConfidence: 'high', orderCount: 4, itemLinesCount: 10, totalQuantity: 100,
+      statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+      workBucketCount: 2
+    };
+
+    const mockRouteGroupWBKlali: RouteGroupWorkBucketSummary = {
+      workBucketKey: 'wb-galil-klali', workBucketName: 'כללי', workBucketDisplayName: 'כללי',
+      classificationConfidence: 'high', orderCount: 3, itemLinesCount: 7, totalQuantity: 60,
+      statusBreakdown: { queued: 3, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+      orders: [
+        { orderId: 'g-o-1', orderNumber: 'SO26013614', customerName: 'לקוח א', pointName: 'גליל', status: 'queued', workBucketName: 'כללי', pickerName: null, checkerName: null, lineCount: 2, totalQuantity: 20 },
+        { orderId: 'g-o-2', orderNumber: 'SO26013629', customerName: 'לקוח ב', pointName: 'גליל', status: 'queued', workBucketName: 'כללי', pickerName: null, checkerName: null, lineCount: 3, totalQuantity: 20 },
+        { orderId: 'g-o-3', orderNumber: 'SO26013663', customerName: 'לקוח ג', pointName: 'גליל', status: 'queued', workBucketName: 'כללי', pickerName: null, checkerName: null, lineCount: 2, totalQuantity: 20 }
+      ]
+    };
+
+    const mockRouteGroupWBSellular: RouteGroupWorkBucketSummary = {
+      workBucketKey: 'wb-galil-sellular', workBucketName: 'סלולר', workBucketDisplayName: 'סלולר',
+      classificationConfidence: 'high', orderCount: 1, itemLinesCount: 3, totalQuantity: 40,
+      statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+      orders: [
+        { orderId: 'g-o-4', orderNumber: 'SO26013678', customerName: 'לקוח ד', pointName: 'סלולר', status: 'queued', workBucketName: 'סלולר', pickerName: null, checkerName: null, lineCount: 3, totalQuantity: 40 }
+      ]
+    };
+
+    const mockDabachRouteGroup: RouteGroupSummary = {
+      routeGroupKey: 'dbeach', routeGroupName: 'דבאח עין המפרץ',
+      classificationConfidence: 'high', orderCount: 2, itemLinesCount: 5, totalQuantity: 60,
+      statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+      workBucketCount: 1
+    };
+
+    const mockDabachBucket: RouteGroupWorkBucketSummary = {
+      workBucketKey: 'wb-dbeach-klali', workBucketName: 'כללי', workBucketDisplayName: 'כללי',
+      classificationConfidence: 'high', orderCount: 2, itemLinesCount: 5, totalQuantity: 60,
+      statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+      orders: [
+        { orderId: 'd-o-1', orderNumber: 'SO26013686', customerName: 'לקוח ה', pointName: 'דבאח עין המפרץ', status: 'queued', workBucketName: 'כללי', pickerName: null, checkerName: null, lineCount: 2, totalQuantity: 30 },
+        { orderId: 'd-o-2', orderNumber: 'SO26013699', customerName: 'לקוח ו', pointName: 'דבאח עין המפרץ', status: 'queued', workBucketName: 'כללי', pickerName: null, checkerName: null, lineCount: 3, totalQuantity: 30 }
+      ]
+    };
+
+    const mockMultiSourceRouteGroup: RouteGroupSummary = {
+      routeGroupKey: 'multi-src', routeGroupName: 'מעורב',
+      classificationConfidence: 'high', orderCount: 2, itemLinesCount: 5, totalQuantity: 30,
+      statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+      workBucketCount: 1
+    };
+
+    const mockMultiSourceBucket: RouteGroupWorkBucketSummary = {
+      workBucketKey: 'wb-mixed', workBucketName: 'מעורב', workBucketDisplayName: 'מעורב',
+      classificationConfidence: 'high', orderCount: 2, itemLinesCount: 5, totalQuantity: 30,
+      statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+      orders: [
+        { orderId: 'm-o-1', orderNumber: 'SO-1', customerName: 'לקוח א', pointName: 'גליל', status: 'queued', workBucketName: 'מעורב', pickerName: null, checkerName: null, lineCount: 2, totalQuantity: 10 },
+        { orderId: 'm-o-2', orderNumber: 'SO-2', customerName: 'לקוח ב', pointName: 'סלולר', status: 'queued', workBucketName: 'מעורב', pickerName: null, checkerName: null, lineCount: 3, totalQuantity: 20 }
+      ]
+    };
+
+    function renderRouteGroupPanel(overrides: Partial<Parameters<typeof DesktopHierarchyPanel>[0]> = {}) {
+      return renderPanel({
+        selectedAreaKey: 'גליל',
+        selectedLineId: 'line-galil',
+        selectedRouteGroupKey: 'galil-general',
+        areaSummaries: [mockGalilArea],
+        areaLineSummaries: [mockGalilLineSummary],
+        lineHierarchySummaries: [mockGalilLineSummary],
+        hasRouteGroups: true,
+        routeGroupSummaries: [mockGalilRouteGroup],
+        routeGroupWorkBucketSummaries: [mockRouteGroupWBKlali, mockRouteGroupWBSellular],
+        ...overrides
+      });
+    }
+
+    // ── Case 1: גליל כללי > כללי ──────────────────────────────────────────
+    it('Case 1 — גליל כללי > כללי: product table renders with pointName=גליל', () => {
+      renderRouteGroupPanel({
+        selectedWorkBucketKey: 'wb-galil-klali',
+        selectedRouteGroupWorkBucket: mockRouteGroupWBKlali,
+        selectedWorkBucketName: 'כללי',
+        showProductRollupDeferred: false,
+        workBucketView: 'products',
+        productRollup: [{ sku: 'SKU-1', description: 'מוצר', category: 'קטגוריה', totalQuantity: 10, orderCount: 2 }],
+        productRollupLoading: false
+      });
+
+      expect(screen.queryByText('תצוגת מוצרים לקבוצת חלוקה מרובת מקורות תתווסף בשלב הבא')).toBeNull();
+      expect(screen.getByTestId('bucket-product-table')).toBeTruthy();
+      expect(screen.getByText('קבוצת עבודה: כללי')).toBeTruthy();
+    });
+
+    it('Case 1 — גליל כללי > כללי: orders tab contains only orders with pointName=גליל', () => {
+      renderRouteGroupPanel({
+        selectedWorkBucketKey: 'wb-galil-klali',
+        selectedRouteGroupWorkBucket: mockRouteGroupWBKlali,
+        selectedWorkBucketName: 'כללי',
+        showProductRollupDeferred: false,
+        workBucketView: 'orders'
+      });
+
+      expect(screen.getByTestId('order-mini-card-g-o-1')).toBeTruthy();
+      expect(screen.getByTestId('order-mini-card-g-o-2')).toBeTruthy();
+      expect(screen.getByTestId('order-mini-card-g-o-3')).toBeTruthy();
+      expect(screen.queryByTestId('order-mini-card-g-o-4')).toBeNull();
+    });
+
+    // ── Case 2: גליל כללי > סלולר ──────────────────────────────────────────
+    it('Case 2 — גליל כללי > סלולר: product table renders with pointName=סלולר, not deferred', () => {
+      renderRouteGroupPanel({
+        selectedWorkBucketKey: 'wb-galil-sellular',
+        selectedRouteGroupWorkBucket: mockRouteGroupWBSellular,
+        selectedWorkBucketName: 'סלולר',
+        showProductRollupDeferred: false,
+        workBucketView: 'products',
+        productRollup: [{ sku: 'SKU-2', description: 'טלפון', category: 'סלולר', totalQuantity: 5, orderCount: 1 }],
+        productRollupLoading: false
+      });
+
+      expect(screen.queryByText('תצוגת מוצרים לקבוצת חלוקה מרובת מקורות תתווסף בשלב הבא')).toBeNull();
+      expect(screen.getByTestId('bucket-product-table')).toBeTruthy();
+      expect(screen.getByText('קבוצת עבודה: סלולר')).toBeTruthy();
+    });
+
+    it('Case 2 — גליל כללי > סלולר: orders tab contains only orders with pointName=סלולר', () => {
+      renderRouteGroupPanel({
+        selectedWorkBucketKey: 'wb-galil-sellular',
+        selectedRouteGroupWorkBucket: mockRouteGroupWBSellular,
+        selectedWorkBucketName: 'סלולר',
+        showProductRollupDeferred: false,
+        workBucketView: 'orders'
+      });
+
+      expect(screen.getByTestId('order-mini-card-g-o-4')).toBeTruthy();
+      expect(screen.queryByTestId('order-mini-card-g-o-1')).toBeNull();
+      expect(screen.queryByTestId('order-mini-card-g-o-2')).toBeNull();
+      expect(screen.queryByTestId('order-mini-card-g-o-3')).toBeNull();
+    });
+
+    // ── Case 3: גליל כללי > רכב-פז נהריה ──────────────────────────────────
+    it('Case 3 — route group category bucket with single pointName renders product table', () => {
+      const rechevBucket: RouteGroupWorkBucketSummary = {
+        workBucketKey: 'wb-rechev', workBucketName: 'רכב-פז נהריה', workBucketDisplayName: 'רכב-פז נהריה',
+        classificationConfidence: 'high', orderCount: 1, itemLinesCount: 2, totalQuantity: 25,
+        statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+        orders: [
+          { orderId: 'r-o-1', orderNumber: 'SO-Rechev', customerName: 'לקוח ז', pointName: 'רכב-פז נהריה', status: 'queued', workBucketName: 'רכב-פז נהריה', pickerName: null, checkerName: null, lineCount: 2, totalQuantity: 25 }
+        ]
+      };
+
+      renderPanel({
+        selectedAreaKey: 'גליל',
+        selectedLineId: 'line-galil',
+        selectedRouteGroupKey: 'galil-general',
+        selectedWorkBucketKey: 'wb-rechev',
+        selectedRouteGroupWorkBucket: rechevBucket,
+        selectedWorkBucketName: 'רכב-פז נהריה',
+        areaSummaries: [mockGalilArea],
+        areaLineSummaries: [mockGalilLineSummary],
+        lineHierarchySummaries: [mockGalilLineSummary],
+        hasRouteGroups: true,
+        routeGroupSummaries: [mockGalilRouteGroup],
+        routeGroupWorkBucketSummaries: [mockRouteGroupWBKlali, mockRouteGroupWBSellular, rechevBucket],
+        showProductRollupDeferred: false,
+        workBucketView: 'products',
+        productRollup: [{ sku: 'SKU-R', description: 'חלקי רכב', category: 'רכב', totalQuantity: 25, orderCount: 1 }],
+        productRollupLoading: false
+      });
+
+      expect(screen.queryByText('תצוגת מוצרים לקבוצת חלוקה מרובת מקורות תתווסף בשלב הבא')).toBeNull();
+      expect(screen.getByTestId('bucket-product-table')).toBeTruthy();
+    });
+
+    // ── Case 4: דבאח עין המפרץ > כללי ──────────────────────────────────────
+    it('Case 4 — standalone route group bucket uses pointName from orders, not semantic כללי', () => {
+      renderPanel({
+        selectedAreaKey: 'גליל',
+        selectedLineId: 'line-galil',
+        selectedRouteGroupKey: 'dbeach',
+        selectedWorkBucketKey: 'wb-dbeach-klali',
+        selectedRouteGroupWorkBucket: mockDabachBucket,
+        selectedWorkBucketName: 'כללי',
+        areaSummaries: [mockGalilArea],
+        areaLineSummaries: [mockGalilLineSummary],
+        lineHierarchySummaries: [mockGalilLineSummary],
+        hasRouteGroups: true,
+        routeGroupSummaries: [mockDabachRouteGroup],
+        routeGroupWorkBucketSummaries: [mockDabachBucket],
+        showProductRollupDeferred: false,
+        workBucketView: 'products',
+        productRollup: [{ sku: 'SKU-D', description: 'דבאח', category: 'דבאח', totalQuantity: 60, orderCount: 2 }],
+        productRollupLoading: false
+      });
+
+      expect(screen.queryByText('תצוגת מוצרים לקבוצת חלוקה מרובת מקורות תתווסף בשלב הבא')).toBeNull();
+      expect(screen.getByTestId('bucket-product-table')).toBeTruthy();
+      // Breadcrumb shows the routeGroupName, not semantic label
+      expect(screen.getByText('קבוצת חלוקה: דבאח עין המפרץ')).toBeTruthy();
+    });
+
+    it('Case 4 — standalone route group orders tab uses selectedRouteGroupWorkBucket.orders', () => {
+      renderPanel({
+        selectedAreaKey: 'גליל',
+        selectedLineId: 'line-galil',
+        selectedRouteGroupKey: 'dbeach',
+        selectedWorkBucketKey: 'wb-dbeach-klali',
+        selectedRouteGroupWorkBucket: mockDabachBucket,
+        selectedWorkBucketName: 'כללי',
+        areaSummaries: [mockGalilArea],
+        areaLineSummaries: [mockGalilLineSummary],
+        lineHierarchySummaries: [mockGalilLineSummary],
+        hasRouteGroups: true,
+        routeGroupSummaries: [mockDabachRouteGroup],
+        routeGroupWorkBucketSummaries: [mockDabachBucket],
+        showProductRollupDeferred: false,
+        workBucketView: 'orders'
+      });
+
+      expect(screen.getByTestId('order-mini-card-d-o-1')).toBeTruthy();
+      expect(screen.getByTestId('order-mini-card-d-o-2')).toBeTruthy();
+    });
+
+    // ── Case 7: Intentional multi-source → deferred ────────────────────────
+    it('Case 7 — multi-source work bucket renders deferred placeholder', () => {
+      renderPanel({
+        selectedAreaKey: 'גליל',
+        selectedLineId: 'line-galil',
+        selectedRouteGroupKey: 'multi-src',
+        selectedWorkBucketKey: 'wb-mixed',
+        selectedRouteGroupWorkBucket: mockMultiSourceBucket,
+        selectedWorkBucketName: 'מעורב',
+        areaSummaries: [mockGalilArea],
+        areaLineSummaries: [mockGalilLineSummary],
+        lineHierarchySummaries: [mockGalilLineSummary],
+        hasRouteGroups: true,
+        routeGroupSummaries: [mockMultiSourceRouteGroup],
+        routeGroupWorkBucketSummaries: [mockMultiSourceBucket],
+        showProductRollupDeferred: true,
+        workBucketView: 'products'
+      });
+
+      expect(screen.getByText('תצוגת מוצרים לקבוצת חלוקה מרובת מקורות תתווסף בשלב הבא')).toBeTruthy();
+      expect(screen.queryByTestId('bucket-product-table')).toBeNull();
+    });
+
+    it('Case 7 — multi-source work bucket orders tab still shows both orders', () => {
+      renderPanel({
+        selectedAreaKey: 'גליל',
+        selectedLineId: 'line-galil',
+        selectedRouteGroupKey: 'multi-src',
+        selectedWorkBucketKey: 'wb-mixed',
+        selectedRouteGroupWorkBucket: mockMultiSourceBucket,
+        selectedWorkBucketName: 'מעורב',
+        areaSummaries: [mockGalilArea],
+        areaLineSummaries: [mockGalilLineSummary],
+        lineHierarchySummaries: [mockGalilLineSummary],
+        hasRouteGroups: true,
+        routeGroupSummaries: [mockMultiSourceRouteGroup],
+        routeGroupWorkBucketSummaries: [mockMultiSourceBucket],
+        showProductRollupDeferred: true,
+        workBucketView: 'orders'
+      });
+
+      expect(screen.getByTestId('order-mini-card-m-o-1')).toBeTruthy();
+      expect(screen.getByTestId('order-mini-card-m-o-2')).toBeTruthy();
+    });
+
+    // ── Case 6: No sibling bucket leakage ───────────────────────────────────
+    it('selected bucket orders do not include sibling bucket orders', () => {
+      renderRouteGroupPanel({
+        selectedWorkBucketKey: 'wb-galil-klali',
+        selectedRouteGroupWorkBucket: mockRouteGroupWBKlali,
+        selectedWorkBucketName: 'כללי',
+        showProductRollupDeferred: false,
+        workBucketView: 'orders'
+      });
+
+      expect(screen.getByTestId('order-mini-card-g-o-1')).toBeTruthy();
+      expect(screen.getByTestId('order-mini-card-g-o-2')).toBeTruthy();
+      expect(screen.getByTestId('order-mini-card-g-o-3')).toBeTruthy();
+      // Sibling bucket order 'g-o-4' (סלולר) must NOT appear
+      expect(screen.queryByTestId('order-mini-card-g-o-4')).toBeNull();
+    });
+
+    // ── Zero orders edge case ───────────────────────────────────────────────
+    it('work bucket with zero orders renders empty state', () => {
+      const emptyBucket: RouteGroupWorkBucketSummary = {
+        workBucketKey: 'wb-empty', workBucketName: 'ריק', workBucketDisplayName: 'ריק',
+        classificationConfidence: 'high', orderCount: 0, itemLinesCount: 0, totalQuantity: 0,
+        statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+        orders: []
+      };
+
+      renderPanel({
+        selectedAreaKey: 'גליל',
+        selectedLineId: 'line-galil',
+        selectedRouteGroupKey: 'galil-general',
+        selectedWorkBucketKey: 'wb-empty',
+        selectedRouteGroupWorkBucket: emptyBucket,
+        selectedWorkBucketName: 'ריק',
+        areaSummaries: [mockGalilArea],
+        areaLineSummaries: [mockGalilLineSummary],
+        lineHierarchySummaries: [mockGalilLineSummary],
+        hasRouteGroups: true,
+        routeGroupSummaries: [mockGalilRouteGroup],
+        routeGroupWorkBucketSummaries: [emptyBucket],
+        showProductRollupDeferred: true,
+        workBucketView: 'orders'
+      });
+
+      expect(screen.getByText('אין הזמנות בקבוצת עבודה זו')).toBeTruthy();
+    });
+
+    // ── selectedRouteGroupWorkBucket is sole source for orders ──────────────
+    it('orders tab uses selectedRouteGroupWorkBucket.orders, ignoring routeGroupWorkBucketSummaries list', () => {
+      // Provide a bucket via selectedRouteGroupWorkBucket that is NOT in routeGroupWorkBucketSummaries
+      const standaloneBucket: RouteGroupWorkBucketSummary = {
+        workBucketKey: 'wb-standalone', workBucketName: 'עצמאי', workBucketDisplayName: 'עצמאי',
+        classificationConfidence: 'high', orderCount: 1, itemLinesCount: 1, totalQuantity: 10,
+        statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+        orders: [
+          { orderId: 's-o-1', orderNumber: 'SO-9', customerName: 'בודד', pointName: 'עצמאי', status: 'queued', workBucketName: 'עצמאי', pickerName: null, checkerName: null, lineCount: 1, totalQuantity: 10 }
+        ]
+      };
+
+      // routeGroupWorkBucketSummaries does NOT include standaloneBucket
+      renderPanel({
+        selectedAreaKey: 'גליל',
+        selectedLineId: 'line-galil',
+        selectedRouteGroupKey: 'galil-general',
+        selectedWorkBucketKey: 'wb-standalone',
+        selectedRouteGroupWorkBucket: standaloneBucket,
+        selectedWorkBucketName: 'עצמאי',
+        areaSummaries: [mockGalilArea],
+        areaLineSummaries: [mockGalilLineSummary],
+        lineHierarchySummaries: [mockGalilLineSummary],
+        hasRouteGroups: true,
+        routeGroupSummaries: [mockGalilRouteGroup],
+        routeGroupWorkBucketSummaries: [mockRouteGroupWBKlali], // different list!
+        showProductRollupDeferred: false,
+        workBucketView: 'orders'
+      });
+
+      // The standalone bucket's order must render (source: selectedRouteGroupWorkBucket)
+      expect(screen.getByTestId('order-mini-card-s-o-1')).toBeTruthy();
+      // The klali bucket's orders must NOT render (they are not in selectedRouteGroupWorkBucket)
+      expect(screen.queryByTestId('order-mini-card-g-o-1')).toBeNull();
     });
   });
 });
