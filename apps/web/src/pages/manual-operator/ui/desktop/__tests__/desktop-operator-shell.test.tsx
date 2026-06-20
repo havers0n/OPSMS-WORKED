@@ -11,12 +11,8 @@ vi.mock('@/shared/api/bff/client', async (importOriginal) => {
 import { DesktopOperatorShell } from '../desktop-operator-shell';
 import type { DesktopOperatorShellProps } from '../desktop-operator-shell';
 import {
-  emptyCheckQueue,
-  mockCheckQueue,
   mockKpi,
   mockOrderDetail,
-  mockPickerDetail,
-  mockPickers,
   mockShift,
   mockLineHierarchySummaries,
   mockWorkBucketSummaries,
@@ -29,11 +25,8 @@ const defaultProps = {
   shift: mockShift,
   isLoading: false,
   kpi: mockKpi,
-  pickerWorkloads: mockPickers,
-  checkQueue: emptyCheckQueue,
-  pickerDetail: null,
   orderDetail: null,
-  selectedDetailType: null as 'picker' | 'order' | null,
+  selectedDetailType: null as 'order' | null,
   selectedAreaKey: null as string | null,
   selectedLineId: null as string | null,
   selectedWorkBucketName: null as string | null,
@@ -41,7 +34,6 @@ const defaultProps = {
   lineHierarchySummaries: mockLineHierarchySummaries,
   areaLineSummaries: mockLineHierarchySummaries,
   workBucketSummaries: mockWorkBucketSummaries,
-  onSelectPicker: vi.fn(),
   onSelectOrder: vi.fn(),
   onCloseDetail: vi.fn(),
   onSelectArea: vi.fn(),
@@ -105,31 +97,15 @@ describe('DesktopOperatorShell', () => {
     expect(screen.getByText('פתח משמרת כדי להתחיל לעקוב אחר ההזמנות')).toBeTruthy();
   });
 
-  it('passes check queue data to picker panel', () => {
-    renderShell({ checkQueue: mockCheckQueue });
-    expect(screen.getByText(/ממתינים לבדיקה/)).toBeTruthy();
+  it('renders hierarchy panel area cards and line summaries', () => {
+    renderShell();
+    expect(screen.getByTestId('area-card-צפון')).toBeTruthy();
+    expect(screen.getByTestId('area-card-דרום')).toBeTruthy();
   });
 
-  it('renders picker detail drawer when picker detail is selected', () => {
-    renderShell({ selectedDetailType: 'picker', pickerDetail: mockPickerDetail });
-    expect(screen.getByRole('button', { name: /סגור/i })).toBeTruthy();
-  });
-
-  it('renders order detail drawer when order detail is selected', () => {
-    renderShell({ selectedDetailType: 'order', orderDetail: mockOrderDetail });
-    expect(screen.getByTestId('order-detail-view')).toBeTruthy();
-  });
-
-  it('calls onCloseDetail when close button is clicked', () => {
-    const onCloseDetail = vi.fn();
-    renderShell({
-      onCloseDetail,
-      selectedDetailType: 'picker',
-      pickerDetail: mockPickerDetail
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /סגור/i }));
-    expect(onCloseDetail).toHaveBeenCalledOnce();
+  it('renders hierarchy line summary cards when an area is selected', () => {
+    renderShell({ selectedAreaKey: 'צפון' });
+    expect(screen.getByTestId('line-summary-card-line-1')).toBeTruthy();
   });
 
   it('clicking line summary card calls onSelectHierarchyLine', () => {
@@ -139,15 +115,21 @@ describe('DesktopOperatorShell', () => {
     expect(onSelectHierarchyLine).toHaveBeenCalledWith('line-1');
   });
 
-  it('clicking picker detail order row calls onSelectOrder', () => {
-    const onSelectOrder = vi.fn();
+  it('renders order detail drawer when order detail is selected', () => {
+    renderShell({ selectedDetailType: 'order', orderDetail: mockOrderDetail });
+    expect(screen.getByTestId('order-detail-view')).toBeTruthy();
+  });
+
+  it('calls onCloseDetail when close button is clicked in order detail drawer', () => {
+    const onCloseDetail = vi.fn();
     renderShell({
-      selectedDetailType: 'picker',
-      pickerDetail: mockPickerDetail,
-      onSelectOrder
+      onCloseDetail,
+      selectedDetailType: 'order',
+      orderDetail: mockOrderDetail
     });
-    fireEvent.click(screen.getByTestId(`detail-order-row-${mockPickerDetail.orders[0].orderId}`));
-    expect(onSelectOrder).toHaveBeenCalledWith(mockPickerDetail.orders[0].orderId);
+
+    fireEvent.click(screen.getByRole('button', { name: /סגור/i }));
+    expect(onCloseDetail).toHaveBeenCalledOnce();
   });
 
   it('date navigation buttons call onChangeDate', () => {
@@ -168,29 +150,8 @@ describe('DesktopOperatorShell', () => {
     expect(onOpenDatePicker).toHaveBeenCalledOnce();
   });
 
-  it('right sidebar with pickers is visible when no detail drawer is open', () => {
-    const { container } = renderShell();
-    const asideElements = container.querySelectorAll('aside');
-    const pickerAside = Array.from(asideElements).find((a) => a.textContent?.includes('מלקטים'));
-    expect(pickerAside).toBeTruthy();
-  });
-
-  it('right sidebar with pickers is hidden when order detail drawer is open', () => {
-    const { container } = renderShell({ selectedDetailType: 'order', orderDetail: mockOrderDetail });
-    const asideElements = container.querySelectorAll('aside');
-    const pickerAside = Array.from(asideElements).find((a) => a.textContent?.includes('מלקטים'));
-    expect(pickerAside).toBeUndefined();
-  });
-
-  it('right sidebar with pickers is hidden when picker detail drawer is open', () => {
-    const { container } = renderShell({ selectedDetailType: 'picker', pickerDetail: mockPickerDetail });
-    const asideElements = container.querySelectorAll('aside');
-    const pickerAside = Array.from(asideElements).find((a) => a.textContent?.includes('מלקטים'));
-    expect(pickerAside).toBeUndefined();
-  });
-
-  it('does not render ShiftOpenAshlamotBoard when no detail drawer is open', () => {
+  it('does not render DesktopPickerPanel side panel', () => {
     renderShell();
-    expect(screen.queryByTestId('shift-open-ashlamot-board')).toBeNull();
+    expect(screen.queryByText('מלקטים')).toBeNull();
   });
 });

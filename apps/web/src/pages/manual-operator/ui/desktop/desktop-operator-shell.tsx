@@ -2,11 +2,8 @@ import type { BucketProductRollupRow, ManualShiftSession } from '@wos/domain';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type {
   AreaHierarchySummary,
-  CheckQueue,
   LineHierarchySummary,
   OrderDetail,
-  PickerDetail,
-  PickerWorkload,
   WorkBucketSummary,
   ShiftSummary
 } from '@/entities/manual-shift/model/shift-selectors';
@@ -14,17 +11,13 @@ import { DesktopDetailDrawer } from './desktop-detail-drawer';
 import { DesktopEmptyState } from './desktop-empty-state';
 import { DesktopHierarchyPanel } from './desktop-hierarchy-panel';
 import { DesktopKpiRow } from './desktop-kpi-row';
-import { DesktopPickerPanel } from './desktop-picker-panel';
 
 export interface DesktopOperatorShellProps {
   shift: ManualShiftSession | null;
   isLoading: boolean;
   kpi: ShiftSummary | undefined;
-  pickerWorkloads: PickerWorkload[];
-  checkQueue: CheckQueue;
-  pickerDetail: PickerDetail | null;
   orderDetail: OrderDetail | null;
-  selectedDetailType: 'picker' | 'order' | null;
+  selectedDetailType: 'order' | null;
   selectedAreaKey: string | null;
   selectedLineId: string | null;
   selectedWorkBucketName: string | null;
@@ -32,7 +25,6 @@ export interface DesktopOperatorShellProps {
   lineHierarchySummaries: LineHierarchySummary[];
   areaLineSummaries: LineHierarchySummary[];
   workBucketSummaries: WorkBucketSummary[];
-  onSelectPicker: (pickerKey: string) => void;
   onSelectOrder: (orderId: string) => void;
   onCloseDetail: () => void;
   onSelectArea: (areaName: string | null) => void;
@@ -100,9 +92,6 @@ export function DesktopOperatorShell({
   shift,
   isLoading,
   kpi,
-  pickerWorkloads,
-  checkQueue,
-  pickerDetail,
   orderDetail,
   selectedDetailType,
   selectedAreaKey,
@@ -112,7 +101,6 @@ export function DesktopOperatorShell({
   lineHierarchySummaries,
   areaLineSummaries,
   workBucketSummaries,
-  onSelectPicker,
   onSelectOrder,
   onCloseDetail,
   onSelectArea,
@@ -141,14 +129,9 @@ export function DesktopOperatorShell({
   }
 
   const drawerState =
-    selectedDetailType === 'picker'
-      ? {
-          type: 'picker' as const,
-          detail: pickerDetail ?? { summary: null, orders: [], lineBreakdown: [] }
-        }
-      : selectedDetailType === 'order'
-        ? { type: 'order' as const, detail: orderDetail }
-        : null;
+    selectedDetailType === 'order'
+      ? { type: 'order' as const, detail: orderDetail }
+      : null;
   const isTodaySelected = selectedDate === todayDate;
   const headerTitle = shift?.name ?? 'אין משמרת פעילה';
   const headerDateLabel = formatSelectedDate(selectedDate);
@@ -240,16 +223,6 @@ export function DesktopOperatorShell({
               onSetWorkBucketView={onSetWorkBucketView}
             />
           </main>
-
-          {!drawerState && (
-            <aside className="w-72 bg-white overflow-y-auto shrink-0">
-              <DesktopPickerPanel
-                pickers={pickerWorkloads}
-                checkQueue={checkQueue}
-                onSelectPicker={onSelectPicker}
-              />
-            </aside>
-          )}
 
           <DesktopDetailDrawer
             state={drawerState}

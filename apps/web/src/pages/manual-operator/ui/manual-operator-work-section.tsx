@@ -10,11 +10,8 @@ import {
   workHierarchyQueryOptions
 } from '@/entities/manual-shift/api/queries';
 import {
-  selectCheckQueue,
   selectLineSummaries,
   selectOrderDetail,
-  selectPickerDetail,
-  selectPickerWorkloads,
   selectShiftSummary,
   selectWorkHierarchyAreaSummaries,
   selectWorkHierarchyLineSummaries,
@@ -79,11 +76,7 @@ export function ManualOperatorWorkSection({
   const [showImportExcel, setShowImportExcel] = useState(false);
   const [showMonthlyPreview, setShowMonthlyPreview] = useState(false);
   const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
-  const [selectedDesktopDetail, setSelectedDesktopDetail] = useState<
-    | { type: 'picker'; pickerKey: string }
-    | { type: 'order'; orderId: string }
-    | null
-  >(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const [selectedWorkBucketName, setSelectedWorkBucketName] = useState<string | null>(null);
   const [selectedAreaKey, setSelectedAreaKey] = useState<string | null>(null);
@@ -134,21 +127,10 @@ const { data: workHierarchy } = useQuery({
     () => selectLineSummaries(byLine, shiftOrders),
     [byLine, shiftOrders]
   );
-  const pickerWorkloads = useMemo(() => selectPickerWorkloads(shiftOrders), [shiftOrders]);
-  const checkQueue = useMemo(() => selectCheckQueue(shiftOrders), [shiftOrders]);
-  const pickerDetail = useMemo(() => {
-    if (!selectedDesktopDetail || selectedDesktopDetail.type !== 'picker') return null;
-    return selectPickerDetail(
-      selectedDesktopDetail.pickerKey,
-      pickerWorkloads,
-      shiftOrders,
-      lineSummaries
-    );
-  }, [selectedDesktopDetail, pickerWorkloads, shiftOrders, lineSummaries]);
   const orderDetail = useMemo(() => {
-    if (!selectedDesktopDetail || selectedDesktopDetail.type !== 'order') return null;
-    return selectOrderDetail(selectedDesktopDetail.orderId, shiftOrders, lineSummaries);
-  }, [selectedDesktopDetail, shiftOrders, lineSummaries]);
+    if (!selectedOrderId) return null;
+    return selectOrderDetail(selectedOrderId, shiftOrders, lineSummaries);
+  }, [selectedOrderId, shiftOrders, lineSummaries]);
   const lineHierarchySummaries = useMemo(
     () => selectWorkHierarchyLineSummaries(workHierarchy),
     [workHierarchy]
@@ -213,11 +195,8 @@ const { data: workHierarchy } = useQuery({
         shift={shift}
         isLoading={isLoading || (!!shift && isDaySummaryLoading)}
         kpi={kpi}
-        pickerWorkloads={pickerWorkloads}
-        checkQueue={checkQueue}
-        pickerDetail={pickerDetail}
         orderDetail={orderDetail}
-        selectedDetailType={selectedDesktopDetail?.type ?? null}
+        selectedDetailType={selectedOrderId ? 'order' : null}
         selectedAreaKey={selectedAreaKey}
         selectedLineId={selectedLineId}
         selectedWorkBucketName={selectedWorkBucketName}
@@ -225,9 +204,8 @@ const { data: workHierarchy } = useQuery({
         lineHierarchySummaries={lineHierarchySummaries}
         areaLineSummaries={areaLineSummaries}
         workBucketSummaries={workBucketSummaries}
-        onSelectPicker={(pickerKey) => setSelectedDesktopDetail({ type: 'picker', pickerKey })}
-        onSelectOrder={(orderId) => setSelectedDesktopDetail({ type: 'order', orderId })}
-        onCloseDetail={() => setSelectedDesktopDetail(null)}
+        onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
+        onCloseDetail={() => setSelectedOrderId(null)}
         onSelectArea={handleSelectArea}
         onSelectHierarchyLine={handleSelectHierarchyLine}
         onSelectHierarchyBucket={handleSelectHierarchyBucket}

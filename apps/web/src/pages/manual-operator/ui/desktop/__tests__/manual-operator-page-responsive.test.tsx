@@ -84,15 +84,14 @@ describe('ManualOperatorPage responsive rendering', () => {
       expect(screen.getByRole('button', { name: 'בדיקה' })).toBeTruthy();
     });
 
-    it('does not render desktop panels on mobile', async () => {
+    it('does not render desktop hierarchy panel on mobile', async () => {
       mockUseMediaQuery.mockReturnValue(false);
       mockedBffRequest.mockResolvedValue({ shift: null, lines: [] });
 
       renderPage(makeQC());
 
-      // Desktop-specific panel headers should not appear
+      // Desktop hierarchy panel content should not appear on mobile
       expect(screen.queryByText('קווים')).toBeNull();
-      expect(screen.queryByText('מלקטים')).toBeNull();
     });
 
     it('mobile empty state renders when shift is null', async () => {
@@ -108,7 +107,7 @@ describe('ManualOperatorPage responsive rendering', () => {
   });
 
   describe('desktop path (isDesktop=true)', () => {
-    it('renders desktop shell with shift name and picker panel when viewport is wide', async () => {
+    it('renders desktop shell with shift name and hierarchy panel when viewport is wide', async () => {
       mockUseMediaQuery.mockReturnValue(true);
       mockedBffRequest.mockImplementation((url: string) => {
         if (url.includes('/day-summary')) return Promise.resolve(emptyDaySummary);
@@ -122,8 +121,8 @@ describe('ManualOperatorPage responsive rendering', () => {
       await waitFor(() => {
         // Shift name always appears in desktop header
         expect(screen.getByText('משמרת בוקר')).toBeTruthy();
-        // Picker panel header always renders regardless of picker count
-        expect(screen.getByText('מלקטים')).toBeTruthy();
+        // Hierarchy panel renders desktop content (no areas in empty hierarchy)
+        expect(screen.getByText('אין אזורים פעילים')).toBeTruthy();
       });
     });
 
@@ -139,8 +138,8 @@ describe('ManualOperatorPage responsive rendering', () => {
       renderPage(makeQC());
 
       await waitFor(() => {
-        // Picker panel header always renders on desktop — confirms shell is mounted
-        expect(screen.getByText('מלקטים')).toBeTruthy();
+        // Desktop hierarchy panel renders — confirms desktop shell is mounted
+        expect(screen.getByText('אין אזורים פעילים')).toBeTruthy();
       });
 
       expect(screen.queryByRole('button', { name: 'תור' })).toBeNull();
