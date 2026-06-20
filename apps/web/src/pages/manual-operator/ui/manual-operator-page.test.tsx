@@ -127,45 +127,65 @@ describe('ManualOperatorPage queue import placement', () => {
   });
 
   it('non-empty queue hides Import Excel CTA', async () => {
-    mockedBffRequest.mockResolvedValue({
-      shift: {
-        id: 'shift-1',
-        tenantId: 'tenant-1',
-        date: '2026-06-01',
-        name: 'Shift',
-        status: 'active',
-        createdBy: null,
-        createdAt: new Date().toISOString(),
-        closedAt: null
-      },
-      lines: [{
-        line: {
-          id: 'line-1',
-          tenantId: 'tenant-1',
-          shiftId: 'shift-1',
-          name: '????',
-          sortOrder: 1,
-          status: 'open',
-          createdAt: new Date().toISOString(),
-          deletedAt: null,
-          deletedByProfileId: null,
-          deletedByName: null,
-          deleteReason: null
-        },
-        totalOrders: 2,
-        queuedOrders: 2,
-        pickingOrders: 0,
-        waitingCheckOrders: 0,
-        returnedOrders: 0,
-        doneOrders: 0,
-        errorCount: 0
-      }]
+    mockedBffRequest.mockImplementation((url: string) => {
+      if (String(url).includes('/monthly-replace-safety')) {
+        return Promise.resolve({
+          canReplace: true,
+          activeLinesCount: 1,
+          activeOrdersCount: 2,
+          startedOrdersCount: 0,
+          assignedPickersCount: 0,
+          assignedCheckersCount: 0,
+          checkUnitsCount: 0,
+          nonImportEventsCount: 0,
+          blockReasons: []
+        });
+      }
+
+      if (String(url).includes('/api/manual-shifts/by-date')) {
+        return Promise.resolve({
+          shift: {
+            id: 'shift-1',
+            tenantId: 'tenant-1',
+            date: '2026-06-20',
+            name: 'Shift',
+            status: 'active',
+            createdBy: null,
+            createdAt: new Date().toISOString(),
+            closedAt: null
+          },
+          lines: [{
+            line: {
+              id: 'line-1',
+              tenantId: 'tenant-1',
+              shiftId: 'shift-1',
+              name: 'Line 1',
+              sortOrder: 1,
+              status: 'open',
+              createdAt: new Date().toISOString(),
+              deletedAt: null,
+              deletedByProfileId: null,
+              deletedByName: null,
+              deleteReason: null
+            },
+            totalOrders: 2,
+            queuedOrders: 2,
+            pickingOrders: 0,
+            waitingCheckOrders: 0,
+            returnedOrders: 0,
+            doneOrders: 0,
+            errorCount: 0
+          }]
+        });
+      }
+
+      return Promise.resolve({ shift: null, lines: [] });
     });
 
     renderPage(makeQueryClient());
 
     await waitFor(() => {
-      expect(screen.getByText('????')).toBeTruthy();
+      expect(screen.getByText('Line 1')).toBeTruthy();
     });
 
     expect(screen.queryByRole('button', { name: 'תצוגה מקדימה חודשית' })).toBeNull();
