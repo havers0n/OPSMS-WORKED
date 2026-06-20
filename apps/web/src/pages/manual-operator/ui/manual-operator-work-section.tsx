@@ -10,6 +10,7 @@ import {
   workHierarchyQueryOptions
 } from '@/entities/manual-shift/api/queries';
 import {
+  NO_DISTRIBUTION_AREA_KEY,
   selectLineRouteGroupSummaries,
   selectLineSummaries,
   selectOrderDetail,
@@ -80,7 +81,7 @@ export function ManualOperatorWorkSection({
   const [showMonthlyPreview, setShowMonthlyPreview] = useState(false);
   const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
+  const [selectedAreaLineKey, setSelectedAreaLineKey] = useState<string | null>(null);
   const [selectedWorkBucketKey, setSelectedWorkBucketKey] = useState<string | null>(null);
   const [selectedWorkBucketName, setSelectedWorkBucketName] = useState<string | null>(null);
   const [selectedAreaKey, setSelectedAreaKey] = useState<string | null>(null);
@@ -100,24 +101,32 @@ export function ManualOperatorWorkSection({
     enabled: !!shift?.id && isDesktop
   });
 
-  const selectedHierarchyLine = workHierarchy?.areas
-    .flatMap(a => a.lines)
-    .find(l => l.lineId === selectedLineId);
+  const selectedArea = useMemo(
+    () => workHierarchy?.areas.find((area) => (area.areaName === null ? NO_DISTRIBUTION_AREA_KEY : area.areaName) === selectedAreaKey),
+    [selectedAreaKey, workHierarchy]
+  );
+
+  const selectedHierarchyLine = useMemo(
+    () => selectedArea?.lines.find((line) => (line.areaLineKey ?? line.lineId) === selectedAreaLineKey),
+    [selectedArea, selectedAreaLineKey]
+  );
+
+  const selectedLineId = selectedHierarchyLine?.lineId ?? null;
 
   const hasRouteGroups = !!(selectedHierarchyLine?.routeGroups && selectedHierarchyLine.routeGroups.length > 0);
 
   const routeGroupSummaries = useMemo(
-    () => hasRouteGroups && selectedLineId
-      ? selectLineRouteGroupSummaries(workHierarchy, selectedLineId)
+    () => hasRouteGroups && selectedAreaLineKey
+      ? selectLineRouteGroupSummaries(workHierarchy, selectedAreaKey, selectedAreaLineKey)
       : [],
-    [hasRouteGroups, selectedLineId, workHierarchy]
+    [hasRouteGroups, selectedAreaKey, selectedAreaLineKey, workHierarchy]
   );
 
   const routeGroupWorkBucketSummaries = useMemo(
-    () => hasRouteGroups && selectedLineId && selectedRouteGroupKey
-      ? selectRouteGroupWorkBucketSummaries(workHierarchy, selectedLineId, selectedRouteGroupKey)
+    () => hasRouteGroups && selectedAreaLineKey && selectedRouteGroupKey
+      ? selectRouteGroupWorkBucketSummaries(workHierarchy, selectedAreaKey, selectedAreaLineKey, selectedRouteGroupKey)
       : [],
-    [hasRouteGroups, selectedLineId, selectedRouteGroupKey, workHierarchy]
+    [hasRouteGroups, selectedAreaKey, selectedAreaLineKey, selectedRouteGroupKey, workHierarchy]
   );
 
   const selectedRouteGroupWorkBucket: RouteGroupWorkBucketSummary | undefined = useMemo(
@@ -129,14 +138,14 @@ export function ManualOperatorWorkSection({
   );
 
   const workBucketSummaries = useMemo(
-    () => !hasRouteGroups && selectedLineId
-      ? selectWorkHierarchyBucketSummaries(workHierarchy, selectedLineId)
+    () => !hasRouteGroups && selectedAreaLineKey
+      ? selectWorkHierarchyBucketSummaries(workHierarchy, selectedAreaKey, selectedAreaLineKey)
       : [],
-    [hasRouteGroups, selectedLineId, workHierarchy]
+    [hasRouteGroups, selectedAreaKey, selectedAreaLineKey, workHierarchy]
   );
 
   const selectedWorkBucketRawName: string = useMemo(() => {
-    if (!selectedLineId || !workHierarchy) return '';
+    if (!selectedHierarchyLine) return '';
 
     if (hasRouteGroups && selectedRouteGroupKey) {
       const wb = selectedRouteGroupWorkBucket;
@@ -148,15 +157,9 @@ export function ManualOperatorWorkSection({
 
     if (!selectedWorkBucketName) return '';
 
-    for (const area of workHierarchy.areas) {
-      const line = area.lines.find((l) => l.lineId === selectedLineId);
-      if (!line) continue;
-      const bucket = line.buckets.find((b) => b.displayName === selectedWorkBucketName);
-      if (!bucket) continue;
-      return bucket.bucketName ?? '';
-    }
-    return '';
-  }, [selectedLineId, selectedWorkBucketName, selectedWorkBucketKey, workHierarchy, hasRouteGroups, selectedRouteGroupKey, selectedRouteGroupWorkBucket]);
+    const bucket = selectedHierarchyLine.buckets.find((entry) => entry.displayName === selectedWorkBucketName);
+    return bucket?.bucketName ?? '';
+  }, [selectedHierarchyLine, selectedWorkBucketName, hasRouteGroups, selectedRouteGroupKey, selectedRouteGroupWorkBucket]);
 
   const selectedSourceZone: string | undefined = useMemo(() => {
     if (!selectedHierarchyLine) return undefined;
@@ -211,17 +214,17 @@ export function ManualOperatorWorkSection({
     if (areaKey !== null) {
       const areaLines = selectWorkHierarchyLineSummariesByArea(workHierarchy, areaKey);
       if (areaLines.length === 1) {
-        setSelectedLineId(areaLines[0].lineId);
+        setSelectedAreaLineKey(areaLines[0].areaLineKey ?? areaLines[0].lineId);
       } else {
-        setSelectedLineId(null);
+        setSelectedAreaLineKey(null);
       }
     } else {
-      setSelectedLineId(null);
+      setSelectedAreaLineKey(null);
     }
   }
 
-  function handleSelectHierarchyLine(lineId: string) {
-    setSelectedLineId(lineId);
+  function handleSelectHierarchyLine(areaLineKey: string) {
+    setSelectedAreaLineKey(areaLineKey);
     setSelectedRouteGroupKey(null);
     setSelectedWorkBucketKey(null);
     setSelectedWorkBucketName(null);
@@ -250,7 +253,7 @@ export function ManualOperatorWorkSection({
 
   function handleClearArea() {
     setSelectedAreaKey(null);
-    setSelectedLineId(null);
+    setSelectedAreaLineKey(null);
     setSelectedRouteGroupKey(null);
     setSelectedWorkBucketKey(null);
     setSelectedWorkBucketName(null);
@@ -258,7 +261,7 @@ export function ManualOperatorWorkSection({
   }
 
   function handleClearHierarchyLine() {
-    setSelectedLineId(null);
+    setSelectedAreaLineKey(null);
     setSelectedRouteGroupKey(null);
     setSelectedWorkBucketKey(null);
     setSelectedWorkBucketName(null);
@@ -280,7 +283,7 @@ export function ManualOperatorWorkSection({
 
   useEffect(() => {
     setSelectedOrderId(null);
-  }, [shift?.id, selectedAreaKey, selectedLineId, selectedRouteGroupKey, selectedWorkBucketKey]);
+  }, [shift?.id, selectedAreaKey, selectedAreaLineKey, selectedRouteGroupKey, selectedWorkBucketKey]);
 
   if (isDesktop) {
     return (
@@ -291,7 +294,7 @@ export function ManualOperatorWorkSection({
         orderDetail={orderDetail}
         selectedDetailType={selectedOrderId ? 'order' : null}
         selectedAreaKey={selectedAreaKey}
-        selectedLineId={selectedLineId}
+        selectedAreaLineKey={selectedAreaLineKey}
         selectedRouteGroupKey={selectedRouteGroupKey}
         selectedWorkBucketKey={selectedWorkBucketKey}
         selectedRouteGroupWorkBucket={selectedRouteGroupWorkBucket}

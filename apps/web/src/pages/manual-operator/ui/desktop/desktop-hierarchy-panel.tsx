@@ -15,7 +15,8 @@ import { DesktopBucketProductTable } from './desktop-bucket-product-table';
 
 interface DesktopHierarchyPanelProps {
   selectedAreaKey: string | null;
-  selectedLineId: string | null;
+  selectedAreaLineKey?: string | null;
+  selectedLineId?: string | null;
   selectedRouteGroupKey: string | null;
   selectedWorkBucketKey: string | null;
   selectedRouteGroupWorkBucket: RouteGroupWorkBucketSummary | undefined;
@@ -28,7 +29,7 @@ interface DesktopHierarchyPanelProps {
   routeGroupWorkBucketSummaries: RouteGroupWorkBucketSummary[];
   hasRouteGroups: boolean;
   onSelectArea: (areaKey: string | null) => void;
-  onSelectLine: (lineId: string) => void;
+  onSelectLine: (areaLineKey: string) => void;
   onSelectRouteGroup: (routeGroupKey: string) => void;
   onSelectBucket: (workBucketIdentifier: string) => void;
   onSelectOrder: (orderId: string) => void;
@@ -62,6 +63,7 @@ function AreaBreadcrumb({ areaName, onClearArea }: { areaName: string; onClearAr
 
 export function DesktopHierarchyPanel({
   selectedAreaKey,
+  selectedAreaLineKey,
   selectedLineId,
   selectedRouteGroupKey,
   selectedWorkBucketKey,
@@ -89,6 +91,8 @@ export function DesktopHierarchyPanel({
   showProductRollupDeferred,
   onSetWorkBucketView
 }: DesktopHierarchyPanelProps) {
+  const effectiveSelectedAreaLineKey = selectedAreaLineKey ?? selectedLineId ?? null;
+
   // ── State 1: No area selected → area cards ──────────────────────────────
   if (!selectedAreaKey) {
     if (areaSummaries.length === 0) {
@@ -113,10 +117,10 @@ export function DesktopHierarchyPanel({
   }
 
   const selectedArea = areaSummaries.find((a) => a.areaKey === selectedAreaKey);
-  const isAutoSkippedSingleLine = selectedLineId !== null && areaLineSummaries.length === 1;
+  const isAutoSkippedSingleLine = effectiveSelectedAreaLineKey !== null && areaLineSummaries.length === 1;
 
   // ── State 2: Area selected, no line → line cards ────────────────────────
-  if (!selectedLineId) {
+  if (!effectiveSelectedAreaLineKey) {
     if (areaLineSummaries.length === 0) {
       return (
         <div className="p-4">
@@ -141,7 +145,7 @@ export function DesktopHierarchyPanel({
     );
   }
 
-  const selectedLine = lineHierarchySummaries.find((l) => l.lineId === selectedLineId);
+  const selectedLine = lineHierarchySummaries.find((l) => (l.areaLineKey ?? l.lineId) === effectiveSelectedAreaLineKey);
 
   // ── State 3: Route group selected, but no work bucket yet ──────────────
   if (hasRouteGroups && selectedRouteGroupKey && !selectedWorkBucketKey && !selectedWorkBucketName) {

@@ -21,7 +21,8 @@ export interface DesktopOperatorShellProps {
   orderDetail: OrderDetail | null;
   selectedDetailType: 'order' | null;
   selectedAreaKey: string | null;
-  selectedLineId: string | null;
+  selectedAreaLineKey?: string | null;
+  selectedLineId?: string | null;
   selectedRouteGroupKey: string | null;
   selectedWorkBucketKey: string | null;
   selectedRouteGroupWorkBucket: RouteGroupWorkBucketSummary | undefined;
@@ -37,7 +38,7 @@ export interface DesktopOperatorShellProps {
   onSelectOrder: (orderId: string) => void;
   onCloseDetail: () => void;
   onSelectArea: (areaName: string | null) => void;
-  onSelectHierarchyLine: (lineId: string) => void;
+  onSelectHierarchyLine: (areaLineKey: string) => void;
   onSelectHierarchyRouteGroup: (routeGroupKey: string) => void;
   onSelectHierarchyBucket: (workBucketIdentifier: string) => void;
   onClearArea: () => void;
@@ -106,6 +107,7 @@ export function DesktopOperatorShell({
   orderDetail,
   selectedDetailType,
   selectedAreaKey,
+  selectedAreaLineKey,
   selectedLineId,
   selectedRouteGroupKey,
   selectedWorkBucketKey,
@@ -224,6 +226,7 @@ export function DesktopOperatorShell({
           <main className="flex-1 bg-white overflow-y-auto min-w-0">
             <DesktopHierarchyPanel
               selectedAreaKey={selectedAreaKey}
+              selectedAreaLineKey={selectedAreaLineKey}
               selectedLineId={selectedLineId}
               selectedRouteGroupKey={selectedRouteGroupKey}
               selectedWorkBucketKey={selectedWorkBucketKey}

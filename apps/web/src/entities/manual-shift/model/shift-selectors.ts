@@ -678,6 +678,7 @@ export interface StatusBreakdown {
 }
 
 export interface LineHierarchySummary {
+  areaLineKey?: string;
   lineId: string;
   lineName: string;
   distributionArea?: string | null;
@@ -725,6 +726,7 @@ export function selectLineHierarchySummaries(
   }
 
   return lineSummaries.map((line): LineHierarchySummary => ({
+    areaLineKey: line.lineId,
     lineId: line.lineId,
     lineName: line.lineName,
     distributionArea: null,
@@ -814,6 +816,37 @@ function resolveAreaKey(areaName: string | null): string {
   return areaName === null ? NO_DISTRIBUTION_AREA_KEY : areaName;
 }
 
+function resolveAreaLineKey(line: { areaLineKey?: string; lineId: string }): string {
+  return line.areaLineKey ?? line.lineId;
+}
+
+function selectHierarchyLineByArea(
+  hierarchy: ManualShiftWorkHierarchyResponse | undefined,
+  selectedAreaKey: string | null,
+  selectedAreaLineKey: string | null
+) {
+  if (!hierarchy || selectedAreaKey === null || !selectedAreaLineKey) return undefined;
+
+  const area = hierarchy.areas.find((entry) => resolveAreaKey(entry.areaName) === selectedAreaKey);
+  if (!area) return undefined;
+
+  return area.lines.find((line) => resolveAreaLineKey(line) === selectedAreaLineKey);
+}
+
+function selectHierarchyLineByLineId(
+  hierarchy: ManualShiftWorkHierarchyResponse | undefined,
+  lineId: string | null
+) {
+  if (!hierarchy || !lineId) return undefined;
+
+  for (const area of hierarchy.areas) {
+    const line = area.lines.find((entry) => entry.lineId === lineId);
+    if (line) return line;
+  }
+
+  return undefined;
+}
+
 export function selectWorkHierarchyAreaSummaries(
   hierarchy: ManualShiftWorkHierarchyResponse | undefined
 ): AreaHierarchySummary[] {
@@ -843,6 +876,7 @@ export function selectWorkHierarchyLineSummariesByArea(
   if (!area) return [];
 
   return area.lines.map((line) => ({
+    areaLineKey: resolveAreaLineKey(line),
     lineId: line.lineId,
     lineName: line.lineGroupName,
     distributionArea: line.distributionArea,
@@ -866,6 +900,7 @@ export function selectWorkHierarchyLineSummaries(
   for (const area of hierarchy.areas) {
     for (const line of area.lines) {
       result.push({
+        areaLineKey: resolveAreaLineKey(line),
         lineId: line.lineId,
         lineName: line.lineGroupName,
         distributionArea: line.distributionArea,
@@ -886,39 +921,36 @@ export function selectWorkHierarchyLineSummaries(
 
 export function selectWorkHierarchyBucketSummaries(
   hierarchy: ManualShiftWorkHierarchyResponse | undefined,
-  lineId: string
+  selectedAreaKeyOrLineId: string | null,
+  selectedAreaLineKey?: string | null
 ): WorkBucketSummary[] {
-  if (!hierarchy || !lineId) return [];
+  const line = selectedAreaLineKey === undefined
+    ? selectHierarchyLineByLineId(hierarchy, selectedAreaKeyOrLineId)
+    : selectHierarchyLineByArea(hierarchy, selectedAreaKeyOrLineId, selectedAreaLineKey);
+  if (!line) return [];
 
-  for (const area of hierarchy.areas) {
-    const line = area.lines.find((entry) => entry.lineId === lineId);
-    if (!line) continue;
-
-    return line.buckets.map((bucket) => {
-      const orders: HierarchyOrder[] = bucket.orders.map((order) => ({
-        orderId: order.orderId,
-        orderNumber: order.orderNumber,
-        customerName: order.customerName,
-        pointName: order.pointName,
-        status: order.status,
-        workBucketName: toHierarchyBucketName(order.pointName, bucket.displayName),
-        pickerName: null,
-        checkerName: null,
-        lineCount: order.lineCount ?? 0,
-        totalQuantity: order.totalQuantity
-      }));
-      return {
-        workBucketName: bucket.displayName,
-        ordersCount: bucket.totalOrders,
-        itemLinesCount: orders.reduce((sum, o) => sum + o.lineCount, 0),
-        totalQuantity: bucket.totalQuantity,
-        statusBreakdown: bucket.statusBreakdown,
-        orders
-      };
-    });
-  }
-
-  return [];
+  return line.buckets.map((bucket) => {
+    const orders: HierarchyOrder[] = bucket.orders.map((order) => ({
+      orderId: order.orderId,
+      orderNumber: order.orderNumber,
+      customerName: order.customerName,
+      pointName: order.pointName,
+      status: order.status,
+      workBucketName: toHierarchyBucketName(order.pointName, bucket.displayName),
+      pickerName: null,
+      checkerName: null,
+      lineCount: order.lineCount ?? 0,
+      totalQuantity: order.totalQuantity
+    }));
+    return {
+      workBucketName: bucket.displayName,
+      ordersCount: bucket.totalOrders,
+      itemLinesCount: orders.reduce((sum, o) => sum + o.lineCount, 0),
+      totalQuantity: bucket.totalQuantity,
+      statusBreakdown: bucket.statusBreakdown,
+      orders
+    };
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -950,78 +982,75 @@ export interface RouteGroupWorkBucketSummary {
 
 export function selectLineRouteGroupSummaries(
   hierarchy: ManualShiftWorkHierarchyResponse | undefined,
-  lineId: string
+  selectedAreaKeyOrLineId: string | null,
+  selectedAreaLineKey?: string | null
 ): RouteGroupSummary[] {
-  if (!hierarchy || !lineId) return [];
+  const line = selectedAreaLineKey === undefined
+    ? selectHierarchyLineByLineId(hierarchy, selectedAreaKeyOrLineId)
+    : selectHierarchyLineByArea(hierarchy, selectedAreaKeyOrLineId, selectedAreaLineKey);
+  if (!line) return [];
 
-  for (const area of hierarchy.areas) {
-    const line = area.lines.find((entry) => entry.lineId === lineId);
-    if (!line) continue;
+  const groups = line.routeGroups;
+  if (!groups || groups.length === 0) return [];
 
-    const groups = line.routeGroups;
-    if (!groups || groups.length === 0) return [];
-
-    return groups.map((rg: ManualShiftWorkHierarchyRouteGroup): RouteGroupSummary => ({
-      routeGroupKey: rg.routeGroupKey,
-      routeGroupName: rg.routeGroupName,
-      classificationConfidence: rg.classificationConfidence,
-      orderCount: rg.orderCount,
-      itemLinesCount: rg.itemLinesCount,
-      totalQuantity: rg.totalQuantity,
-      statusBreakdown: rg.statusBreakdown,
-      workBucketCount: rg.workBuckets.length
-    }));
-  }
-
-  return [];
+  return groups.map((rg: ManualShiftWorkHierarchyRouteGroup): RouteGroupSummary => ({
+    routeGroupKey: rg.routeGroupKey,
+    routeGroupName: rg.routeGroupName,
+    classificationConfidence: rg.classificationConfidence,
+    orderCount: rg.orderCount,
+    itemLinesCount: rg.itemLinesCount,
+    totalQuantity: rg.totalQuantity,
+    statusBreakdown: rg.statusBreakdown,
+    workBucketCount: rg.workBuckets.length
+  }));
 }
 
 export function selectRouteGroupWorkBucketSummaries(
   hierarchy: ManualShiftWorkHierarchyResponse | undefined,
-  lineId: string,
-  routeGroupKey: string
+  selectedAreaKeyOrLineId: string | null,
+  selectedAreaLineKeyOrRouteGroupKey: string | null,
+  routeGroupKeyArg?: string
 ): RouteGroupWorkBucketSummary[] {
-  if (!hierarchy || !lineId || !routeGroupKey) return [];
+  const routeGroupKey = routeGroupKeyArg ?? selectedAreaLineKeyOrRouteGroupKey;
+  if (!routeGroupKey) return [];
 
-  for (const area of hierarchy.areas) {
-    const line = area.lines.find((entry) => entry.lineId === lineId);
-    if (!line) continue;
+  const line = routeGroupKeyArg === undefined
+    ? selectHierarchyLineByLineId(hierarchy, selectedAreaKeyOrLineId)
+    : selectHierarchyLineByArea(hierarchy, selectedAreaKeyOrLineId, selectedAreaLineKeyOrRouteGroupKey);
+  if (!line) return [];
 
-    const groups = line.routeGroups;
-    if (!groups) return [];
+  const groups = line.routeGroups;
+  if (!groups) return [];
 
-    const routeGroup = groups.find((rg: ManualShiftWorkHierarchyRouteGroup) => rg.routeGroupKey === routeGroupKey);
-    if (!routeGroup) return [];
+  const routeGroup = groups.find((rg: ManualShiftWorkHierarchyRouteGroup) => rg.routeGroupKey === routeGroupKey);
+  if (!routeGroup) return [];
 
-    return routeGroup.workBuckets.map((wb: ManualShiftWorkHierarchyWorkBucket): RouteGroupWorkBucketSummary => {
-      const orders: HierarchyOrder[] = wb.orders.map((order) => ({
-        orderId: order.orderId,
-        orderNumber: order.orderNumber,
-        customerName: order.customerName,
-        pointName: order.pointName,
-        status: order.status,
-        workBucketName: wb.workBucketDisplayName,
-        pickerName: null,
-        checkerName: null,
-        lineCount: order.lineCount ?? 0,
-        totalQuantity: order.totalQuantity
-      }));
+  return routeGroup.workBuckets.map((wb: ManualShiftWorkHierarchyWorkBucket): RouteGroupWorkBucketSummary => {
+    const orders: HierarchyOrder[] = wb.orders.map((order) => ({
+      orderId: order.orderId,
+      orderNumber: order.orderNumber,
+      customerName: order.customerName,
+      pointName: order.pointName,
+      status: order.status,
+      workBucketName: wb.workBucketDisplayName,
+      pickerName: null,
+      checkerName: null,
+      lineCount: order.lineCount ?? 0,
+      totalQuantity: order.totalQuantity
+    }));
 
-      return {
-        workBucketKey: wb.workBucketKey,
-        workBucketName: wb.workBucketName,
-        workBucketDisplayName: wb.workBucketDisplayName,
-        classificationConfidence: wb.classificationConfidence,
-        orderCount: wb.orderCount,
-        itemLinesCount: wb.itemLinesCount,
-        totalQuantity: wb.totalQuantity,
-        statusBreakdown: wb.statusBreakdown,
-        orders
-      };
-    });
-  }
-
-  return [];
+    return {
+      workBucketKey: wb.workBucketKey,
+      workBucketName: wb.workBucketName,
+      workBucketDisplayName: wb.workBucketDisplayName,
+      classificationConfidence: wb.classificationConfidence,
+      orderCount: wb.orderCount,
+      itemLinesCount: wb.itemLinesCount,
+      totalQuantity: wb.totalQuantity,
+      statusBreakdown: wb.statusBreakdown,
+      orders
+    };
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

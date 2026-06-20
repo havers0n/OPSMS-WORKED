@@ -176,6 +176,8 @@ function mockWorkspaceData(options?: {
   orders?: unknown[];
   workers?: unknown[];
   peopleSummaryItems?: unknown[];
+  workHierarchyData?: Record<string, unknown>;
+  productRollupResolver?: (url: URL) => unknown;
 }) {
   const lines = options?.lines ?? [lineSummary];
   const daySummary =
@@ -197,11 +199,12 @@ function mockWorkspaceData(options?: {
   const workers =
     options?.workers ?? [{ id: 'worker-1', name: 'Picker A', role: 'picker', active: true, authUserId: null }];
   const peopleSummaryItems = options?.peopleSummaryItems ?? [];
+  const workHierarchyData = options?.workHierarchyData ?? workHierarchy;
 
   mockedBffRequest.mockImplementation((url: string) => {
     const path = String(url);
     if (path.includes('/api/manual-shifts/by-date')) return Promise.resolve({ shift, lines });
-    if (path.endsWith(`/api/manual-shifts/${shift.id}/work-hierarchy`)) return Promise.resolve(workHierarchy);
+    if (path.endsWith(`/api/manual-shifts/${shift.id}/work-hierarchy`)) return Promise.resolve(workHierarchyData);
     if (path.endsWith(`/api/manual-shifts/${shift.id}/day-summary`)) return Promise.resolve(daySummary);
     if (path.endsWith(`/api/manual-shifts/${shift.id}/orders`)) return Promise.resolve(orders);
     if (path.endsWith(`/api/manual-shifts/${shift.id}/workers`)) return Promise.resolve(workers);
@@ -235,8 +238,178 @@ function mockWorkspaceData(options?: {
         totals: { totalSkus: 1, shortageSkus: 0, coveredByBondedSkus: 0, partialBondedSkus: 0, unresolvedSkus: 0, dataIssueSkus: 0 }
       });
     }
+    if (path.includes(`/api/manual-shifts/${shift.id}/buckets/product-rollup`)) {
+      const parsedUrl = new URL(path, 'http://localhost');
+      return Promise.resolve(
+        options?.productRollupResolver?.(parsedUrl) ?? {
+          shiftId: shift.id,
+          generatedAt: new Date().toISOString(),
+          products: []
+        }
+      );
+    }
     return Promise.resolve([]);
   });
+}
+
+const sharedPhysicalLineId = 'de488c8d-d17a-43d7-9f4c-fc01645b225b';
+
+function makeAreaScopedRouteGroupHierarchy() {
+  return {
+    shiftId: shift.id,
+    areas: [
+      {
+        areaName: 'שפלה 2',
+        displayName: 'שפלה 2',
+        totalLines: 1,
+        totalBuckets: 1,
+        totalOrders: 1,
+        totalQuantity: 5,
+        statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+        lines: [
+          {
+            lineId: sharedPhysicalLineId,
+            areaLineKey: `שפלה 2\u0001${sharedPhysicalLineId}`,
+            lineGroupName: 'שפלה 2 כללי',
+            distributionArea: 'שפלה 2',
+            sourceZone: 'שפלה 2',
+            status: 'open',
+            totalBuckets: 1,
+            totalOrders: 1,
+            totalQuantity: 5,
+            statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            buckets: [],
+            routeGroups: [
+              {
+                routeGroupKey: 'rg-shefela-general',
+                routeGroupName: 'שפלה 2 כללי',
+                routeGroupKind: 'general',
+                classificationConfidence: 'high',
+                classificationReasons: [],
+                orderCount: 1,
+                itemLinesCount: 1,
+                totalQuantity: 5,
+                statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                workBuckets: [
+                  {
+                    workBucketKey: 'wb-cellular',
+                    workBucketName: 'סלולר',
+                    workBucketDisplayName: 'סלולר',
+                    workBucketKind: 'category',
+                    classificationConfidence: 'high',
+                    classificationReasons: [],
+                    orderCount: 1,
+                    itemLinesCount: 1,
+                    totalQuantity: 5,
+                    statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                    orders: [
+                      {
+                        orderId: 'order-shefela-2',
+                        orderNumber: 'SO_A',
+                        customerName: 'Customer A',
+                        pointName: 'סלולר',
+                        status: 'queued',
+                        lineCount: 1,
+                        totalQuantity: 5,
+                        hasAshlama: false,
+                        hasCheckUnits: false
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        areaName: 'שפלה אמצעי',
+        displayName: 'שפלה אמצעי',
+        totalLines: 1,
+        totalBuckets: 1,
+        totalOrders: 1,
+        totalQuantity: 7,
+        statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+        lines: [
+          {
+            lineId: sharedPhysicalLineId,
+            areaLineKey: `שפלה אמצעי\u0001${sharedPhysicalLineId}`,
+            lineGroupName: 'שפלה 2 כללי',
+            distributionArea: 'שפלה אמצעי',
+            sourceZone: 'שפלה אמצעי',
+            status: 'open',
+            totalBuckets: 1,
+            totalOrders: 1,
+            totalQuantity: 7,
+            statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            buckets: [],
+            routeGroups: [
+              {
+                routeGroupKey: 'rg-shefela-general',
+                routeGroupName: 'שפלה 2 כללי',
+                routeGroupKind: 'general',
+                classificationConfidence: 'high',
+                classificationReasons: [],
+                orderCount: 1,
+                itemLinesCount: 1,
+                totalQuantity: 7,
+                statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                workBuckets: [
+                  {
+                    workBucketKey: 'wb-cellular',
+                    workBucketName: 'סלולר',
+                    workBucketDisplayName: 'סלולר',
+                    workBucketKind: 'category',
+                    classificationConfidence: 'high',
+                    classificationReasons: [],
+                    orderCount: 1,
+                    itemLinesCount: 1,
+                    totalQuantity: 7,
+                    statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                    orders: [
+                      {
+                        orderId: 'order-shefela-center',
+                        orderNumber: 'SO_B',
+                        customerName: 'Customer B',
+                        pointName: 'סלולר',
+                        status: 'queued',
+                        lineCount: 1,
+                        totalQuantity: 7,
+                        hasAshlama: false,
+                        hasCheckUnits: false
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  };
+}
+
+async function openDesktopRouteGroupBucket(areaName: 'שפלה 2' | 'שפלה אמצעי') {
+  await waitFor(() => {
+    expect(screen.getByTestId(`area-card-${areaName}`)).toBeTruthy();
+  });
+  fireEvent.click(screen.getByTestId(`area-card-${areaName}`));
+  await waitFor(() => {
+    expect(screen.getByTestId('route-group-card-rg-shefela-general')).toBeTruthy();
+  });
+  fireEvent.click(screen.getByTestId('route-group-card-rg-shefela-general'));
+  await waitFor(() => {
+    expect(screen.getByTestId('work-bucket-card-wb-cellular')).toBeTruthy();
+  });
+  fireEvent.click(screen.getByTestId('work-bucket-card-wb-cellular'));
+}
+
+function getProductRollupSourceZones() {
+  return mockedBffRequest.mock.calls
+    .map(([url]) => String(url))
+    .filter((url) => url.includes(`/api/manual-shifts/${shift.id}/buckets/product-rollup`))
+    .map((url) => new URL(url, 'http://localhost').searchParams.get('sourceZone'));
 }
 
 describe('ManualOperatorPage URL sections', () => {
@@ -288,6 +461,7 @@ describe('ManualOperatorPage URL sections', () => {
     await waitFor(() => {
       expect(screen.getByText('חוסרים להיום + כיסוי בונדד')).toBeTruthy();
     });
+    expect(screen.queryByText('המסך הזה עדיין לא מחובר')).toBeNull();
     expect(screen.queryByTestId('manual-placeholder-products')).toBeNull();
     expect(
       mockedBffRequest.mock.calls.some(([, init]) => (init?.method ?? 'GET') !== 'GET')
@@ -341,6 +515,167 @@ describe('ManualOperatorPage URL sections', () => {
 
     await waitFor(() => {
       expect(mockedBffRequest).toHaveBeenCalledWith(`/api/manual-shifts/${shift.id}/work-hierarchy`);
+    });
+  });
+
+  it('scopes desktop orders by areaLineKey when the same physical line exists under two areas', async () => {
+    isDesktop = true;
+    const scopedHierarchy = makeAreaScopedRouteGroupHierarchy();
+
+    mockWorkspaceData({ workHierarchyData: scopedHierarchy });
+    const firstRender = renderAt(routes.operatorManualWork);
+
+    await openDesktopRouteGroupBucket('שפלה 2');
+    fireEvent.click(screen.getByTestId('tab-orders'));
+    await waitFor(() => {
+      expect(screen.getByText('SO_A')).toBeTruthy();
+    });
+    expect(screen.queryByText('SO_B')).toBeNull();
+
+    firstRender.unmount();
+
+    mockWorkspaceData({ workHierarchyData: scopedHierarchy });
+    renderAt(routes.operatorManualWork);
+
+    await openDesktopRouteGroupBucket('שפלה אמצעי');
+    fireEvent.click(screen.getByTestId('tab-orders'));
+    await waitFor(() => {
+      expect(screen.getByText('SO_B')).toBeTruthy();
+    });
+    expect(screen.queryByText('SO_A')).toBeNull();
+  });
+
+  it('sends the correct sourceZone in desktop product rollup queries for each area projection', async () => {
+    isDesktop = true;
+    const scopedHierarchy = makeAreaScopedRouteGroupHierarchy();
+
+    mockWorkspaceData({
+      workHierarchyData: scopedHierarchy,
+      productRollupResolver: (url) => ({
+        shiftId: shift.id,
+        generatedAt: new Date().toISOString(),
+        products: [{ sku: `sku-${url.searchParams.get('sourceZone')}`, description: 'Scoped product' }]
+      })
+    });
+    const firstRender = renderAt(routes.operatorManualWork);
+
+    await openDesktopRouteGroupBucket('שפלה 2');
+    await waitFor(() => {
+      expect(getProductRollupSourceZones()).toContain('שפלה 2');
+    });
+
+    firstRender.unmount();
+
+    mockWorkspaceData({
+      workHierarchyData: scopedHierarchy,
+      productRollupResolver: (url) => ({
+        shiftId: shift.id,
+        generatedAt: new Date().toISOString(),
+        products: [{ sku: `sku-${url.searchParams.get('sourceZone')}`, description: 'Scoped product' }]
+      })
+    });
+    renderAt(routes.operatorManualWork);
+
+    await openDesktopRouteGroupBucket('שפלה אמצעי');
+    await waitFor(() => {
+      expect(getProductRollupSourceZones()).toContain('שפלה אמצעי');
+    });
+  });
+
+  it('keeps single-line area auto-skip area-scoped when two areas share the same physical lineId', async () => {
+    isDesktop = true;
+    const scopedHierarchy = makeAreaScopedRouteGroupHierarchy();
+
+    mockWorkspaceData({
+      workHierarchyData: scopedHierarchy,
+      productRollupResolver: (url) => ({
+        shiftId: shift.id,
+        generatedAt: new Date().toISOString(),
+        products: [{ sku: `sku-${url.searchParams.get('sourceZone')}`, description: 'Scoped product' }]
+      })
+    });
+    renderAt(routes.operatorManualWork);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('area-card-שפלה אמצעי')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('area-card-שפלה אמצעי'));
+    await waitFor(() => {
+      expect(screen.queryByText('קווים')).toBeNull();
+      expect(screen.getByTestId('route-group-card-rg-shefela-general')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('route-group-card-rg-shefela-general'));
+    await waitFor(() => {
+      expect(screen.getByTestId('work-bucket-card-wb-cellular')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('work-bucket-card-wb-cellular'));
+    await waitFor(() => {
+      expect(getProductRollupSourceZones()).toContain('שפלה אמצעי');
+    });
+  });
+
+  it('does not regress normal unique-line desktop hierarchy selection', async () => {
+    isDesktop = true;
+    mockWorkspaceData({
+      workHierarchyData: {
+        shiftId: shift.id,
+        areas: [
+          {
+            areaName: 'south',
+            displayName: 'South',
+            totalLines: 1,
+            totalBuckets: 1,
+            totalOrders: 1,
+            totalQuantity: 5,
+            statusBreakdown: { queued: 0, picking: 0, waitingCheck: 1, returned: 0, done: 0 },
+            lines: [
+              {
+                lineId: 'unique-line-1',
+                areaLineKey: 'south\u0001unique-line-1',
+                lineGroupName: 'Line A',
+                distributionArea: 'South',
+                sourceZone: 'South',
+                status: 'open',
+                totalBuckets: 1,
+                totalOrders: 1,
+                totalQuantity: 5,
+                statusBreakdown: { queued: 0, picking: 0, waitingCheck: 1, returned: 0, done: 0 },
+                buckets: [
+                  {
+                    bucketName: 'Point A',
+                    displayName: 'Point A',
+                    totalOrders: 1,
+                    totalQuantity: 5,
+                    statusBreakdown: { queued: 0, picking: 0, waitingCheck: 1, returned: 0, done: 0 },
+                    orders: [
+                      {
+                        orderId: waitingOrder.id,
+                        orderNumber: waitingOrder.orderNumber,
+                        customerName: waitingOrder.customerName,
+                        pointName: waitingOrder.pointName,
+                        status: waitingOrder.status,
+                        lineCount: 2,
+                        totalQuantity: 5,
+                        hasAshlama: false,
+                        hasCheckUnits: false
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    });
+    renderAt(routes.operatorManualWork);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('area-card-south')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('area-card-south'));
+    await waitFor(() => {
+      expect(screen.getByTestId('work-bucket-card-Point A')).toBeTruthy();
     });
   });
 });

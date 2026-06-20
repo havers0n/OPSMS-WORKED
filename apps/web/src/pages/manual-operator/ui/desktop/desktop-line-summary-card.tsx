@@ -2,7 +2,7 @@ import type { LineHierarchySummary } from '@/entities/manual-shift/model/shift-s
 
 interface DesktopLineSummaryCardProps {
   line: LineHierarchySummary;
-  onClick?: (lineId: string) => void;
+  onClick?: (areaLineKey: string) => void;
 }
 
 const STATUS_DOT: Record<string, string> = {
@@ -17,7 +17,7 @@ export function DesktopLineSummaryCard({ line, onClick }: DesktopLineSummaryCard
     <button
       type="button"
       className="bg-white border border-gray-200 rounded-lg p-4 text-right w-full hover:bg-gray-50 hover:border-gray-300 transition-colors"
-      onClick={() => onClick?.(line.lineId)}
+      onClick={() => onClick?.(line.areaLineKey ?? line.lineId)}
       data-testid={`line-summary-card-${line.lineId}`}
       aria-label={`קו ${line.lineName}`}
     >
