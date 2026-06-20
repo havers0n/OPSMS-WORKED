@@ -213,6 +213,28 @@ function mockWorkspaceData(options?: {
     if (path.includes('/check-units')) return Promise.resolve([]);
     if (path.includes('/ashlamot')) return Promise.resolve([]);
     if (path.endsWith(`/api/manual-shift-lines/${line.id}/orders`)) return Promise.resolve([]);
+    if (path.includes(`/api/manual-shifts/${shift.id}/product-control`)) {
+      return Promise.resolve({
+        shiftId: shift.id,
+        generatedAt: new Date().toISOString(),
+        rows: [
+          {
+            sku: '100001',
+            description: 'מחברת A4 100 דפים',
+            category: 'ניירת',
+            demandQty: 500,
+            warehouseQty: 500,
+            shortageQty: 0,
+            bondedAvailableQty: 0,
+            bondedCoverQty: 0,
+            finalMissingQty: 0,
+            surplusQty: 0,
+            status: 'ok'
+          }
+        ],
+        totals: { totalSkus: 1, shortageSkus: 0, coveredByBondedSkus: 0, partialBondedSkus: 0, unresolvedSkus: 0, dataIssueSkus: 0 }
+      });
+    }
     return Promise.resolve([]);
   });
 }

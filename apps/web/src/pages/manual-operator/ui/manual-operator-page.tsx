@@ -75,7 +75,7 @@ function ManualOperatorSectionContent({
   }
 
   if (section === 'products') {
-    return shift ? <ProductControlTab /> : null;
+    return shift ? <ProductControlTab shiftId={shift.id} /> : null;
   }
 
   return (

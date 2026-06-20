@@ -1,35 +1,23 @@
-export type ProductControlStatus =
-  | 'ok'
-  | 'covered_by_bonded'
-  | 'partial_bonded'
-  | 'unresolved'
-  | 'data_issue';
+export type {
+  ProductControlStatus,
+  ProductControlRow,
+  ProductControlTotals,
+  ProductControlResponse,
+  ProductControlWorkLine
+} from '@wos/domain';
 
-export interface ProductControlRow {
-  sku: string;
-  description: string;
-  category: string;
-  demandQty: number;
-  warehouseQty: number;
-  shortageQty: number;
-  bondedAvailableQty: number;
-  bondedCoverQty: number;
-  finalMissingQty: number;
-  surplusQty: number;
-  status: ProductControlStatus;
-
-  affectedLinesCount?: number;
-  affectedOrdersCount?: number;
-  bondedCandidateLabel?: string;
-  notes?: string;
-
-  bondedCandidateBlock?: string;
-  bondedCandidateSource?: string;
-  bondedCandidateUnitsPerPallet?: number;
-  bondedCandidateCartonsPerPallet?: number;
-  bondedCandidatePackFactor?: number;
-  bondedCandidateAlreadyPulled?: number;
-  bondedCandidateAvailableBalance?: number;
-
-  workLines?: { name: string; units: number; blockedOrders: number }[];
-}
+export {
+  productControlStatusSchema,
+  productControlStatusLabels,
+  productControlRowSchema,
+  productControlTotalsSchema,
+  productControlResponseSchema,
+  productControlWorkLineSchema,
+  deriveShortageQty,
+  deriveBondedCoverQty,
+  deriveFinalMissingQty,
+  deriveSurplusQty,
+  deriveProductControlStatus,
+  computeProductControlTotals,
+  buildProductControlRow
+} from '@wos/domain';
