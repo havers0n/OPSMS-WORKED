@@ -17,6 +17,7 @@ interface DesktopHierarchyPanelProps {
   selectedAreaKey: string | null;
   selectedLineId: string | null;
   selectedRouteGroupKey: string | null;
+  selectedWorkBucketKey: string | null;
   selectedWorkBucketName: string | null;
   areaSummaries: AreaHierarchySummary[];
   lineHierarchySummaries: LineHierarchySummary[];
@@ -28,7 +29,7 @@ interface DesktopHierarchyPanelProps {
   onSelectArea: (areaKey: string | null) => void;
   onSelectLine: (lineId: string) => void;
   onSelectRouteGroup: (routeGroupKey: string) => void;
-  onSelectBucket: (workBucketName: string) => void;
+  onSelectBucket: (workBucketIdentifier: string) => void;
   onSelectOrder: (orderId: string) => void;
   onClearArea: () => void;
   onClearLine: () => void;
@@ -62,6 +63,7 @@ export function DesktopHierarchyPanel({
   selectedAreaKey,
   selectedLineId,
   selectedRouteGroupKey,
+  selectedWorkBucketKey,
   selectedWorkBucketName,
   areaSummaries,
   lineHierarchySummaries,
@@ -140,7 +142,7 @@ export function DesktopHierarchyPanel({
   const selectedLine = lineHierarchySummaries.find((l) => l.lineId === selectedLineId);
 
   // ── State 3: Route group selected, but no work bucket yet ──────────────
-  if (hasRouteGroups && selectedRouteGroupKey && !selectedWorkBucketName) {
+  if (hasRouteGroups && selectedRouteGroupKey && !selectedWorkBucketKey && !selectedWorkBucketName) {
     const selectedRouteGroup = routeGroupSummaries.find((rg) => rg.routeGroupKey === selectedRouteGroupKey);
 
     return (
@@ -190,7 +192,7 @@ export function DesktopHierarchyPanel({
   }
 
   // ── State 4: Line selected, route groups shown (no route group selected) ──
-  if (hasRouteGroups && !selectedRouteGroupKey && !selectedWorkBucketName) {
+  if (hasRouteGroups && !selectedRouteGroupKey && !selectedWorkBucketKey && !selectedWorkBucketName) {
     return (
       <div className="p-4">
         <div className="flex items-center gap-2 mb-3">
@@ -224,7 +226,7 @@ export function DesktopHierarchyPanel({
   }
 
   // ── State 5: Legacy fallback — no route groups, no work bucket selected ──
-  if (!selectedWorkBucketName) {
+  if (!selectedWorkBucketKey && !selectedWorkBucketName) {
     return (
       <div className="p-4">
         <div className="flex items-center gap-2 mb-3">
@@ -279,9 +281,7 @@ export function DesktopHierarchyPanel({
 
   // ── State 6: Work bucket selected → products/orders ──────────────────────
   const selectedBucketLegacy = workBucketSummaries.find((p) => p.workBucketName === selectedWorkBucketName);
-  const selectedBucketRouteGroup = routeGroupWorkBucketSummaries.find(
-    (wb) => wb.workBucketDisplayName === selectedWorkBucketName || wb.workBucketName === selectedWorkBucketName
-  );
+  const selectedBucketRouteGroup = routeGroupWorkBucketSummaries.find((wb) => wb.workBucketKey === selectedWorkBucketKey);
 
   const isRouteGroupBucket = hasRouteGroups && !!selectedRouteGroupKey;
   const selectedRouteGroup = isRouteGroupBucket

@@ -23,6 +23,7 @@ export interface DesktopOperatorShellProps {
   selectedAreaKey: string | null;
   selectedLineId: string | null;
   selectedRouteGroupKey: string | null;
+  selectedWorkBucketKey: string | null;
   selectedWorkBucketName: string | null;
   areaSummaries: AreaHierarchySummary[];
   lineHierarchySummaries: LineHierarchySummary[];
@@ -37,7 +38,7 @@ export interface DesktopOperatorShellProps {
   onSelectArea: (areaName: string | null) => void;
   onSelectHierarchyLine: (lineId: string) => void;
   onSelectHierarchyRouteGroup: (routeGroupKey: string) => void;
-  onSelectHierarchyBucket: (workBucketName: string) => void;
+  onSelectHierarchyBucket: (workBucketIdentifier: string) => void;
   onClearArea: () => void;
   onClearHierarchyLine: () => void;
   onClearHierarchyRouteGroup: () => void;
@@ -106,6 +107,7 @@ export function DesktopOperatorShell({
   selectedAreaKey,
   selectedLineId,
   selectedRouteGroupKey,
+  selectedWorkBucketKey,
   selectedWorkBucketName,
   areaSummaries,
   lineHierarchySummaries,
@@ -222,6 +224,7 @@ export function DesktopOperatorShell({
               selectedAreaKey={selectedAreaKey}
               selectedLineId={selectedLineId}
               selectedRouteGroupKey={selectedRouteGroupKey}
+              selectedWorkBucketKey={selectedWorkBucketKey}
               selectedWorkBucketName={selectedWorkBucketName}
               areaSummaries={areaSummaries}
               lineHierarchySummaries={lineHierarchySummaries}

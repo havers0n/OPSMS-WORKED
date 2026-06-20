@@ -9,10 +9,15 @@ interface DesktopWorkBucketCardProps {
   bucket: BucketForCard;
   lineName?: string;
   routeGroupName?: string;
-  onClick?: (workBucketName: string) => void;
+  onClick?: (workBucketIdentifier: string) => void;
 }
 
-function getWorkBucketName(bucket: BucketForCard): string {
+function getWorkBucketIdentifier(bucket: BucketForCard): string {
+  if ('workBucketKey' in bucket) return bucket.workBucketKey;
+  return bucket.workBucketName;
+}
+
+function getWorkBucketDisplayName(bucket: BucketForCard): string {
   if ('workBucketDisplayName' in bucket) return bucket.workBucketDisplayName;
   return bucket.workBucketName;
 }
@@ -39,8 +44,8 @@ function bucketDisplayName(workBucketName: string, lineName?: string, routeGroup
 }
 
 export function DesktopWorkBucketCard({ bucket, lineName, routeGroupName, onClick }: DesktopWorkBucketCardProps) {
-  const rawName = getWorkBucketName(bucket);
-  const displayName = bucketDisplayName(rawName, lineName, routeGroupName);
+  const rawName = getWorkBucketIdentifier(bucket);
+  const displayName = bucketDisplayName(getWorkBucketDisplayName(bucket), lineName, routeGroupName);
   const sb = bucket.statusBreakdown;
   const ordersCount = getOrdersCount(bucket);
   const itemLinesCount = getItemLinesCount(bucket);

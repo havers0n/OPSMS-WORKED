@@ -80,6 +80,7 @@ export function ManualOperatorWorkSection({
   const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
+  const [selectedWorkBucketKey, setSelectedWorkBucketKey] = useState<string | null>(null);
   const [selectedWorkBucketName, setSelectedWorkBucketName] = useState<string | null>(null);
   const [selectedAreaKey, setSelectedAreaKey] = useState<string | null>(null);
   const [selectedRouteGroupKey, setSelectedRouteGroupKey] = useState<string | null>(null);
@@ -93,7 +94,7 @@ export function ManualOperatorWorkSection({
     ...shiftOrdersQueryOptions(shift?.id ?? ''),
     enabled: !!shift?.id && isDesktop
   });
-const { data: workHierarchy } = useQuery({
+  const { data: workHierarchy } = useQuery({
     ...workHierarchyQueryOptions(shift?.id ?? ''),
     enabled: !!shift?.id && isDesktop
   });
@@ -126,17 +127,18 @@ const { data: workHierarchy } = useQuery({
   );
 
   const selectedWorkBucketRawName: string = useMemo(() => {
-    if (!selectedLineId || !selectedWorkBucketName || !workHierarchy) return '';
+    if (!selectedLineId || !workHierarchy) return '';
 
     if (hasRouteGroups && selectedRouteGroupKey) {
-      const wb = routeGroupWorkBucketSummaries.find(
-        (w) => w.workBucketDisplayName === selectedWorkBucketName || w.workBucketName === selectedWorkBucketName
-      );
+      if (!selectedWorkBucketKey) return '';
+      const wb = routeGroupWorkBucketSummaries.find((w) => w.workBucketKey === selectedWorkBucketKey);
       if (!wb || wb.orders.length === 0) return '';
       const uniquePointNames = [...new Set(wb.orders.map((o) => o.pointName).filter(Boolean))];
       if (uniquePointNames.length === 1) return uniquePointNames[0]!;
       return '';
     }
+
+    if (!selectedWorkBucketName) return '';
 
     for (const area of workHierarchy.areas) {
       const line = area.lines.find((l) => l.lineId === selectedLineId);
@@ -146,7 +148,7 @@ const { data: workHierarchy } = useQuery({
       return bucket.bucketName ?? '';
     }
     return '';
-  }, [selectedLineId, selectedWorkBucketName, workHierarchy, hasRouteGroups, selectedRouteGroupKey, routeGroupWorkBucketSummaries]);
+  }, [selectedLineId, selectedWorkBucketName, selectedWorkBucketKey, workHierarchy, hasRouteGroups, selectedRouteGroupKey, routeGroupWorkBucketSummaries]);
 
   const showProductRollupDeferred = !!(hasRouteGroups && selectedRouteGroupKey && !selectedWorkBucketRawName);
 
@@ -189,6 +191,7 @@ const { data: workHierarchy } = useQuery({
   function handleSelectArea(areaKey: string | null) {
     setSelectedAreaKey(areaKey);
     setSelectedRouteGroupKey(null);
+    setSelectedWorkBucketKey(null);
     setSelectedWorkBucketName(null);
 
     if (areaKey !== null) {
@@ -206,16 +209,25 @@ const { data: workHierarchy } = useQuery({
   function handleSelectHierarchyLine(lineId: string) {
     setSelectedLineId(lineId);
     setSelectedRouteGroupKey(null);
+    setSelectedWorkBucketKey(null);
     setSelectedWorkBucketName(null);
   }
 
   function handleSelectHierarchyRouteGroup(routeGroupKey: string) {
     setSelectedRouteGroupKey(routeGroupKey);
+    setSelectedWorkBucketKey(null);
     setSelectedWorkBucketName(null);
   }
 
-  function handleSelectHierarchyBucket(workBucketName: string) {
-    setSelectedWorkBucketName(workBucketName);
+  function handleSelectHierarchyBucket(workBucketIdentifier: string) {
+    if (hasRouteGroups && selectedRouteGroupKey) {
+      const bucket = routeGroupWorkBucketSummaries.find((wb) => wb.workBucketKey === workBucketIdentifier);
+      setSelectedWorkBucketKey(bucket?.workBucketKey ?? workBucketIdentifier);
+      setSelectedWorkBucketName(bucket?.workBucketDisplayName ?? workBucketIdentifier);
+    } else {
+      setSelectedWorkBucketKey(null);
+      setSelectedWorkBucketName(workBucketIdentifier);
+    }
     setWorkBucketView('products');
   }
 
@@ -223,21 +235,25 @@ const { data: workHierarchy } = useQuery({
     setSelectedAreaKey(null);
     setSelectedLineId(null);
     setSelectedRouteGroupKey(null);
+    setSelectedWorkBucketKey(null);
     setSelectedWorkBucketName(null);
   }
 
   function handleClearHierarchyLine() {
     setSelectedLineId(null);
     setSelectedRouteGroupKey(null);
+    setSelectedWorkBucketKey(null);
     setSelectedWorkBucketName(null);
   }
 
   function handleClearHierarchyRouteGroup() {
     setSelectedRouteGroupKey(null);
+    setSelectedWorkBucketKey(null);
     setSelectedWorkBucketName(null);
   }
 
   function handleClearHierarchyBucket() {
+    setSelectedWorkBucketKey(null);
     setSelectedWorkBucketName(null);
   }
 
@@ -252,6 +268,7 @@ const { data: workHierarchy } = useQuery({
         selectedAreaKey={selectedAreaKey}
         selectedLineId={selectedLineId}
         selectedRouteGroupKey={selectedRouteGroupKey}
+        selectedWorkBucketKey={selectedWorkBucketKey}
         selectedWorkBucketName={selectedWorkBucketName}
         areaSummaries={areaSummaries}
         lineHierarchySummaries={lineHierarchySummaries}

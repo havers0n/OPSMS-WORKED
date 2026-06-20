@@ -24,7 +24,8 @@ import {
   normalizePointName,
   NO_POINT_LABEL,
   NO_WORK_BUCKET_LABEL,
-  type ShiftListOrder
+  type ShiftListOrder,
+  type RouteGroupWorkBucketSummary
 } from './shift-selectors';
 import type {
   ManualShiftDaySummary,
@@ -2675,5 +2676,278 @@ describe('selectRouteGroupWorkBucketSummaries', () => {
     const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'galil-general');
     const wb = result[0];
     expect(wb.orders[0].workBucketName).toBe('כללי');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Diagnostic: simulate the exact inline logic from manual-operator-work-section
+// selectedWorkBucketRawName derivation — no production code changes
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('selectedWorkBucketRawName derivation (diagnostic — inline logic replica)', () => {
+  const SHIFT_ID = 'shift-0000-0000-0000-000000000000';
+  const LINE_GALIL = 'line-galil-1111-1111-111111111111';
+
+  function deriveRawName(
+    workBucketSummaries: RouteGroupWorkBucketSummary[],
+    selectedWorkBucketName: string
+  ): string {
+    const wb = workBucketSummaries.find(
+      (w) => w.workBucketDisplayName === selectedWorkBucketName || w.workBucketName === selectedWorkBucketName
+    );
+    if (!wb || wb.orders.length === 0) return '';
+    const uniquePointNames = [...new Set(wb.orders.map((o) => o.pointName).filter((pointName): pointName is string => Boolean(pointName)))];
+    if (uniquePointNames.length === 1) return uniquePointNames[0]!;
+    return '';
+  }
+
+  function makeGalilFixture(): ManualShiftWorkHierarchyResponse {
+    return {
+      shiftId: SHIFT_ID,
+      areas: [{
+        areaName: 'גליל',
+        displayName: 'גליל',
+        totalLines: 1,
+        totalBuckets: 4,
+        totalOrders: 6,
+        totalQuantity: 160,
+        statusBreakdown: { queued: 6, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+        lines: [{
+          lineId: LINE_GALIL,
+          lineGroupName: 'גליל',
+          distributionArea: 'גליל',
+          status: 'open',
+          totalBuckets: 4,
+          totalOrders: 6,
+          totalQuantity: 160,
+          statusBreakdown: { queued: 6, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          buckets: [],
+          routeGroups: [
+            {
+              routeGroupKey: 'galil-general',
+              routeGroupName: 'גליל כללי',
+              routeGroupKind: 'general',
+              classificationConfidence: 'high',
+              classificationReasons: [],
+              orderCount: 4,
+              itemLinesCount: 10,
+              totalQuantity: 100,
+              statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              workBuckets: [
+                {
+                  workBucketKey: 'wb-klali',
+                  workBucketName: 'כללי',
+                  workBucketDisplayName: 'כללי',
+                  workBucketKind: 'general',
+                  classificationConfidence: 'high',
+                  classificationReasons: [],
+                  orderCount: 3,
+                  itemLinesCount: 7,
+                  totalQuantity: 60,
+                  statusBreakdown: { queued: 3, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                  orders: [
+                    { orderId: 'o-1', orderNumber: 'SO26013614', customerName: 'לקוח א', pointName: 'גליל', status: 'queued', lineCount: 2, totalQuantity: 20, hasAshlama: false, hasCheckUnits: false },
+                    { orderId: 'o-2', orderNumber: 'SO26013629', customerName: 'לקוח ב', pointName: 'גליל', status: 'queued', lineCount: 3, totalQuantity: 20, hasAshlama: false, hasCheckUnits: false },
+                    { orderId: 'o-3', orderNumber: 'SO26013663', customerName: 'לקוח ג', pointName: 'גליל', status: 'queued', lineCount: 2, totalQuantity: 20, hasAshlama: false, hasCheckUnits: false }
+                  ]
+                },
+                {
+                  workBucketKey: 'wb-sellular',
+                  workBucketName: 'סלולר',
+                  workBucketDisplayName: 'סלולר',
+                  workBucketKind: 'category',
+                  classificationConfidence: 'high',
+                  classificationReasons: [],
+                  orderCount: 1,
+                  itemLinesCount: 3,
+                  totalQuantity: 40,
+                  statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                  orders: [
+                    { orderId: 'o-4', orderNumber: 'SO26013678', customerName: 'לקוח ד', pointName: 'סלולר', status: 'queued', lineCount: 3, totalQuantity: 40, hasAshlama: false, hasCheckUnits: false }
+                  ]
+                }
+              ]
+            },
+            {
+              routeGroupKey: 'dbeach',
+              routeGroupName: 'דבאח עין המפרץ',
+              routeGroupKind: 'standalone',
+              classificationConfidence: 'high',
+              classificationReasons: [],
+              orderCount: 2,
+              itemLinesCount: 5,
+              totalQuantity: 60,
+              statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              workBuckets: [
+                {
+                  workBucketKey: 'wb-klali-dbeach',
+                  workBucketName: 'כללי',
+                  workBucketDisplayName: 'כללי',
+                  workBucketKind: 'standalone-general',
+                  classificationConfidence: 'high',
+                  classificationReasons: [],
+                  orderCount: 2,
+                  itemLinesCount: 5,
+                  totalQuantity: 60,
+                  statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                  orders: [
+                    { orderId: 'o-5', orderNumber: 'SO26013686', customerName: 'לקוח ה', pointName: 'דבאח עין המפרץ', status: 'queued', lineCount: 2, totalQuantity: 30, hasAshlama: false, hasCheckUnits: false },
+                    { orderId: 'o-6', orderNumber: 'SO26013699', customerName: 'לקוח ו', pointName: 'דבאח עין המפרץ', status: 'queued', lineCount: 3, totalQuantity: 30, hasAshlama: false, hasCheckUnits: false }
+                  ]
+                }
+              ]
+            }
+          ]
+        }]
+      }]
+    };
+  }
+
+  // ── Case 1: גליל כללי > כללי ───────────────────────────────────────────
+  // Fixture: work bucket 'כללי' in 'galil-general' has 3 orders, all pointName='גליל'
+  it('גליל כללי > כללי: derives pointName=גליל from work bucket orders, not semantic כללי', () => {
+    const hierarchy = makeGalilFixture();
+    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'galil-general');
+    const rawName = deriveRawName(result, 'כללי');
+    // All 3 orders share pointName='גליל' → should derive 'גליל'
+    expect(rawName).toBe('גליל');
+    // showProductRollupDeferred = !(hasRouteGroups && selectedRouteGroupKey && !rawName)
+    // rawName is non-empty → deferred is FALSE
+    expect(rawName).not.toBe('');
+    // MUST NOT pass semantic 'כללי' as legacy pointName
+    expect(rawName).not.toBe('כללי');
+  });
+
+  // ── Case 2: דבאח עין המפרץ > כללי ──────────────────────────────────────
+  it('דבאח עין המפרץ > כללי: derives pointName=דבאח עין המפרץ from work bucket orders', () => {
+    const hierarchy = makeGalilFixture();
+    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'dbeach');
+    const rawName = deriveRawName(result, 'כללי');
+    // Both orders share pointName='דבאח עין המפרץ'
+    expect(rawName).toBe('דבאח עין המפרץ');
+    expect(rawName).not.toBe('');
+    expect(rawName).not.toBe('כללי');
+  });
+
+  // ── Case 3: Multi-source work bucket → rawName = '' (deferred) ─────────
+  it('multi-source work bucket returns empty string (product rollup deferred)', () => {
+    const hierarchy: ManualShiftWorkHierarchyResponse = {
+      shiftId: SHIFT_ID,
+      areas: [
+        {
+          areaName: 'גליל',
+          displayName: 'גליל',
+          totalLines: 1,
+          totalBuckets: 1,
+          totalOrders: 2,
+          totalQuantity: 30,
+          statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          lines: [{
+            lineId: LINE_GALIL,
+            lineGroupName: 'גליל',
+            distributionArea: 'גליל',
+            status: 'open',
+            totalBuckets: 1,
+            totalOrders: 2,
+            totalQuantity: 30,
+            statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            buckets: [],
+            routeGroups: [{
+              routeGroupKey: 'multi-source',
+              routeGroupName: 'מעורב',
+              routeGroupKind: 'general',
+              classificationConfidence: 'high',
+              classificationReasons: [],
+              orderCount: 2,
+              itemLinesCount: 5,
+              totalQuantity: 30,
+              statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              workBuckets: [{
+                workBucketKey: 'wb-mixed',
+                workBucketName: 'מעורב',
+                workBucketDisplayName: 'מעורב',
+                workBucketKind: 'general',
+                classificationConfidence: 'high',
+                classificationReasons: [],
+                orderCount: 2,
+                itemLinesCount: 5,
+                totalQuantity: 30,
+                statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                orders: [
+                  { orderId: 'o-1', orderNumber: 'SO-1', customerName: 'לקוח א', pointName: 'גליל', status: 'queued', lineCount: 2, totalQuantity: 10, hasAshlama: false, hasCheckUnits: false },
+                  { orderId: 'o-2', orderNumber: 'SO-2', customerName: 'לקוח ב', pointName: 'סלולר', status: 'queued', lineCount: 3, totalQuantity: 20, hasAshlama: false, hasCheckUnits: false }
+                ]
+              }]
+            }]
+          }]
+        }
+      ]
+    };
+    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'multi-source');
+    const rawName = deriveRawName(result, 'מעורב');
+    // Two different pointNames → empty string
+    expect(rawName).toBe('');
+  });
+
+  // ── Case 4: Zero orders → rawName = '' (deferred) ──────────────────────
+  it('work bucket with zero orders returns empty string', () => {
+    const hierarchy: ManualShiftWorkHierarchyResponse = {
+      shiftId: SHIFT_ID,
+      areas: [{
+        areaName: 'גליל',
+        displayName: 'גליל',
+        totalLines: 1,
+        totalBuckets: 1,
+        totalOrders: 0,
+        totalQuantity: 0,
+        statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+        lines: [{
+          lineId: LINE_GALIL,
+          lineGroupName: 'גליל',
+          distributionArea: 'גליל',
+          status: 'open',
+          totalBuckets: 1,
+          totalOrders: 0,
+          totalQuantity: 0,
+          statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          buckets: [],
+          routeGroups: [{
+            routeGroupKey: 'empty-wb',
+            routeGroupName: 'ריק',
+            routeGroupKind: 'general',
+            classificationConfidence: 'high',
+            classificationReasons: [],
+            orderCount: 0,
+            itemLinesCount: 0,
+            totalQuantity: 0,
+            statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            workBuckets: [{
+              workBucketKey: 'wb-empty',
+              workBucketName: 'ריק',
+              workBucketDisplayName: 'ריק',
+              workBucketKind: 'general',
+              classificationConfidence: 'high',
+              classificationReasons: [],
+              orderCount: 0,
+              itemLinesCount: 0,
+              totalQuantity: 0,
+              statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              orders: []
+            }]
+          }]
+        }]
+      }]
+    };
+    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'empty-wb');
+    const rawName = deriveRawName(result, 'ריק');
+    expect(rawName).toBe('');
+  });
+
+  // ── Case 5: Work bucket not found → rawName = '' (shouldn't happen in normal flow) ──
+  it('unknown work bucket name returns empty string', () => {
+    const hierarchy = makeGalilFixture();
+    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'galil-general');
+    const rawName = deriveRawName(result, 'NONEXISTENT');
+    expect(rawName).toBe('');
   });
 });
