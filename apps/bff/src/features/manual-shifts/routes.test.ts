@@ -2747,7 +2747,7 @@ describe('manual shifts routes', () => {
     it('returns 200 with shiftId, rows and totals', async () => {
       const mockRows = [
         {
-          sku: '100001',
+          sku: 'SKU-001',
           description: 'Test Product',
           category: 'Test',
           demandQty: 500,
@@ -2790,7 +2790,7 @@ describe('manual shifts routes', () => {
       expect(body).toHaveProperty('rows');
       expect(body).toHaveProperty('totals');
       expect(body.rows).toHaveLength(1);
-      expect(body.rows[0].sku).toBe('100001');
+      expect(body.rows[0].sku).toBe('SKU-001');
       expect(body.rows[0].status).toBe('ok');
       expect(body.totals.totalSkus).toBe(1);
       expect(service.getProductControl).toHaveBeenCalledWith({

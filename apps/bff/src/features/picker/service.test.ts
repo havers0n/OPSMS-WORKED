@@ -195,7 +195,9 @@ function createManualRepoMock(): ManualShiftsRepo {
       checkUnitsCount: 0,
       nonImportEventsCount: 0,
       blockReasons: []
-    }))
+    })),
+    listProductControlDemand: vi.fn(async () => []),
+    listWarehouseStockBySku: vi.fn(async () => new Map())
   };
 }
 

@@ -316,4 +316,16 @@ describe('buildProductControlRow', () => {
     expect(row.surplusQty).toBe(100);
     expect(row.status).toBe('ok');
   });
+
+  it('computeProductControlTotals handles empty rows', () => {
+    const totals = computeProductControlTotals([]);
+    expect(totals).toEqual({
+      totalSkus: 0,
+      shortageSkus: 0,
+      coveredByBondedSkus: 0,
+      partialBondedSkus: 0,
+      unresolvedSkus: 0,
+      dataIssueSkus: 0
+    });
+  });
 });

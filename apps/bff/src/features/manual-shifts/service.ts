@@ -32,9 +32,11 @@ import type {
   ProductControlResponse
 } from '@wos/domain';
 import {
+  buildProductControlRow,
   calculateSizeFromLineCount,
   canTransitionManualShiftOrderToDoneWithCheckUnits,
   canTransitionManualShiftOrderStatus,
+  computeProductControlTotals,
   deriveManualShiftLineStatus,
   getEffectiveExpectedCheckUnitsCount,
   manualShiftBulkAddInputRowSchema
@@ -1858,8 +1860,41 @@ export function createManualShiftsServiceFromRepo(
         throw manualShiftNotFound(input.shiftId);
       }
 
-      const { getMockProductControlResponse } = await import('./product-control-fixtures.js');
-      return getMockProductControlResponse(input.shiftId);
+      const demandRows = await repo.listProductControlDemand(input.shiftId);
+      if (demandRows.length === 0) {
+        return {
+          shiftId: input.shiftId,
+          generatedAt: new Date().toISOString(),
+          rows: [],
+          totals: { totalSkus: 0, shortageSkus: 0, coveredByBondedSkus: 0, partialBondedSkus: 0, unresolvedSkus: 0, dataIssueSkus: 0 }
+        };
+      }
+
+      const skus = demandRows.map((r) => r.sku);
+      const stockBySku = await repo.listWarehouseStockBySku(skus, input.tenantId);
+
+      const rows = demandRows.map((demand) => {
+        const warehouseQty = stockBySku.get(demand.sku) ?? 0;
+        return buildProductControlRow({
+          sku: demand.sku,
+          description: demand.description ?? '',
+          category: demand.category ?? '',
+          demandQty: demand.demandQty,
+          warehouseQty,
+          bondedAvailableQty: 0,
+          affectedOrdersCount: demand.orderCount,
+          affectedLinesCount: demand.lineCount
+        });
+      });
+
+      const totals = computeProductControlTotals(rows);
+
+      return {
+        shiftId: input.shiftId,
+        generatedAt: new Date().toISOString(),
+        rows,
+        totals
+      };
     }
   };
 }

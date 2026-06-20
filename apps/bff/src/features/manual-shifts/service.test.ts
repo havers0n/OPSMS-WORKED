@@ -634,7 +634,9 @@ function createRepo() {
     listShiftCheckUnits: vi.fn(async (_shiftId: string) => []),
     listShiftAshlamot: vi.fn(async (_shiftId: string) => []),
     listShiftWorkHierarchy: vi.fn(async (_shiftId: string) => ({ shiftId: '', areas: [] })),
-    listBucketProductRollup: vi.fn(async () => [])
+    listBucketProductRollup: vi.fn(async () => []),
+    listProductControlDemand: vi.fn(async (_shiftId: string) => []),
+    listWarehouseStockBySku: vi.fn(async (_sku: string[], _tenantId: string) => new Map())
   };
  
   return { repo, state };
@@ -3600,6 +3602,139 @@ describe('manual shift monthly import apply', () => {
 
     expect(repo.countMonthlyImportShiftRows).toHaveBeenCalledTimes(1);
     expect(repo.applyMonthlyImport).not.toHaveBeenCalled();
+  });
+});
+
+describe('getProductControl', () => {
+  function makeService(repo: ManualShiftsRepo) {
+    const service = createManualShiftsServiceFromRepo(repo);
+    return { repo, service };
+  }
+
+  const skuA = 'REAL-SKU-001';
+  const skuB = 'REAL-SKU-002';
+
+  it('returns demand from order items with warehouse stock lookup', async () => {
+    const { repo, service } = makeService({
+      ...createRepo().repo,
+      findShiftById: vi.fn(async () => createShift()),
+      listProductControlDemand: vi.fn(async () => [
+        { sku: skuA, description: 'Product A', category: 'Cat A', demandQty: 100, orderCount: 3, lineCount: 2 },
+        { sku: skuB, description: 'Product B', category: 'Cat B', demandQty: 50, orderCount: 1, lineCount: 1 }
+      ]),
+      listWarehouseStockBySku: vi.fn(async () => {
+        const map = new Map<string, number>();
+        map.set(skuA, 80);
+        map.set(skuB, 0);
+        return map;
+      })
+    });
+
+    const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+    expect(result.shiftId).toBe(ids.shift);
+    expect(result.generatedAt).toBeTruthy();
+    expect(result.rows).toHaveLength(2);
+
+    const rowA = result.rows.find((r) => r.sku === skuA)!;
+    expect(rowA.demandQty).toBe(100);
+    expect(rowA.warehouseQty).toBe(80);
+    expect(rowA.shortageQty).toBe(20);
+    expect(rowA.bondedAvailableQty).toBe(0);
+    expect(rowA.bondedCoverQty).toBe(0);
+    expect(rowA.finalMissingQty).toBe(20);
+    expect(rowA.surplusQty).toBe(0);
+    expect(rowA.status).toBe('unresolved');
+    expect(rowA.affectedOrdersCount).toBe(3);
+    expect(rowA.affectedLinesCount).toBe(2);
+
+    const rowB = result.rows.find((r) => r.sku === skuB)!;
+    expect(rowB.demandQty).toBe(50);
+    expect(rowB.warehouseQty).toBe(0);
+    expect(rowB.shortageQty).toBe(50);
+    expect(rowB.status).toBe('unresolved');
+    expect(rowB.affectedOrdersCount).toBe(1);
+
+    expect(result.totals.totalSkus).toBe(2);
+    expect(result.totals.shortageSkus).toBe(2);
+    expect(result.totals.unresolvedSkus).toBe(2);
+
+    expect(repo.listProductControlDemand).toHaveBeenCalledWith(ids.shift);
+    expect(repo.listWarehouseStockBySku).toHaveBeenCalled();
+  });
+
+  it('returns empty rows when no demand exists', async () => {
+    const { repo, service } = makeService({
+      ...createRepo().repo,
+      findShiftById: vi.fn(async () => createShift()),
+      listProductControlDemand: vi.fn(async () => []),
+      listWarehouseStockBySku: vi.fn(async () => new Map())
+    });
+
+    const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+    expect(result.rows).toHaveLength(0);
+    expect(result.totals.totalSkus).toBe(0);
+    expect(result.totals.shortageSkus).toBe(0);
+    expect(repo.listWarehouseStockBySku).not.toHaveBeenCalled();
+  });
+
+  it('does not return demo SKU 100001', async () => {
+    const { repo, service } = makeService({
+      ...createRepo().repo,
+      findShiftById: vi.fn(async () => createShift()),
+      listProductControlDemand: vi.fn(async () => [
+        { sku: 'REAL-SKU-100', description: 'Real Product', category: 'Real', demandQty: 10, orderCount: 1, lineCount: 1 }
+      ]),
+      listWarehouseStockBySku: vi.fn(async () => new Map())
+    });
+
+    const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+    for (const row of result.rows) {
+      expect(row.sku).not.toBe('100001');
+      expect(row.sku).not.toBe('100002');
+      expect(row.sku).not.toBe('100003');
+      expect(row.sku).not.toBe('100004');
+      expect(row.sku).not.toBe('999999');
+    }
+  });
+
+  it('rejects shift from different tenant', async () => {
+    const { repo, service } = makeService({
+      ...createRepo().repo,
+      findShiftById: vi.fn(async () => createShift({ tenantId: ids.otherTenant })),
+      listProductControlDemand: vi.fn(async () => { throw new Error('should not be called'); }),
+      listWarehouseStockBySku: vi.fn(async () => { throw new Error('should not be called'); })
+    });
+
+    await expect(
+      service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_NOT_FOUND' });
+
+    expect(repo.listProductControlDemand).not.toHaveBeenCalled();
+    expect(repo.listWarehouseStockBySku).not.toHaveBeenCalled();
+  });
+
+  it('bondedAvailableQty is 0 for all rows when no bonded source exists', async () => {
+    const { repo, service } = makeService({
+      ...createRepo().repo,
+      findShiftById: vi.fn(async () => createShift()),
+      listProductControlDemand: vi.fn(async () => [
+        { sku: 'SKU-X', description: 'Prod X', category: 'Cat', demandQty: 30, orderCount: 1, lineCount: 1 }
+      ]),
+      listWarehouseStockBySku: vi.fn(async () => new Map())
+    });
+
+    const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+    for (const row of result.rows) {
+      expect(row.bondedAvailableQty).toBe(0);
+      expect(row.bondedCoverQty).toBe(0);
+      expect(row.bondedCandidateLabel).toBeUndefined();
+      expect(row.bondedCandidateBlock).toBeUndefined();
+      expect(row.bondedCandidateSource).toBeUndefined();
+    }
   });
 });
 

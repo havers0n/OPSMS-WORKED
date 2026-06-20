@@ -28,6 +28,15 @@ import type {
   OpenAshlamaBoardItem,
   BucketProductRollupRow
 } from '@wos/domain';
+
+export type ProductControlDemandRow = {
+  sku: string;
+  description: string | null;
+  category: string | null;
+  demandQty: number;
+  orderCount: number;
+  lineCount: number;
+};
 import {
   classifyRouteFragments,
   deriveManualShiftLineStatus,
@@ -723,6 +732,8 @@ export type ManualShiftsRepo = {
     bucketName: string;
     sourceZone?: string | null;
   }): Promise<BucketProductRollupRow[]>;
+  listProductControlDemand(shiftId: string): Promise<ProductControlDemandRow[]>;
+  listWarehouseStockBySku(skus: string[], tenantId: string): Promise<Map<string, number>>;
 };
 
 export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRepo {
@@ -1772,6 +1783,167 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         if (qtyDiff !== 0) return qtyDiff;
         return a.sku.localeCompare(b.sku);
       });
+
+      return result;
+    },
+
+    async listProductControlDemand(shiftId) {
+      const PAGE_SIZE = 1000;
+      const productMap = new Map<
+        string,
+        { sku: string; description: string | null; category: string | null; totalQuantity: number; orderIds: Set<string>; lineIds: Set<string> }
+      >();
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('manual_shift_order_items')
+          .select('sku, description, category, quantity, order_id, line_id')
+          .eq('shift_id', shiftId)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) throw error;
+
+        const rows = (data ?? []) as Array<{
+          sku: string | null;
+          description: string | null;
+          category: string | null;
+          quantity: number;
+          order_id: string;
+          line_id: string | null;
+        }>;
+
+        for (const row of rows) {
+          if (!row.sku || row.sku.trim() === '') continue;
+          if (row.quantity <= 0) continue;
+
+          const key = row.sku.trim();
+          let entry = productMap.get(key);
+          if (!entry) {
+            entry = { sku: key, description: row.description, category: row.category, totalQuantity: 0, orderIds: new Set(), lineIds: new Set() };
+            productMap.set(key, entry);
+          }
+          entry.totalQuantity += row.quantity;
+          entry.orderIds.add(row.order_id);
+          if (row.line_id) {
+            entry.lineIds.add(row.line_id);
+          }
+          if (entry.description === null && row.description !== null) {
+            entry.description = row.description;
+          }
+          if (entry.category === null && row.category !== null) {
+            entry.category = row.category;
+          }
+        }
+
+        hasMore = rows.length === PAGE_SIZE;
+        offset += PAGE_SIZE;
+      }
+
+      const result: ProductControlDemandRow[] = [];
+      for (const entry of productMap.values()) {
+        result.push({
+          sku: entry.sku,
+          description: entry.description,
+          category: entry.category,
+          demandQty: entry.totalQuantity,
+          orderCount: entry.orderIds.size,
+          lineCount: entry.lineIds.size
+        });
+      }
+
+      result.sort((a, b) => {
+        const qtyDiff = b.demandQty - a.demandQty;
+        if (qtyDiff !== 0) return qtyDiff;
+        return a.sku.localeCompare(b.sku);
+      });
+
+      return result;
+    },
+
+    async listWarehouseStockBySku(skus, tenantId) {
+      if (skus.length === 0) return new Map();
+
+      const PAGE_SIZE = 1000;
+
+      // Phase 1: map SKUs to product IDs
+      const productsBySku = new Map<string, string[]>();
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const skuChunk = skus.slice(offset, offset + PAGE_SIZE);
+        if (skuChunk.length === 0) break;
+
+        const { data, error } = await supabase
+          .from('products')
+          .select('id, sku')
+          .in('sku', skuChunk);
+
+        if (error) throw error;
+
+        for (const row of (data ?? []) as Array<{ id: string; sku: string | null }>) {
+          if (!row.sku) continue;
+          const existing = productsBySku.get(row.sku);
+          if (existing) {
+            existing.push(row.id);
+          } else {
+            productsBySku.set(row.sku, [row.id]);
+          }
+        }
+
+        offset += PAGE_SIZE;
+        hasMore = skuChunk.length === PAGE_SIZE;
+      }
+
+      if (productsBySku.size === 0) return new Map();
+
+      // Phase 2: collect all unique product IDs and sum inventory_unit quantities
+      const allProductIds = new Set<string>();
+      for (const ids of productsBySku.values()) {
+        for (const id of ids) {
+          allProductIds.add(id);
+        }
+      }
+
+      const productIdArray = [...allProductIds];
+      const stockByProductId = new Map<string, number>();
+      offset = 0;
+      hasMore = true;
+
+      while (hasMore) {
+        const idChunk = productIdArray.slice(offset, offset + PAGE_SIZE);
+        if (idChunk.length === 0) break;
+
+        const { data, error } = await supabase
+          .from('inventory_unit')
+          .select('product_id, quantity')
+          .in('product_id', idChunk)
+          .eq('tenant_id', tenantId)
+          .eq('status', 'available')
+          .gt('quantity', 0);
+
+        if (error) throw error;
+
+        for (const row of (data ?? []) as Array<{ product_id: string; quantity: number }>) {
+          const current = stockByProductId.get(row.product_id) ?? 0;
+          stockByProductId.set(row.product_id, current + Number(row.quantity));
+        }
+
+        offset += PAGE_SIZE;
+        hasMore = idChunk.length === PAGE_SIZE;
+      }
+
+      // Phase 3: map back from product_id to SKU
+      const result = new Map<string, number>();
+      for (const [sku, productIds] of productsBySku) {
+        let total = 0;
+        for (const pid of productIds) {
+          total += stockByProductId.get(pid) ?? 0;
+        }
+        result.set(sku, total);
+      }
 
       return result;
     }
