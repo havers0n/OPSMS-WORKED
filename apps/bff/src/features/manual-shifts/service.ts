@@ -28,7 +28,8 @@ import type {
   ManualShiftWorkerRole,
   ManualShiftWorkHierarchyResponse,
   OpenAshlamaBoardItem,
-  BucketProductRollupResponse
+  BucketProductRollupResponse,
+  ProductControlResponse
 } from '@wos/domain';
 import {
   calculateSizeFromLineCount,
@@ -274,6 +275,7 @@ export type ManualShiftsService = {
     lineId: string;
     bucketName: string;
   }): Promise<BucketProductRollupResponse>;
+  getProductControl(input: { tenantId: string; shiftId: string }): Promise<ProductControlResponse>;
 };
 
 function formatLocalDate(date: Date, timeZone: string) {
@@ -1836,15 +1838,27 @@ export function createManualShiftsServiceFromRepo(
       const products = await repo.listBucketProductRollup({
         shiftId: input.shiftId,
         lineId: input.lineId,
-        bucketName: input.bucketName
+        bucketName: input.bucketName,
+        sourceZone: input.sourceZone
       });
 
       return {
         shiftId: input.shiftId,
         lineId: input.lineId,
         bucketName: input.bucketName,
+        sourceZone: input.sourceZone ?? null,
         products
       };
+    },
+
+    async getProductControl(input) {
+      const shift = await requireShift(input.shiftId);
+      if (shift.tenantId !== input.tenantId) {
+        throw manualShiftNotFound(input.shiftId);
+      }
+
+      const { getMockProductControlResponse } = await import('./product-control-fixtures.js');
+      return getMockProductControlResponse(input.shiftId);
     }
   };
 }

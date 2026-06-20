@@ -158,10 +158,15 @@ export function ManualOperatorWorkSection({
     return '';
   }, [selectedLineId, selectedWorkBucketName, selectedWorkBucketKey, workHierarchy, hasRouteGroups, selectedRouteGroupKey, selectedRouteGroupWorkBucket]);
 
+  const selectedSourceZone: string | undefined = useMemo(() => {
+    if (!selectedHierarchyLine) return undefined;
+    return selectedHierarchyLine.sourceZone ?? '';
+  }, [selectedHierarchyLine]);
+
   const showProductRollupDeferred = !!(hasRouteGroups && selectedRouteGroupKey && !selectedWorkBucketRawName);
 
   const { data: productRollup, isLoading: isProductRollupLoading } = useQuery({
-    ...bucketProductRollupQueryOptions(shift?.id ?? '', selectedLineId ?? '', selectedWorkBucketRawName),
+    ...bucketProductRollupQueryOptions(shift?.id ?? '', selectedLineId ?? '', selectedWorkBucketRawName, selectedSourceZone),
     enabled: !!shift?.id && !!selectedLineId && selectedWorkBucketRawName !== '' && workBucketView === 'products'
   });
 

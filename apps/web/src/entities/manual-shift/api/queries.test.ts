@@ -7,7 +7,8 @@ import {
   orderCheckUnitsQueryOptions,
   peopleSummaryQueryOptions,
   daySummaryQueryOptions,
-  shiftOpenAshlamotQueryOptions
+  shiftOpenAshlamotQueryOptions,
+  bucketProductRollupQueryOptions
 } from './queries';
 import { bffRequest } from '@/shared/api/bff/client';
 import { vi } from 'vitest';
@@ -218,5 +219,65 @@ describe('shiftOpenAshlamotQueryOptions', () => {
 
   it('is disabled when shiftId is empty', () => {
     expect(shiftOpenAshlamotQueryOptions('').enabled).toBe(false);
+  });
+});
+
+describe('bucketProductRollupQueryOptions', () => {
+  const LINE_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+  it('uses the bucket product rollup query key', () => {
+    const opts = bucketProductRollupQueryOptions(SHIFT_A, LINE_A, 'סלולר');
+    expect(opts.queryKey).toEqual([
+      'manual-shift', 'bucket-product-rollup', SHIFT_A, LINE_A, 'סלולר', '__no_source_zone__'
+    ]);
+  });
+
+  it('includes sourceZone in query key when provided', () => {
+    const opts = bucketProductRollupQueryOptions(SHIFT_A, LINE_A, 'סלולר', 'שפלה אמצעי');
+    expect(opts.queryKey).toEqual([
+      'manual-shift', 'bucket-product-rollup', SHIFT_A, LINE_A, 'סלולר', 'שפלה אמצעי'
+    ]);
+  });
+
+  it('includes empty sourceZone sentinel in query key for unknown zone', () => {
+    const opts = bucketProductRollupQueryOptions(SHIFT_A, LINE_A, 'כללי', '');
+    expect(opts.queryKey).toEqual([
+      'manual-shift', 'bucket-product-rollup', SHIFT_A, LINE_A, 'כללי', ''
+    ]);
+  });
+
+  it('calls product-rollup endpoint in queryFn', async () => {
+    const queryFn = bucketProductRollupQueryOptions(SHIFT_A, LINE_A, 'סלולר').queryFn;
+    expect(queryFn).toBeTypeOf('function');
+    await queryFn?.({} as never);
+    expect(bffRequest).toHaveBeenCalledWith(
+      `/api/manual-shifts/${SHIFT_A}/buckets/product-rollup?lineId=${LINE_A}&bucketName=%D7%A1%D7%9C%D7%95%D7%9C%D7%A8`
+    );
+  });
+
+  it('includes sourceZone in fetch URL when provided', async () => {
+    const queryFn = bucketProductRollupQueryOptions(SHIFT_A, LINE_A, 'סלולר', 'שפלה אמצעי').queryFn;
+    expect(queryFn).toBeTypeOf('function');
+    await queryFn?.({} as never);
+    expect(bffRequest).toHaveBeenCalledWith(
+      `/api/manual-shifts/${SHIFT_A}/buckets/product-rollup?lineId=${LINE_A}&bucketName=%D7%A1%D7%9C%D7%95%D7%9C%D7%A8&sourceZone=%D7%A9%D7%A4%D7%9C%D7%94+%D7%90%D7%9E%D7%A6%D7%A2%D7%99`
+    );
+  });
+
+  it('includes empty sourceZone in fetch URL when unknown', async () => {
+    const queryFn = bucketProductRollupQueryOptions(SHIFT_A, LINE_A, 'כללי', '').queryFn;
+    expect(queryFn).toBeTypeOf('function');
+    await queryFn?.({} as never);
+    expect(bffRequest).toHaveBeenCalledWith(
+      `/api/manual-shifts/${SHIFT_A}/buckets/product-rollup?lineId=${LINE_A}&bucketName=%D7%9B%D7%9C%D7%9C%D7%99&sourceZone=`
+    );
+  });
+
+  it('is disabled when shiftId is empty', () => {
+    expect(bucketProductRollupQueryOptions('', LINE_A, '').enabled).toBe(false);
+  });
+
+  it('is disabled when lineId is empty', () => {
+    expect(bucketProductRollupQueryOptions(SHIFT_A, '', '').enabled).toBe(false);
   });
 });

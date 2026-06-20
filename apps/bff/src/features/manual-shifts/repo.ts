@@ -721,6 +721,7 @@ export type ManualShiftsRepo = {
     shiftId: string;
     lineId: string;
     bucketName: string;
+    sourceZone?: string | null;
   }): Promise<BucketProductRollupRow[]>;
 };
 
@@ -1680,7 +1681,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       return buildShiftWorkHierarchy(shiftId, lineRows, orders, rollups, checkUnits, ashlamot, items);
     },
 
-    async listBucketProductRollup({ shiftId, lineId, bucketName }) {
+    async listBucketProductRollup({ shiftId, lineId, bucketName, sourceZone }) {
       let ordersQuery = supabase
         .from('manual_shift_orders')
         .select('id')
@@ -1692,6 +1693,14 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         ordersQuery = ordersQuery.is('point_name', null);
       } else {
         ordersQuery = ordersQuery.eq('point_name', bucketName);
+      }
+
+      if (sourceZone !== undefined) {
+        if (sourceZone === '' || sourceZone === null) {
+          ordersQuery = ordersQuery.is('source_zone', null);
+        } else {
+          ordersQuery = ordersQuery.eq('source_zone', sourceZone);
+        }
       }
 
       const { data: bucketOrders, error: ordersError } = await ordersQuery;

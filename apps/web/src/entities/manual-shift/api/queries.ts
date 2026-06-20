@@ -38,8 +38,8 @@ export const manualShiftKeys = {
   bindableUsers: () => [...manualShiftKeys.all, 'bindable-users'] as const,
   monthlyReplaceSafety: (shiftId: string) =>
     [...manualShiftKeys.all, 'monthly-replace-safety', shiftId] as const,
-  bucketProductRollup: (shiftId: string, lineId: string, bucketName: string) =>
-    [...manualShiftKeys.all, 'bucket-product-rollup', shiftId, lineId, bucketName] as const
+  bucketProductRollup: (shiftId: string, lineId: string, bucketName: string, sourceZone?: string) =>
+    [...manualShiftKeys.all, 'bucket-product-rollup', shiftId, lineId, bucketName, sourceZone ?? '__no_source_zone__'] as const
 };
 
 async function fetchTodayShift(): Promise<ManualShiftTodayResponse> {
@@ -239,9 +239,13 @@ export function monthlyReplaceSafetyQueryOptions(shiftId: string) {
 async function fetchBucketProductRollup(
   shiftId: string,
   lineId: string,
-  bucketName: string
+  bucketName: string,
+  sourceZone?: string
 ): Promise<BucketProductRollupResponse> {
   const params = new URLSearchParams({ lineId, bucketName });
+  if (sourceZone !== undefined) {
+    params.append('sourceZone', sourceZone);
+  }
   return bffRequest<BucketProductRollupResponse>(
     `/api/manual-shifts/${shiftId}/buckets/product-rollup?${params}`
   );
@@ -250,11 +254,12 @@ async function fetchBucketProductRollup(
 export function bucketProductRollupQueryOptions(
   shiftId: string,
   lineId: string,
-  bucketName: string
+  bucketName: string,
+  sourceZone?: string
 ) {
   return queryOptions({
-    queryKey: manualShiftKeys.bucketProductRollup(shiftId, lineId, bucketName),
-    queryFn: () => fetchBucketProductRollup(shiftId, lineId, bucketName),
+    queryKey: manualShiftKeys.bucketProductRollup(shiftId, lineId, bucketName, sourceZone),
+    queryFn: () => fetchBucketProductRollup(shiftId, lineId, bucketName, sourceZone),
     enabled: !!shiftId && !!lineId,
     staleTime: 10_000
   });

@@ -61,3 +61,4 @@ export * from './operations/picking-planning-pipeline';
 export * from './operations/product-location-role';
 export * from './operations/wave';
 export * from './operations/manual-shift-route-classification';
+export * from './operations/product-control';
