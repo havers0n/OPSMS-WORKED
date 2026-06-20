@@ -1,6 +1,25 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { ProductControlTab } from './product-control-tab';
+import { CoverageStatusBadge } from '@/entities/product-control/coverage-status-badge';
+import type { ProductControlStatus } from '@/entities/product-control/product-control-types';
+
+describe('CoverageStatusBadge', () => {
+  const cases: { status: ProductControlStatus; expected: string }[] = [
+    { status: 'ok', expected: 'תקין' },
+    { status: 'covered_by_bonded', expected: 'מכוסה מבונדד' },
+    { status: 'partial_bonded', expected: 'כיסוי חלקי' },
+    { status: 'unresolved', expected: 'חוסר לא פתור' },
+    { status: 'data_issue', expected: 'בעיית נתונים' },
+  ];
+
+  for (const { status, expected } of cases) {
+    it(`renders "${expected}" for status "${status}"`, () => {
+      render(<CoverageStatusBadge status={status} />);
+      expect(screen.getByText(expected)).toBeTruthy();
+    });
+  }
+});
 
 describe('ProductControlTab', () => {
   it('renders the main title', () => {
@@ -67,8 +86,74 @@ describe('ProductControlTab', () => {
   it('shows shortage values only for rows with shortage', () => {
     render(<ProductControlTab />);
 
-    // 100001 has no shortage - should show em dash
     const emDashes = screen.getAllByText('—');
     expect(emDashes.length).toBeGreaterThan(0);
+  });
+
+  it('opens detail panel when clicking a product row', () => {
+    render(<ProductControlTab />);
+
+    expect(screen.queryByText('פרטי מוצר')).toBeNull();
+
+    fireEvent.click(screen.getByText('100002'));
+
+    expect(screen.getByText('פרטי מוצר')).toBeTruthy();
+    expect(screen.getByText('כמויות')).toBeTruthy();
+  });
+
+  it('detail panel shows selected SKU in header', () => {
+    render(<ProductControlTab />);
+
+    fireEvent.click(screen.getByText('100003'));
+
+    const skuElements = screen.getAllByText('100003');
+    expect(skuElements.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('detail panel shows summary cards', () => {
+    render(<ProductControlTab />);
+
+    fireEvent.click(screen.getByText('100002'));
+
+    expect(screen.getByText('השפעת חוסר')).toBeTruthy();
+    expect(screen.getByText('זמין לבונדד')).toBeTruthy();
+    expect(screen.getByText('מכסה מבונדד')).toBeTruthy();
+  });
+
+  it('detail panel shows fixture notes when present', () => {
+    render(<ProductControlTab />);
+
+    fireEvent.click(screen.getByText('100002'));
+
+    expect(screen.getByText(/בוצעה הזמנת רכש חלופית/)).toBeTruthy();
+  });
+
+  it('closes detail panel when clicking close button', () => {
+    render(<ProductControlTab />);
+
+    fireEvent.click(screen.getByText('100002'));
+    expect(screen.getByText('פרטי מוצר')).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText('סגור פרטי מוצר'));
+    expect(screen.queryByText('פרטי מוצר')).toBeNull();
+  });
+
+  it('toggles row selection on re-click', () => {
+    render(<ProductControlTab />);
+
+    fireEvent.click(screen.getByText('100002'));
+    expect(screen.getByText('פרטי מוצר')).toBeTruthy();
+
+    const skuCells = screen.getAllByText('100002');
+    fireEvent.click(skuCells[0]);
+    expect(screen.queryByText('פרטי מוצר')).toBeNull();
+  });
+
+  it('does not open detail panel for data_issue row', () => {
+    render(<ProductControlTab />);
+
+    fireEvent.click(screen.getByText('999999'));
+
+    expect(screen.queryByText('פרטי מוצר')).toBeNull();
   });
 });

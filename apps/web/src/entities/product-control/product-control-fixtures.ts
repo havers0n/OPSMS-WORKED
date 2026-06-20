@@ -19,6 +19,10 @@ function makeRow(data: {
   warehouseQty: number;
   bondedAvailableQty: number;
   status?: ProductControlStatus;
+  affectedLinesCount?: number;
+  affectedOrdersCount?: number;
+  bondedCandidateLabel?: string;
+  notes?: string;
 }): ProductControlRow {
   const shortageQty = Math.max(0, data.demandQty - data.warehouseQty);
   const bondedCoverQty = Math.min(shortageQty, data.bondedAvailableQty);
@@ -51,6 +55,10 @@ export const productControlFixtures: ProductControlRow[] = [
     demandQty: 200,
     warehouseQty: 50,
     bondedAvailableQty: 200,
+    affectedLinesCount: 8,
+    affectedOrdersCount: 3,
+    bondedCandidateLabel: 'מחסן בונדד A — מדף 12',
+    notes: 'בוצעה הזמנת רכש חלופית לספק משנה',
   }),
   makeRow({
     sku: '100003',
@@ -59,6 +67,9 @@ export const productControlFixtures: ProductControlRow[] = [
     demandQty: 300,
     warehouseQty: 100,
     bondedAvailableQty: 100,
+    affectedLinesCount: 4,
+    affectedOrdersCount: 2,
+    bondedCandidateLabel: 'מחסן בונדד B — מדף 7',
   }),
   makeRow({
     sku: '100004',
@@ -67,6 +78,8 @@ export const productControlFixtures: ProductControlRow[] = [
     demandQty: 400,
     warehouseQty: 80,
     bondedAvailableQty: 0,
+    affectedLinesCount: 12,
+    affectedOrdersCount: 5,
   }),
   {
     sku: '999999',
@@ -80,5 +93,8 @@ export const productControlFixtures: ProductControlRow[] = [
     finalMissingQty: 0,
     surplusQty: 0,
     status: 'data_issue',
+    affectedLinesCount: 0,
+    affectedOrdersCount: 0,
+    notes: 'ביקורת נתונים נדרשת: כמות דרישה שלילית',
   },
 ];

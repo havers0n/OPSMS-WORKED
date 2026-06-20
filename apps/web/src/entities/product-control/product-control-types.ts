@@ -17,4 +17,9 @@ export interface ProductControlRow {
   finalMissingQty: number;
   surplusQty: number;
   status: ProductControlStatus;
+
+  affectedLinesCount?: number;
+  affectedOrdersCount?: number;
+  bondedCandidateLabel?: string;
+  notes?: string;
 }
