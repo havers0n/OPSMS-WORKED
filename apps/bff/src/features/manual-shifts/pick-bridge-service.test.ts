@@ -153,6 +153,7 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
     listOrderCheckUnits: vi.fn(async () => []),
     listOrderAshlamot: vi.fn(async () => []),
     listOpenShiftAshlamot: vi.fn(async () => []),
+    listShiftOrderItems: vi.fn(async () => []),
     countMonthlyImportShiftRows: vi.fn(async ({ shiftId }) => ({
       shiftId,
       activeLinesCount: 0,

@@ -715,6 +715,7 @@ export type ManualShiftsRepo = {
   listShiftErrors(shiftId: string): Promise<ManualShiftOrderError[]>;
   listShiftCheckUnits(shiftId: string): Promise<ManualShiftOrderCheckUnit[]>;
   listShiftAshlamot(shiftId: string): Promise<ManualShiftOrderAshlama[]>;
+  listShiftOrderItems(shiftId: string): Promise<ManualShiftOrderItem[]>;
   listShiftWorkHierarchy(shiftId: string): Promise<ManualShiftWorkHierarchyResponse>;
   listBucketProductRollup(input: {
     shiftId: string;
@@ -1650,12 +1651,25 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       return ((data ?? []) as ManualShiftOrderAshlamaRow[]).map(mapAshlamaRow);
     },
 
+    async listShiftOrderItems(shiftId) {
+      const { data, error } = await supabase
+        .from('manual_shift_order_items')
+        .select(itemColumns)
+        .eq('shift_id', shiftId)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      return ((data ?? []) as ManualShiftOrderItemRow[]).map(mapOrderItemRow);
+    },
+
     async listShiftWorkHierarchy(shiftId) {
-      const [lineRows, orders, checkUnits, ashlamot] = await Promise.all([
+      const [lineRows, orders, checkUnits, ashlamot, items] = await Promise.all([
         this.listShiftLines(shiftId),
         this.listShiftOrders(shiftId),
         this.listShiftCheckUnits(shiftId),
-        this.listShiftAshlamot(shiftId)
+        this.listShiftAshlamot(shiftId),
+        this.listShiftOrderItems(shiftId)
       ]);
 
       const orderIds = orders.map((o) => o.id);
@@ -1663,7 +1677,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         ? await this.listOrdersItemRollups(orderIds)
         : new Map<string, { lineCount: number; totalQuantity: number }>();
 
-      return buildShiftWorkHierarchy(shiftId, lineRows, orders, rollups, checkUnits, ashlamot);
+      return buildShiftWorkHierarchy(shiftId, lineRows, orders, rollups, checkUnits, ashlamot, items);
     },
 
     async listBucketProductRollup({ shiftId, lineId, bucketName }) {
@@ -1892,6 +1906,54 @@ export function inferManualShiftOrderSourceZone(
   return zones.length === 1 ? zones[0] : null;
 }
 
+const UNKNOWN_SOURCE_ZONE_KEY = '__unknown_source_zone__';
+const UNKNOWN_SOURCE_ZONE_DISPLAY_NAME = 'ללא איזור';
+
+function normalizeSourceZone(sourceZone: string | null | undefined): string | null {
+  return normalizeOptionalString(sourceZone);
+}
+
+function sourceZoneKey(sourceZone: string | null): string {
+  return sourceZone ?? UNKNOWN_SOURCE_ZONE_KEY;
+}
+
+function sourceZoneDisplayName(sourceZone: string | null): string {
+  return sourceZone ?? UNKNOWN_SOURCE_ZONE_DISPLAY_NAME;
+}
+
+function buildEffectiveSourceZoneLookup(input: {
+  orders: ManualShiftOrder[];
+  items: ManualShiftOrderItem[];
+}): Map<string, string | null> {
+  const itemZonesByOrderId = new Map<string, Set<string>>();
+  for (const item of input.items) {
+    const zone = normalizeSourceZone(item.zone);
+    if (!zone) continue;
+    const zones = itemZonesByOrderId.get(item.orderId) ?? new Set<string>();
+    zones.add(zone);
+    itemZonesByOrderId.set(item.orderId, zones);
+  }
+
+  const lookup = new Map<string, string | null>();
+  for (const order of input.orders) {
+    const directZone = normalizeSourceZone(order.sourceZone ?? null);
+    if (directZone) {
+      lookup.set(order.id, directZone);
+      continue;
+    }
+
+    const inferredZones = itemZonesByOrderId.get(order.id);
+    if (inferredZones && inferredZones.size === 1) {
+      lookup.set(order.id, inferredZones.values().next().value ?? null);
+      continue;
+    }
+
+    lookup.set(order.id, null);
+  }
+
+  return lookup;
+}
+
 export function buildManualShiftSourceZoneDiagnostics(input: {
   lines: ManualShiftLine[];
   orders: ManualShiftOrder[];
@@ -2072,7 +2134,8 @@ function buildRouteGroupsForLine(
   lineOrders: ManualShiftOrder[],
   rollups: Map<string, { lineCount: number; totalQuantity: number }>,
   checkUnitsByOrderId: Map<string, ManualShiftOrderCheckUnit[]>,
-  ashlamotByOrderId: Map<string, ManualShiftOrderAshlama[]>
+  ashlamotByOrderId: Map<string, ManualShiftOrderAshlama[]>,
+  sourceZone: string | null
 ): ManualShiftWorkHierarchyRouteGroup[] {
   const fragments: RouteFragmentInput[] = lineOrders.map((o) => ({
     orderNumber: o.orderNumber ?? '',
@@ -2176,6 +2239,7 @@ function buildRouteGroupsForLine(
           orderNumber: o.orderNumber,
           customerName: o.customerName,
           pointName: o.pointName,
+          sourceZone,
           status: o.status,
           lineCount: ru ? ru.lineCount : 0,
           totalQuantity,
@@ -2229,7 +2293,8 @@ export function buildShiftWorkHierarchy(
   orders: ManualShiftOrder[],
   rollups: Map<string, { lineCount: number; totalQuantity: number }>,
   checkUnits: ManualShiftOrderCheckUnit[],
-  ashlamot: ManualShiftOrderAshlama[]
+  ashlamot: ManualShiftOrderAshlama[],
+  items: ManualShiftOrderItem[] = []
 ): ManualShiftWorkHierarchyResponse {
   const checkUnitsByOrderId = new Map<string, ManualShiftOrderCheckUnit[]>();
   for (const cu of checkUnits) {
@@ -2245,6 +2310,8 @@ export function buildShiftWorkHierarchy(
     ashlamotByOrderId.set(a.orderId, list);
   }
 
+  const effectiveSourceZoneByOrderId = buildEffectiveSourceZoneLookup({ orders, items });
+
   const ordersByLineId = new Map<string, ManualShiftOrder[]>();
   for (const order of orders) {
     const list = ordersByLineId.get(order.lineId) ?? [];
@@ -2252,93 +2319,168 @@ export function buildShiftWorkHierarchy(
     ordersByLineId.set(order.lineId, list);
   }
 
-  const lines: ManualShiftWorkHierarchyLine[] = [];
+  type LineProjectionRecord = {
+    sortOrder: number;
+    createdAt: string;
+    line: ManualShiftWorkHierarchyLine;
+  };
+
+  const areasMap = new Map<string, {
+    areaName: string | null;
+    displayName: string;
+    lines: LineProjectionRecord[];
+  }>();
+
   for (const row of lineRows) {
     const lineOrders = ordersByLineId.get(row.id) ?? [];
+    const ordersBySourceZone = new Map<string, ManualShiftOrder[]>();
 
-    // ── Legacy buckets (unchanged) ──
-    const bucketsMap = new Map<string | null, ManualShiftOrder[]>();
     for (const order of lineOrders) {
-      const bucketName = order.pointName;
-      const list = bucketsMap.get(bucketName) ?? [];
+      const sourceZone = effectiveSourceZoneByOrderId.get(order.id) ?? null;
+      const key = sourceZoneKey(sourceZone);
+      const list = ordersBySourceZone.get(key) ?? [];
       list.push(order);
-      bucketsMap.set(bucketName, list);
+      ordersBySourceZone.set(key, list);
     }
 
-    const buckets: ManualShiftWorkHierarchyBucket[] = [];
-    for (const [bucketName, bucketOrders] of bucketsMap) {
-      const hierarchyOrders: ManualShiftWorkHierarchyOrder[] = bucketOrders.map((o) => {
-        const rollup = rollups.get(o.id);
-        const totalQuantity = rollup ? rollup.totalQuantity : 0;
-        const orderCheckUnits = checkUnitsByOrderId.get(o.id) ?? [];
-        const orderAshlamot = ashlamotByOrderId.get(o.id) ?? [];
-        return {
-          orderId: o.id,
-          orderNumber: o.orderNumber,
-          customerName: o.customerName,
-          pointName: o.pointName,
-          status: o.status,
-          lineCount: rollup ? rollup.lineCount : 0,
-          totalQuantity,
-          hasAshlama: orderAshlamot.some((a) => a.status === 'open'),
-          hasCheckUnits: orderCheckUnits.length > 0
-        };
-      });
-
-      buckets.push({
-        bucketName,
-        displayName: bucketName ?? 'קו ראשי',
-        totalOrders: bucketOrders.length,
-        totalQuantity: hierarchyOrders.reduce((s, o) => s + o.totalQuantity, 0),
-        statusBreakdown: computeStatusBreakdown(bucketOrders),
-        orders: hierarchyOrders
-      });
+    if (ordersBySourceZone.size === 0) {
+      ordersBySourceZone.set(UNKNOWN_SOURCE_ZONE_KEY, []);
     }
 
-    buckets.sort((a, b) => {
-      if (a.bucketName === null) return -1;
-      if (b.bucketName === null) return 1;
-      return a.bucketName.localeCompare(b.bucketName);
+    const sourceZoneEntries = Array.from(ordersBySourceZone.entries()).sort(([a], [b]) => {
+      if (a === UNKNOWN_SOURCE_ZONE_KEY) return -1;
+      if (b === UNKNOWN_SOURCE_ZONE_KEY) return 1;
+      return sourceZoneDisplayName(a === UNKNOWN_SOURCE_ZONE_KEY ? null : a).localeCompare(
+        sourceZoneDisplayName(b === UNKNOWN_SOURCE_ZONE_KEY ? null : b),
+        'he'
+      );
     });
 
-    // ── Route groups (RG2) ──
-    const routeGroups = buildRouteGroupsForLine(
-      lineOrders, rollups, checkUnitsByOrderId, ashlamotByOrderId
-    );
+    for (const [sourceZoneKeyValue, scopedOrders] of sourceZoneEntries) {
+      const sourceZone = sourceZoneKeyValue === UNKNOWN_SOURCE_ZONE_KEY ? null : sourceZoneKeyValue;
 
-    lines.push({
-      lineId: row.id,
-      lineGroupName: row.name,
-      distributionArea: row.distribution_area,
-      status: deriveManualShiftLineStatus(lineOrders),
-      totalBuckets: buckets.length,
-      totalOrders: lineOrders.length,
-      totalQuantity: buckets.reduce((s, b) => s + b.totalQuantity, 0),
-      statusBreakdown: computeStatusBreakdown(lineOrders),
-      buckets,
-      routeGroups
-    });
-  }
+      const bucketsMap = new Map<string | null, ManualShiftOrder[]>();
+      for (const order of scopedOrders) {
+        const bucketName = order.pointName;
+        const list = bucketsMap.get(bucketName) ?? [];
+        list.push(order);
+        bucketsMap.set(bucketName, list);
+      }
 
-  const areasMap = new Map<string | null, ManualShiftWorkHierarchyLine[]>();
-  for (const line of lines) {
-    const area = line.distributionArea;
-    const list = areasMap.get(area) ?? [];
-    list.push(line);
-    areasMap.set(area, list);
+      const buckets: ManualShiftWorkHierarchyBucket[] = [];
+      for (const [bucketName, bucketOrders] of bucketsMap) {
+        const hierarchyOrders: ManualShiftWorkHierarchyOrder[] = bucketOrders.map((o) => {
+          const rollup = rollups.get(o.id);
+          const totalQuantity = rollup ? rollup.totalQuantity : 0;
+          const orderCheckUnits = checkUnitsByOrderId.get(o.id) ?? [];
+          const orderAshlamot = ashlamotByOrderId.get(o.id) ?? [];
+          return {
+            orderId: o.id,
+            orderNumber: o.orderNumber,
+            customerName: o.customerName,
+            pointName: o.pointName,
+            sourceZone,
+            status: o.status,
+            lineCount: rollup ? rollup.lineCount : 0,
+            totalQuantity,
+            hasAshlama: orderAshlamot.some((a) => a.status === 'open'),
+            hasCheckUnits: orderCheckUnits.length > 0
+          };
+        });
+
+        buckets.push({
+          bucketName,
+          displayName: bucketName ?? 'קו ראשי',
+          totalOrders: bucketOrders.length,
+          totalQuantity: hierarchyOrders.reduce((s, o) => s + o.totalQuantity, 0),
+          statusBreakdown: computeStatusBreakdown(bucketOrders),
+          orders: hierarchyOrders
+        });
+      }
+
+      buckets.sort((a, b) => {
+        if (a.bucketName === null) return -1;
+        if (b.bucketName === null) return 1;
+        return a.bucketName.localeCompare(b.bucketName, 'he');
+      });
+
+      const routeGroups = buildRouteGroupsForLine(
+        scopedOrders,
+        rollups,
+        checkUnitsByOrderId,
+        ashlamotByOrderId,
+        sourceZone
+      );
+
+      const itemLinesCount = scopedOrders.reduce((s, order) => {
+        const rollup = rollups.get(order.id);
+        return s + (rollup ? rollup.lineCount : 0);
+      }, 0);
+
+      const line: ManualShiftWorkHierarchyLine = {
+        lineId: row.id,
+        areaLineKey: `${sourceZoneKeyValue}\u0001${row.id}`,
+        lineGroupName: row.name,
+        distributionArea: row.distribution_area,
+        sourceZone,
+        status: deriveManualShiftLineStatus(scopedOrders),
+        totalBuckets: buckets.length,
+        totalOrders: scopedOrders.length,
+        totalQuantity: buckets.reduce((s, b) => s + b.totalQuantity, 0),
+        itemLinesCount,
+        statusBreakdown: computeStatusBreakdown(scopedOrders),
+        buckets,
+        routeGroups
+      };
+
+      const areaEntry = areasMap.get(sourceZoneKeyValue) ?? {
+        areaName: sourceZone,
+        displayName: sourceZoneDisplayName(sourceZone),
+        lines: []
+      };
+      areaEntry.lines.push({
+        sortOrder: row.sort_order,
+        createdAt: row.created_at,
+        line
+      });
+      areasMap.set(sourceZoneKeyValue, areaEntry);
+    }
   }
 
   const areas: ManualShiftWorkHierarchyArea[] = [];
-  for (const [areaName, areaLines] of areasMap) {
-    const areaOrders = areaLines.flatMap((l) => l.buckets.flatMap((b) => b.orders));
+  for (const [, areaEntry] of areasMap) {
+    const sortedAreaLines = [...areaEntry.lines].sort((a, b) =>
+      a.sortOrder - b.sortOrder ||
+      a.createdAt.localeCompare(b.createdAt) ||
+      a.line.lineGroupName.localeCompare(b.line.lineGroupName, 'he') ||
+      a.line.areaLineKey!.localeCompare(b.line.areaLineKey!)
+    );
+    const areaLines = sortedAreaLines.map((entry) => entry.line);
+    const statusBreakdown = areaLines.reduce((acc, line) => ({
+      queued: acc.queued + line.statusBreakdown.queued,
+      picking: acc.picking + line.statusBreakdown.picking,
+      waitingCheck: acc.waitingCheck + line.statusBreakdown.waitingCheck,
+      returned: acc.returned + line.statusBreakdown.returned,
+      done: acc.done + line.statusBreakdown.done,
+      blocked: (acc.blocked ?? 0) + (line.statusBreakdown.blocked ?? 0)
+    }), { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 } as {
+      queued: number;
+      picking: number;
+      waitingCheck: number;
+      returned: number;
+      done: number;
+      blocked?: number;
+    });
+
     areas.push({
-      areaName,
-      displayName: areaName ?? 'ללא איזור',
+      areaName: areaEntry.areaName,
+      displayName: areaEntry.displayName,
       totalLines: areaLines.length,
       totalBuckets: areaLines.reduce((s, l) => s + l.totalBuckets, 0),
-      totalOrders: areaOrders.length,
+      totalOrders: areaLines.reduce((s, l) => s + l.totalOrders, 0),
       totalQuantity: areaLines.reduce((s, l) => s + l.totalQuantity, 0),
-      statusBreakdown: computeStatusBreakdown(areaOrders.map((o) => ({ status: o.status }))),
+      itemLinesCount: areaLines.reduce((s, l) => s + (l.itemLinesCount ?? 0), 0),
+      statusBreakdown,
       lines: areaLines
     });
   }
@@ -2346,7 +2488,7 @@ export function buildShiftWorkHierarchy(
   areas.sort((a, b) => {
     if (a.areaName === null) return -1;
     if (b.areaName === null) return 1;
-    return a.areaName.localeCompare(b.areaName);
+    return a.areaName.localeCompare(b.areaName, 'he');
   });
 
   return {

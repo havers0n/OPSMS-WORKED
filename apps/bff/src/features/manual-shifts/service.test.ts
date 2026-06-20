@@ -345,6 +345,7 @@ function createRepo() {
     listLineOrders: vi.fn(async (lineId: string) => {
       return state.orders.filter((order) => order.lineId === lineId && order.deletedAt === null);
     }),
+    listShiftOrderItems: vi.fn(async () => []),
     findOrderById: vi.fn(async (orderId: string) => {
       return state.orders.find((order) => order.id === orderId) ?? null;
     }),

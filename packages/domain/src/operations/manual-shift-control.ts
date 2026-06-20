@@ -545,6 +545,7 @@ export const manualShiftWorkHierarchyOrderSchema = z.object({
   orderNumber: z.string().nullable(),
   customerName: z.string().nullable(),
   pointName: z.string().nullable(),
+  sourceZone: z.string().nullable().optional(),
   status: manualShiftOrderStatusSchema,
   lineCount: z.number().min(0),
   totalQuantity: z.number().min(0),
@@ -596,12 +597,15 @@ export type ManualShiftWorkHierarchyRouteGroup = z.infer<typeof manualShiftWorkH
 
 export const manualShiftWorkHierarchyLineSchema = z.object({
   lineId: z.string().uuid(),
+  areaLineKey: z.string().optional(),
   lineGroupName: z.string(),
   distributionArea: z.string().nullable(),
+  sourceZone: z.string().nullable().optional(),
   status: manualShiftLineStatusSchema,
   totalBuckets: z.number().int().min(0),
   totalOrders: z.number().int().min(0),
   totalQuantity: z.number().min(0),
+  itemLinesCount: z.number().int().min(0).optional(),
   statusBreakdown: manualShiftOrderStatusBreakdownSchema,
   buckets: z.array(manualShiftWorkHierarchyBucketSchema),
   routeGroups: z.array(manualShiftWorkHierarchyRouteGroupSchema).optional()
@@ -615,6 +619,7 @@ export const manualShiftWorkHierarchyAreaSchema = z.object({
   totalBuckets: z.number().int().min(0),
   totalOrders: z.number().int().min(0),
   totalQuantity: z.number().min(0),
+  itemLinesCount: z.number().int().min(0).optional(),
   statusBreakdown: manualShiftOrderStatusBreakdownSchema,
   lines: z.array(manualShiftWorkHierarchyLineSchema)
 });

@@ -130,8 +130,8 @@ describe('buildShiftWorkHierarchy', () => {
   it('groups orders by pointName (legacy) into work buckets within a line', () => {
     const lineRows = [makeLineRow()];
     const orders = [
-      makeOrder({ id: ORDER_1, pointName: 'סלולר', orderNumber: 'SO-1', customerName: 'לקוח א' }),
-      makeOrder({ id: ORDER_2, pointName: 'סלולר', orderNumber: 'SO-2', customerName: 'לקוח א' })
+      makeOrder({ id: ORDER_1, pointName: 'סלולר', orderNumber: 'SO-1', customerName: 'לקוח א', sourceZone: 'דרום' }),
+      makeOrder({ id: ORDER_2, pointName: 'סלולר', orderNumber: 'SO-2', customerName: 'לקוח א', sourceZone: 'דרום' })
     ];
     const rollups = new Map<string, { lineCount: number; totalQuantity: number }>();
     rollups.set(ORDER_1, { lineCount: 0, totalQuantity: 10 });
@@ -152,8 +152,8 @@ describe('buildShiftWorkHierarchy', () => {
   it('separates different pointNames into different work buckets', () => {
     const lineRows = [makeLineRow()];
     const orders = [
-      makeOrder({ id: ORDER_1, pointName: 'סלולר', orderNumber: 'SO-1', customerName: 'פז השקמה' }),
-      makeOrder({ id: ORDER_2, pointName: 'פז השקמה', orderNumber: 'SO-2', customerName: 'דלק' })
+      makeOrder({ id: ORDER_1, pointName: 'סלולר', orderNumber: 'SO-1', customerName: 'פז השקמה', sourceZone: 'דרום' }),
+      makeOrder({ id: ORDER_2, pointName: 'פז השקמה', orderNumber: 'SO-2', customerName: 'דלק', sourceZone: 'דרום' })
     ];
     const rollups = new Map<string, { lineCount: number; totalQuantity: number }>();
     rollups.set(ORDER_1, { lineCount: 0, totalQuantity: 10 });
@@ -169,8 +169,8 @@ describe('buildShiftWorkHierarchy', () => {
   it('same orderNumber across different pointNames = separate bucket fragments', () => {
     const lineRows = [makeLineRow()];
     const orders = [
-      makeOrder({ id: ORDER_1, pointName: 'סלולר', orderNumber: 'SO-1', customerName: 'לקוח א' }),
-      makeOrder({ id: ORDER_2, pointName: 'פז השקמה', orderNumber: 'SO-1', customerName: 'לקוח א' })
+      makeOrder({ id: ORDER_1, pointName: 'סלולר', orderNumber: 'SO-1', customerName: 'לקוח א', sourceZone: 'דרום' }),
+      makeOrder({ id: ORDER_2, pointName: 'פז השקמה', orderNumber: 'SO-1', customerName: 'לקוח א', sourceZone: 'דרום' })
     ];
     const rollups = new Map<string, { lineCount: number; totalQuantity: number }>();
     rollups.set(ORDER_1, { lineCount: 0, totalQuantity: 10 });
@@ -200,8 +200,8 @@ describe('buildShiftWorkHierarchy', () => {
       makeLineRow({ id: LINE_B, name: 'קו צפון', distribution_area: 'צפון' })
     ];
     const orders = [
-      makeOrder({ id: ORDER_1, lineId: LINE_A, pointName: 'סלולר', orderNumber: 'SO-1' }),
-      makeOrder({ id: ORDER_2, lineId: LINE_B, pointName: 'מרכז', orderNumber: 'SO-2' })
+      makeOrder({ id: ORDER_1, lineId: LINE_A, pointName: 'סלולר', orderNumber: 'SO-1', sourceZone: 'דרום' }),
+      makeOrder({ id: ORDER_2, lineId: LINE_B, pointName: 'מרכז', orderNumber: 'SO-2', sourceZone: 'צפון' })
     ];
     const rollups = new Map<string, { lineCount: number; totalQuantity: number }>();
     rollups.set(ORDER_1, { lineCount: 0, totalQuantity: 5 });
@@ -216,7 +216,7 @@ describe('buildShiftWorkHierarchy', () => {
 
   it('line with null distributionArea is grouped under "ללא איזור"', () => {
     const lineRows = [makeLineRow({ distribution_area: null })];
-    const orders = [makeOrder()];
+    const orders = [makeOrder({ sourceZone: null })];
     const rollups = new Map<string, { lineCount: number; totalQuantity: number }>();
     rollups.set(ORDER_1, { lineCount: 0, totalQuantity: 5 });
 
@@ -266,7 +266,7 @@ describe('buildShiftWorkHierarchy', () => {
     expect(line.statusBreakdown).toEqual({ queued: 1, picking: 0, waitingCheck: 1, returned: 0, done: 1 });
 
     const area = result.areas[0];
-    expect(area.statusBreakdown).toEqual({ queued: 1, picking: 0, waitingCheck: 1, returned: 0, done: 1 });
+    expect(area.statusBreakdown).toEqual({ queued: 1, picking: 0, waitingCheck: 1, returned: 0, done: 1, blocked: 0 });
   });
 
   it('rolls up totalQuantity from rollups map into each order and bucket', () => {
@@ -313,9 +313,9 @@ describe('buildShiftWorkHierarchy', () => {
       makeLineRow({ id: LINE_B, name: 'קו צפון', distribution_area: 'צפון' })
     ];
     const orders = [
-      makeOrder({ id: ORDER_1, lineId: LINE_A, pointName: 'דבאח עין המפרץ', orderNumber: 'SO26014230', lineCount: null }),
-      makeOrder({ id: ORDER_2, lineId: LINE_A, pointName: 'דבאח עין המפרץ', orderNumber: 'SO-OTHER', lineCount: null }),
-      makeOrder({ id: ORDER_3, lineId: LINE_B, pointName: 'סלולר', orderNumber: 'SO-NORTH', lineCount: null })
+      makeOrder({ id: ORDER_1, lineId: LINE_A, pointName: 'דבאח עין המפרץ', orderNumber: 'SO26014230', lineCount: null, sourceZone: 'גליל' }),
+      makeOrder({ id: ORDER_2, lineId: LINE_A, pointName: 'דבאח עין המפרץ', orderNumber: 'SO-OTHER', lineCount: null, sourceZone: 'גליל' }),
+      makeOrder({ id: ORDER_3, lineId: LINE_B, pointName: 'סלולר', orderNumber: 'SO-NORTH', lineCount: null, sourceZone: 'צפון' })
     ];
     const rollups = new Map<string, { lineCount: number; totalQuantity: number }>();
     rollups.set(ORDER_1, { lineCount: 7, totalQuantity: 88 });
@@ -342,6 +342,323 @@ describe('buildShiftWorkHierarchy', () => {
     expect(order1.orderNumber).toBe('SO26014230');
     expect(order1.totalQuantity).toBe(88);
     expect(order1.lineCount).toBe(7);
+  });
+
+  it('splits same physical line into separate source-zone areas and scopes routeGroups and legacy buckets', () => {
+    const lineRows = [
+      makeLineRow({
+        id: LINE_A,
+        name: 'שפלה 2',
+        distribution_area: 'שפלה אמצעי'
+      })
+    ];
+    const orders = [
+      makeOrder({
+        id: 'o-shfela-1',
+        lineId: LINE_A,
+        orderNumber: 'SO-SH-1',
+        pointName: 'שפלה 2',
+        rawRouteLine: 'שפלה 2',
+        routeBase: 'שפלה 2',
+        workBucketName: null,
+        sourceZone: 'שפלה 2'
+      }),
+      makeOrder({
+        id: 'o-shfela-2',
+        lineId: LINE_A,
+        orderNumber: 'SO-SH-2',
+        pointName: 'סלולר',
+        rawRouteLine: 'שפלה 2/סלולר',
+        routeBase: 'שפלה 2',
+        workBucketName: 'סלולר',
+        sourceZone: 'שפלה 2'
+      }),
+      makeOrder({
+        id: 'o-shfela-3',
+        lineId: LINE_A,
+        orderNumber: 'SO-SH-3',
+        pointName: 'כוורת חצור משפחות',
+        rawRouteLine: 'שפלה 2/כוורת חצור משפחות',
+        routeBase: 'שפלה 2',
+        workBucketName: 'כוורת חצור משפחות',
+        sourceZone: 'שפלה 2'
+      }),
+      makeOrder({
+        id: 'o-shfela-4',
+        lineId: LINE_A,
+        orderNumber: 'SO-SH-4',
+        pointName: 'מנטה מסמיה',
+        rawRouteLine: 'שפלה 2/מנטה מסמיה',
+        routeBase: 'שפלה 2',
+        workBucketName: 'מנטה מסמיה',
+        sourceZone: 'שפלה 2'
+      }),
+      makeOrder({
+        id: 'o-shfela-5',
+        lineId: LINE_A,
+        orderNumber: 'SO-SH-5',
+        pointName: 'פז ברורים',
+        rawRouteLine: 'שפלה 2/פז ברורים',
+        routeBase: 'שפלה 2',
+        workBucketName: 'פז ברורים',
+        sourceZone: 'שפלה 2'
+      }),
+      makeOrder({
+        id: 'o-shfela-6',
+        lineId: LINE_A,
+        orderNumber: 'SO-SH-6',
+        pointName: 'תפוז עד הלום',
+        rawRouteLine: 'שפלה 2/תפוז עד הלום',
+        routeBase: 'שפלה 2',
+        workBucketName: 'תפוז עד הלום',
+        sourceZone: 'שפלה 2'
+      }),
+      makeOrder({
+        id: 'o-mid-1',
+        lineId: LINE_A,
+        orderNumber: 'SO-MID-1',
+        pointName: 'דור אלון טל שחר',
+        rawRouteLine: 'שפלה 2/דור אלון טל שחר',
+        routeBase: 'שפלה 2',
+        workBucketName: 'דור אלון טל שחר',
+        sourceZone: 'שפלה אמצעי'
+      }),
+      makeOrder({
+        id: 'o-mid-2',
+        lineId: LINE_A,
+        orderNumber: 'SO-MID-2',
+        pointName: 'סדש גדרה',
+        rawRouteLine: 'שפלה 2/סדש גדרה',
+        routeBase: 'שפלה 2',
+        workBucketName: 'סדש גדרה',
+        sourceZone: 'שפלה אמצעי'
+      }),
+      makeOrder({
+        id: 'o-mid-3',
+        lineId: LINE_A,
+        orderNumber: 'SO-MID-3',
+        pointName: 'רכב-פז גדרה',
+        rawRouteLine: 'שפלה 2/רכב-פז גדרה',
+        routeBase: 'שפלה 2',
+        workBucketName: 'רכב-פז גדרה',
+        sourceZone: 'שפלה אמצעי'
+      }),
+      makeOrder({
+        id: 'o-mid-4',
+        lineId: LINE_A,
+        orderNumber: 'SO-MID-4',
+        pointName: 'סלולר',
+        rawRouteLine: 'שפלה 2/סלולר',
+        routeBase: 'שפלה 2',
+        workBucketName: 'סלולר',
+        sourceZone: 'שפלה אמצעי'
+      }),
+      makeOrder({
+        id: 'o-mid-5',
+        lineId: LINE_A,
+        orderNumber: 'SO-MID-5',
+        pointName: 'שפלה 2',
+        rawRouteLine: 'שפלה 2',
+        routeBase: 'שפלה 2',
+        workBucketName: null,
+        sourceZone: 'שפלה אמצעי'
+      })
+    ];
+    const rollups = new Map<string, { lineCount: number; totalQuantity: number }>([
+      ['o-shfela-1', { lineCount: 1, totalQuantity: 5 }],
+      ['o-shfela-2', { lineCount: 2, totalQuantity: 4 }],
+      ['o-shfela-3', { lineCount: 3, totalQuantity: 3 }],
+      ['o-shfela-4', { lineCount: 4, totalQuantity: 2 }],
+      ['o-shfela-5', { lineCount: 1, totalQuantity: 6 }],
+      ['o-shfela-6', { lineCount: 2, totalQuantity: 7 }],
+      ['o-mid-1', { lineCount: 5, totalQuantity: 8 }],
+      ['o-mid-2', { lineCount: 6, totalQuantity: 9 }],
+      ['o-mid-3', { lineCount: 7, totalQuantity: 10 }],
+      ['o-mid-4', { lineCount: 8, totalQuantity: 11 }],
+      ['o-mid-5', { lineCount: 9, totalQuantity: 12 }]
+    ]);
+
+    const result = buildShiftWorkHierarchy(SHIFT_ID, lineRows, orders, rollups, [], []);
+    const areasByName = new Map(result.areas.map((area) => [area.areaName, area] as const));
+    const shfela2 = areasByName.get('שפלה 2')!;
+    const shfelaMid = areasByName.get('שפלה אמצעי')!;
+
+    expect(result.areas.map((area) => area.areaName).sort()).toEqual(['שפלה 2', 'שפלה אמצעי']);
+    expect(shfela2.totalOrders).toBe(6);
+    expect(shfelaMid.totalOrders).toBe(5);
+    expect(shfela2.totalQuantity).toBe(27);
+    expect(shfelaMid.totalQuantity).toBe(50);
+    expect(shfela2.lines).toHaveLength(1);
+    expect(shfelaMid.lines).toHaveLength(1);
+    expect(shfela2.lines[0].lineId).toBe(LINE_A);
+    expect(shfelaMid.lines[0].lineId).toBe(LINE_A);
+    expect(shfela2.lines[0].areaLineKey).not.toBe(shfelaMid.lines[0].areaLineKey);
+    expect(shfela2.lines[0].sourceZone).toBe('שפלה 2');
+    expect(shfelaMid.lines[0].sourceZone).toBe('שפלה אמצעי');
+
+    for (const area of [shfela2, shfelaMid]) {
+      for (const line of area.lines) {
+        for (const bucket of line.buckets) {
+          for (const order of bucket.orders) {
+            expect(order.sourceZone).toBe(area.areaName);
+          }
+        }
+        for (const routeGroup of line.routeGroups ?? []) {
+          for (const workBucket of routeGroup.workBuckets) {
+            for (const order of workBucket.orders) {
+              expect(order.sourceZone).toBe(area.areaName);
+            }
+          }
+        }
+      }
+    }
+
+    expect(
+      shfelaMid.lines[0].buckets.some((bucket) =>
+        bucket.orders.some((order) => ['כוורת חצור משפחות', 'מנטה מסמיה', 'פז ברורים', 'תפוז עד הלום'].includes(order.pointName ?? ''))
+      )
+    ).toBe(false);
+  });
+});
+
+describe('source-zone-aware hierarchy', () => {
+  it('splits ??????? into separate source-zone areas for the same physical line', () => {
+    const lineRows = [
+      makeLineRow({
+        id: LINE_A,
+        name: '???????',
+        distribution_area: '??????? ?????'
+      })
+    ];
+    const orders = [
+      makeOrder({
+        id: 'o-jer-1',
+        lineId: LINE_A,
+        orderNumber: 'SO-J-1',
+        pointName: '??????? 1',
+        rawRouteLine: '???????/??????? 1',
+        routeBase: '???????',
+        workBucketName: '??????? 1',
+        sourceZone: '??????? 1'
+      }),
+      makeOrder({
+        id: 'o-jer-2',
+        lineId: LINE_A,
+        orderNumber: 'SO-J-2',
+        pointName: '??????? 2',
+        rawRouteLine: '???????/??????? 2',
+        routeBase: '???????',
+        workBucketName: '??????? 2',
+        sourceZone: '??????? 2'
+      }),
+      makeOrder({
+        id: 'o-jer-3',
+        lineId: LINE_A,
+        orderNumber: 'SO-J-3',
+        pointName: '??????? ?????',
+        rawRouteLine: '???????/??????? ?????',
+        routeBase: '???????',
+        workBucketName: '??????? ?????',
+        sourceZone: '??????? ?????'
+      })
+    ];
+    const rollups = new Map<string, { lineCount: number; totalQuantity: number }>([
+      ['o-jer-1', { lineCount: 2, totalQuantity: 10 }],
+      ['o-jer-2', { lineCount: 3, totalQuantity: 20 }],
+      ['o-jer-3', { lineCount: 4, totalQuantity: 30 }]
+    ]);
+
+    const result = buildShiftWorkHierarchy(SHIFT_ID, lineRows, orders, rollups, [], []);
+    expect(result.areas.map((area) => area.areaName).sort()).toEqual([
+      '??????? 1',
+      '??????? 2',
+      '??????? ?????'
+    ]);
+
+    for (const area of result.areas) {
+      expect(area.lines).toHaveLength(1);
+      expect(area.lines[0].lineId).toBe(LINE_A);
+      expect(area.lines[0].lineGroupName).toBe('???????');
+      expect(area.lines[0].sourceZone).toBe(area.areaName);
+    }
+  });
+
+  it(`routes "?'???" under a different source zone`, () => {
+    const lineRows = [
+      makeLineRow({
+        id: LINE_A,
+        name: `?'???`,
+        distribution_area: `?'???`
+      })
+    ];
+    const orders = [
+      makeOrder({
+        id: 'o-chita-1',
+        lineId: LINE_A,
+        orderNumber: 'SO-C-1',
+        pointName: '???? ??? ?????',
+        rawRouteLine: `?'???/???? ??? ?????`,
+        routeBase: `?'???`,
+        workBucketName: '???? ??? ?????',
+        sourceZone: '???? 1'
+      })
+    ];
+    const rollups = new Map<string, { lineCount: number; totalQuantity: number }>([
+      ['o-chita-1', { lineCount: 2, totalQuantity: 13 }]
+    ]);
+
+    const result = buildShiftWorkHierarchy(SHIFT_ID, lineRows, orders, rollups, [], []);
+    expect(result.areas.map((area) => area.areaName)).toEqual(['???? 1']);
+    expect(result.areas[0].lines[0].lineGroupName).toBe(`?'???`);
+    expect(result.areas[0].lines[0].sourceZone).toBe('???? 1');
+  });
+
+  it('falls back to a single item zone when order.sourceZone is missing', () => {
+    const lineRows = [makeLineRow()];
+    const orders = [
+      makeOrder({
+        id: 'o-legacy-1',
+        lineId: LINE_A,
+        orderNumber: 'SO-L-1',
+        pointName: '?????',
+        rawRouteLine: '???? 2/?????',
+        routeBase: '???? 2',
+        workBucketName: '?????',
+        sourceZone: null
+      }),
+      makeOrder({
+        id: 'o-legacy-2',
+        lineId: LINE_A,
+        orderNumber: 'SO-L-2',
+        pointName: '???? 2',
+        rawRouteLine: '???? 2',
+        routeBase: '???? 2',
+        workBucketName: null,
+        sourceZone: null
+      })
+    ];
+    const items = [
+      makeItem({
+        id: 'i-legacy-1',
+        lineId: LINE_A,
+        orderId: 'o-legacy-1',
+        zone: '???? 2'
+      }),
+      makeItem({
+        id: 'i-legacy-2',
+        lineId: LINE_A,
+        orderId: 'o-legacy-2',
+        zone: '???? 2'
+      })
+    ];
+    const rollups = new Map<string, { lineCount: number; totalQuantity: number }>([
+      ['o-legacy-1', { lineCount: 1, totalQuantity: 4 }],
+      ['o-legacy-2', { lineCount: 1, totalQuantity: 6 }]
+    ]);
+
+    const result = buildShiftWorkHierarchy(SHIFT_ID, lineRows, orders, rollups, [], [], items);
+    expect(result.areas.map((area) => area.areaName)).toEqual(['???? 2']);
+    expect(result.areas[0].lines[0].sourceZone).toBe('???? 2');
   });
 });
 
