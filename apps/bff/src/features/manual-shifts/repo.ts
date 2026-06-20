@@ -1809,11 +1809,60 @@ function buildRouteGroupsForLine(
 
   const classified = classifyRouteFragments(fragments);
 
-  // Index-based matching: classified[i] matches lineOrders[i]
-  const classifiedOrders = classified.map((classification, index) => ({
-    classification,
-    order: lineOrders[index],
-  }));
+  // Build lookup from 5-field composite fragment key to original order.
+  // classifyRouteFragments reorders results (groups by orderNumber+routeBase,
+  // sorts by first appearance, and within Rule 2 outputs base before
+  // category before standalone).  Index-based matching is therefore wrong;
+  // we match by fragment identity instead.
+  //
+  // Each key maps to a queue of orders (preserving input order).
+  // Classified results consume the first matching order from its key's queue.
+  // This correctly handles both unique keys and rare duplicates (e.g. legacy
+  // test data without route fields), because within each key group the
+  // classification output preserves the input relative order.
+  const makeFragmentKey = (f: {
+    orderNumber?: string | null;
+    rawRouteLine?: string | null;
+    routeBase?: string | null;
+    workBucketName?: string | null;
+    pointName?: string | null;
+  }) =>
+    [
+      f.orderNumber ?? '',
+      f.rawRouteLine ?? '',
+      f.routeBase ?? '',
+      f.workBucketName ?? '',
+      f.pointName ?? '',
+    ].join('\u0001');
+
+  const orderQueue = new Map<string, ManualShiftOrder[]>();
+  for (const order of lineOrders) {
+    const key = makeFragmentKey(order);
+    const list = orderQueue.get(key) ?? [];
+    list.push(order);
+    orderQueue.set(key, list);
+  }
+
+  const classifiedOrders = classified.map((c) => {
+    const key = makeFragmentKey(c);
+    const queue = orderQueue.get(key);
+    if (!queue || queue.length === 0) {
+      throw new Error(
+        `Cannot match classified fragment back to order: ${key}`
+      );
+    }
+    const order = queue.shift()!;
+    return { classification: c, order };
+  });
+
+  // Defensive: every input order must have been consumed
+  for (const [key, queue] of orderQueue) {
+    if (queue.length > 0) {
+      throw new Error(
+        `Unmatched orders remain for fragment key: ${key} (${queue.length} orders)`
+      );
+    }
+  }
 
   // Group by routeGroupKey
   const rgMap = new Map<string, typeof classifiedOrders>();
