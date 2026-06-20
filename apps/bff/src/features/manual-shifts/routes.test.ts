@@ -353,7 +353,21 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
       shiftId: ids.shift,
       lineId: ids.line,
       bucketName: '',
+      sourceZone: null,
       products: []
+    })),
+    getProductControl: vi.fn(async () => ({
+      shiftId: ids.shift,
+      generatedAt: new Date().toISOString(),
+      rows: [],
+      totals: {
+        totalSkus: 0,
+        shortageSkus: 0,
+        coveredByBondedSkus: 0,
+        partialBondedSkus: 0,
+        unresolvedSkus: 0,
+        dataIssueSkus: 0
+      }
     })),
     ...overrides
   };
@@ -2630,6 +2644,240 @@ describe('manual shifts routes', () => {
 
       await app.close();
     });
+
+    it('filters by sourceZone when provided', async () => {
+      const rollup = {
+        shiftId: ids.shift,
+        lineId: ids.line,
+        bucketName: 'סלולר',
+        sourceZone: 'שפלה אמצעי',
+        products: [
+          { sku: '222', description: 'מוצר ב', category: null, totalQuantity: 5, orderCount: 1 }
+        ]
+      };
+      const service = createServiceMock({
+        getBucketProductRollup: vi.fn(async () => rollup)
+      });
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/buckets/product-rollup?lineId=${ids.line}&bucketName=%D7%A1%D7%9C%D7%95%D7%9C%D7%A8&sourceZone=%D7%A9%D7%A4%D7%9C%D7%94+%D7%90%D7%9E%D7%A6%D7%A2%D7%99`
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        shiftId: ids.shift,
+        lineId: ids.line,
+        bucketName: 'סלולר',
+        sourceZone: 'שפלה אמצעי',
+        products: [
+          { sku: '222', description: 'מוצר ב', category: null, totalQuantity: 5, orderCount: 1 }
+        ]
+      });
+      expect(service.getBucketProductRollup).toHaveBeenCalledWith(
+        expect.objectContaining({ sourceZone: 'שפלה אמצעי' })
+      );
+
+      await app.close();
+    });
+
+    it('treats empty sourceZone as unknown zone filter', async () => {
+      const rollup = {
+        shiftId: ids.shift,
+        lineId: ids.line,
+        bucketName: 'כללי',
+        sourceZone: null,
+        products: []
+      };
+      const service = createServiceMock({
+        getBucketProductRollup: vi.fn(async () => rollup)
+      });
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/buckets/product-rollup?lineId=${ids.line}&bucketName=%D7%9B%D7%9C%D7%9C%D7%99&sourceZone=`
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(service.getBucketProductRollup).toHaveBeenCalledWith(
+        expect.objectContaining({ sourceZone: '' })
+      );
+
+      await app.close();
+    });
+
+    it('works without sourceZone param (backward compat)', async () => {
+      const rollup = {
+        shiftId: ids.shift,
+        lineId: ids.line,
+        bucketName: 'סלולר',
+        sourceZone: null,
+        products: [
+          { sku: 'SKU-1', description: 'מוצר א', category: 'cat-a', totalQuantity: 24, orderCount: 2 },
+          { sku: 'SKU-2', description: 'מוצר ב', category: 'cat-b', totalQuantity: 10, orderCount: 1 }
+        ]
+      };
+      const service = createServiceMock({
+        getBucketProductRollup: vi.fn(async () => rollup)
+      });
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/buckets/product-rollup?lineId=${ids.line}&bucketName=%D7%A1%D7%9C%D7%95%D7%9C%D7%A8`
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(service.getBucketProductRollup).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: ids.tenant,
+          shiftId: ids.shift,
+          lineId: ids.line,
+          bucketName: 'סלולר'
+        })
+      );
+
+      await app.close();
+    });
+  });
+
+  describe('GET /api/manual-shifts/:shiftId/product-control', () => {
+    it('returns 200 with shiftId, rows and totals', async () => {
+      const mockRows = [
+        {
+          sku: '100001',
+          description: 'Test Product',
+          category: 'Test',
+          demandQty: 500,
+          warehouseQty: 500,
+          shortageQty: 0,
+          bondedAvailableQty: 0,
+          bondedCoverQty: 0,
+          finalMissingQty: 0,
+          surplusQty: 0,
+          status: 'ok' as const
+        }
+      ];
+      const mockResponse = {
+        shiftId: ids.shift,
+        generatedAt: new Date().toISOString(),
+        rows: mockRows,
+        totals: {
+          totalSkus: 1,
+          shortageSkus: 0,
+          coveredByBondedSkus: 0,
+          partialBondedSkus: 0,
+          unresolvedSkus: 0,
+          dataIssueSkus: 0
+        }
+      };
+      const service = createServiceMock({
+        getProductControl: vi.fn(async () => mockResponse)
+      });
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/product-control`
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body).toHaveProperty('shiftId', ids.shift);
+      expect(body).toHaveProperty('generatedAt');
+      expect(body).toHaveProperty('rows');
+      expect(body).toHaveProperty('totals');
+      expect(body.rows).toHaveLength(1);
+      expect(body.rows[0].sku).toBe('100001');
+      expect(body.rows[0].status).toBe('ok');
+      expect(body.totals.totalSkus).toBe(1);
+      expect(service.getProductControl).toHaveBeenCalledWith({
+        tenantId: ids.tenant,
+        shiftId: ids.shift
+      });
+
+      await app.close();
+    });
+
+    it('returns rows with all five statuses from service', async () => {
+      const mockRows = [
+        { sku: 'A', description: '', category: '', demandQty: 100, warehouseQty: 100, shortageQty: 0, bondedAvailableQty: 0, bondedCoverQty: 0, finalMissingQty: 0, surplusQty: 0, status: 'ok' as const },
+        { sku: 'B', description: '', category: '', demandQty: 200, warehouseQty: 50, shortageQty: 150, bondedAvailableQty: 200, bondedCoverQty: 150, finalMissingQty: 0, surplusQty: 0, status: 'covered_by_bonded' as const },
+        { sku: 'C', description: '', category: '', demandQty: 300, warehouseQty: 100, shortageQty: 200, bondedAvailableQty: 100, bondedCoverQty: 100, finalMissingQty: 100, surplusQty: 0, status: 'partial_bonded' as const },
+        { sku: 'D', description: '', category: '', demandQty: 400, warehouseQty: 80, shortageQty: 320, bondedAvailableQty: 0, bondedCoverQty: 0, finalMissingQty: 320, surplusQty: 0, status: 'unresolved' as const },
+        { sku: 'E', description: '', category: '', demandQty: 0, warehouseQty: 9999, shortageQty: 0, bondedAvailableQty: 0, bondedCoverQty: 0, finalMissingQty: 0, surplusQty: 9999, status: 'data_issue' as const }
+      ];
+      const service = createServiceMock({
+        getProductControl: vi.fn(async () => ({
+          shiftId: ids.shift,
+          generatedAt: new Date().toISOString(),
+          rows: mockRows,
+          totals: { totalSkus: 5, shortageSkus: 3, coveredByBondedSkus: 1, partialBondedSkus: 1, unresolvedSkus: 1, dataIssueSkus: 1 }
+        }))
+      });
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/product-control`
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.rows).toHaveLength(5);
+      expect(body.rows.map((r: { status: string }) => r.status).sort()).toEqual([
+        'covered_by_bonded', 'data_issue', 'ok', 'partial_bonded', 'unresolved'
+      ]);
+      expect(body.totals.shortageSkus).toBe(3);
+      expect(body.totals.dataIssueSkus).toBe(1);
+
+      await app.close();
+    });
+
+    it('rejects invalid shiftId format', async () => {
+      const service = createServiceMock();
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/manual-shifts/not-a-valid-id/product-control'
+      });
+
+      expect(response.statusCode).toBe(400);
+
+      await app.close();
+    });
+
+    it('is read-only (GET request)', async () => {
+      const service = createServiceMock();
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/manual-shifts/${ids.shift}/product-control`
+      });
+
+      expect(response.statusCode).toBe(404);
+
+      await app.close();
+    });
+
+    it('returns 401 without auth', async () => {
+      const service = createServiceMock();
+      const app = await buildTestApp(service, null);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/product-control`
+      });
+
+      expect(response.statusCode).toBe(401);
+
+      await app.close();
+    });
   });
 });
+
 

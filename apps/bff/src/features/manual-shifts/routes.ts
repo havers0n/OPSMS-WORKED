@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { ZodError } from 'zod';
 import {
   ManualShiftImportError,
   parseDailyManualShiftImport,
@@ -60,7 +61,8 @@ import {
   transitionManualShiftOrderCheckUnitStatusBodySchema,
   transitionManualShiftOrderStatusBodySchema,
   pickTaskDetailResponseSchema,
-  openAshlamaBoardResponseSchema
+  openAshlamaBoardResponseSchema,
+  productControlResponseSchema as manualShiftProductControlResponseSchema
 } from '../../schemas.js';
 import { parseOrThrow } from '../../validation.js';
 import { createPickBridgeServiceFromSupabase } from './pick-bridge-service.js';
@@ -1196,19 +1198,46 @@ export function registerManualShiftsRoutes(
     const shiftId = parseOrThrow(idResponseSchema, {
       id: (request.params as { shiftId: string }).shiftId
     }).id;
-    const query = request.query as { lineId?: string; bucketName?: string };
+    const query = request.query as { lineId?: string; bucketName?: string; sourceZone?: string };
     const lineId = parseOrThrow(idResponseSchema, {
       id: query.lineId ?? ''
     }).id;
     const bucketName = query.bucketName ?? '';
+    const sourceZone = query.sourceZone;
 
     const rollup = await getManualShiftsService(auth).getBucketProductRollup({
       tenantId,
       shiftId,
       lineId,
-      bucketName
+      bucketName,
+      sourceZone
     });
     return parseOrThrow(bucketProductRollupResponseSchema, rollup);
+  });
+
+  app.get('/api/manual-shifts/:shiftId/product-control', async (request, reply) => {
+    try {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+      const tenantId = requireTenant(auth);
+      const { id: shiftId } = parseOrThrow(
+        idResponseSchema,
+        { id: (request.params as Record<string, string>).shiftId ?? '' }
+      );
+      const result = await getManualShiftsService(auth).getProductControl({
+        tenantId,
+        shiftId
+      });
+      return parseOrThrow(manualShiftProductControlResponseSchema, result);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return sendApiError(reply, error, request.id);
+      }
+      if (error instanceof ZodError) {
+        return sendApiError(reply, new ApiError(400, 'VALIDATION_ERROR', error.message), request.id);
+      }
+      return sendApiError(reply, new ApiError(500, 'INTERNAL_ERROR', 'Unexpected error'), request.id);
+    }
   });
 
   // ── Pick bridge ──────────────────────────────────────────────────────────────

@@ -6,12 +6,14 @@ import type {
   ManualShiftOrderCheckUnit,
   ManualShiftOrderAshlama,
   ManualShiftOrderItem,
-  ManualShiftWorkHierarchyResponse
+  ManualShiftWorkHierarchyResponse,
+  BucketProductRollupRow
 } from '@wos/domain';
 import {
   buildManualShiftSourceZoneDiagnostics,
   buildShiftWorkHierarchy,
-  inferManualShiftOrderSourceZone
+  inferManualShiftOrderSourceZone,
+  createManualShiftsRepo
 } from './repo.js';
 
 type ManualShiftLineRow = {
@@ -1200,5 +1202,127 @@ describe('buildShiftWorkHierarchy — routeGroups (RG2)', () => {
 
     // Case 5 — פז לוחמי הגטאות > כללי → ["פז לוחמי הגטאות"]
     expect(uniquePointNames('פז לוחמי הגטאות', 'כללי')).toEqual(['פז לוחמי הגטאות']);
+  });
+});
+
+// ── listBucketProductRollup sourceZone isolation ───────────────────────────
+
+function fakeSupabase(orders: Array<Record<string, unknown>>, items: Array<Record<string, unknown>>) {
+  function makeBuilder(rows: Array<Record<string, unknown>>) {
+    let filtered = [...rows];
+    const builder = {
+      _select: '',
+      select(cols: string) {
+        builder._select = cols;
+        return builder;
+      },
+      eq(col: string, val: unknown) {
+        filtered = filtered.filter(r => r[col] === val);
+        return builder;
+      },
+      is(col: string, val: unknown) {
+        if (val === null) {
+          filtered = filtered.filter(r => r[col] === null || r[col] === undefined);
+        }
+        return builder;
+      },
+      in(col: string, vals: unknown[]) {
+        filtered = filtered.filter(r => vals.includes(r[col]));
+        return builder;
+      },
+      range(_offset: number, _limit: number) {
+        return builder;
+      },
+      then(resolve: (result: { data: Array<Record<string, unknown>> | null; error: null }) => void) {
+        const out = filtered.length > 0 ? filtered : null;
+        resolve({ data: out, error: null });
+      }
+    };
+    return builder;
+  }
+
+  const orderRows = [...orders];
+  const itemRows = [...items];
+
+  return {
+    from(table: string) {
+      const sourceRows = table === 'manual_shift_orders' ? orderRows : itemRows;
+      return { select(cols: string) { return makeBuilder(sourceRows); } };
+    }
+  };
+}
+
+describe('listBucketProductRollup sourceZone isolation', () => {
+  const SHIFT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const LINE = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+  const sharedOrders = [
+    { id: 'o-1', shift_id: SHIFT, line_id: LINE, point_name: 'סלולר', source_zone: 'שפלה 2', deleted_at: null },
+    { id: 'o-2', shift_id: SHIFT, line_id: LINE, point_name: 'סלולר', source_zone: 'שפלה אמצעי', deleted_at: null },
+  ];
+
+  const sharedItems = [
+    { sku: '111', description: null, category: null, quantity: 10, order_id: 'o-1' },
+    { sku: '222', description: null, category: null, quantity: 5, order_id: 'o-2' },
+  ];
+
+  it('returns only SKU 111 for sourceZone=שפלה 2', async () => {
+    const supabase = fakeSupabase(sharedOrders, sharedItems);
+    const repo = createManualShiftsRepo(supabase as never);
+
+    const result = await repo.listBucketProductRollup({
+      shiftId: SHIFT, lineId: LINE, bucketName: 'סלולר', sourceZone: 'שפלה 2'
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].sku).toBe('111');
+    expect(result[0].totalQuantity).toBe(10);
+  });
+
+  it('returns only SKU 222 for sourceZone=שפלה אמצעי', async () => {
+    const supabase = fakeSupabase(sharedOrders, sharedItems);
+    const repo = createManualShiftsRepo(supabase as never);
+
+    const result = await repo.listBucketProductRollup({
+      shiftId: SHIFT, lineId: LINE, bucketName: 'סלולר', sourceZone: 'שפלה אמצעי'
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].sku).toBe('222');
+    expect(result[0].totalQuantity).toBe(5);
+  });
+
+  it('filters source_zone IS NULL for empty sourceZone sentinel', async () => {
+    const orders = [
+      { id: 'o-3', shift_id: SHIFT, line_id: LINE, point_name: 'כללי', source_zone: 'שפלה 2', deleted_at: null },
+      { id: 'o-4', shift_id: SHIFT, line_id: LINE, point_name: 'כללי', source_zone: null, deleted_at: null },
+    ];
+    const items = [
+      { sku: '333', description: null, category: null, quantity: 7, order_id: 'o-3' },
+      { sku: '444', description: null, category: null, quantity: 3, order_id: 'o-4' },
+    ];
+    const supabase = fakeSupabase(orders, items);
+    const repo = createManualShiftsRepo(supabase as never);
+
+    const result = await repo.listBucketProductRollup({
+      shiftId: SHIFT, lineId: LINE, bucketName: 'כללי', sourceZone: ''
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].sku).toBe('444');
+    expect(result[0].totalQuantity).toBe(3);
+  });
+
+  it('returns all products when sourceZone is omitted (legacy compat)', async () => {
+    const supabase = fakeSupabase(sharedOrders, sharedItems);
+    const repo = createManualShiftsRepo(supabase as never);
+
+    const result = await repo.listBucketProductRollup({
+      shiftId: SHIFT, lineId: LINE, bucketName: 'סלולר'
+    });
+
+    expect(result).toHaveLength(2);
+    const skus = result.map((r: BucketProductRollupRow) => r.sku).sort();
+    expect(skus).toEqual(['111', '222']);
   });
 });
