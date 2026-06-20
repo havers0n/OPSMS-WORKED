@@ -19,7 +19,7 @@ export function DesktopLineSummaryCard({ line, onClick }: DesktopLineSummaryCard
       className="bg-white border border-gray-200 rounded-lg p-4 text-right w-full hover:bg-gray-50 hover:border-gray-300 transition-colors"
       onClick={() => onClick?.(line.areaLineKey ?? line.lineId)}
       data-testid={`line-summary-card-${line.lineId}`}
-      aria-label={`קו ${line.lineName}`}
+      aria-label={`${line.lineKind === 'delivery_channel' ? 'ערוץ משלוח' : 'קו'} ${line.lineName}`}
     >
       <div className="flex items-center gap-2 mb-2">
         <span

@@ -602,6 +602,7 @@ export const manualShiftWorkHierarchyLineSchema = z.object({
   lineGroupName: z.string(),
   distributionArea: z.string().nullable(),
   sourceZone: z.string().nullable().optional(),
+  lineKind: z.enum(['route', 'delivery_channel']).optional(),
   status: manualShiftLineStatusSchema,
   totalBuckets: z.number().int().min(0),
   totalOrders: z.number().int().min(0),

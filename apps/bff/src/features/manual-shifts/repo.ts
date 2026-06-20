@@ -2296,6 +2296,12 @@ function buildRouteGroupsForLine(
   return routeGroups;
 }
 
+function getManualShiftLineKind(lineName: string): 'route' | 'delivery_channel' {
+  const normalized = lineName.trim().toLowerCase();
+  if (normalized.startsWith("צ'יטה")) return 'delivery_channel';
+  return 'route';
+}
+
 export function buildShiftWorkHierarchy(
   shiftId: string,
   lineRows: ManualShiftLineRow[],
@@ -2432,6 +2438,7 @@ export function buildShiftWorkHierarchy(
         lineGroupName: row.name,
         distributionArea: row.distribution_area,
         sourceZone,
+        lineKind: getManualShiftLineKind(row.name),
         status: deriveManualShiftLineStatus(scopedOrders),
         totalBuckets: buckets.length,
         totalOrders: scopedOrders.length,

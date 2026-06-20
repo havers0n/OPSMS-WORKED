@@ -844,7 +844,45 @@ describe('buildManualShiftSourceZoneDiagnostics', () => {
   });
 });
 
-describe('buildShiftWorkHierarchy — routeGroups (RG2)', () => {
+it('sets lineKind delivery_channel for route named צ\'יטה under geographic source zone', () => {
+    const lineRows = [makeLineRow({ name: "צ'יטה", distribution_area: 'שפלה 1' })];
+    const orders = [makeOrder({ sourceZone: 'שפלה 1' })];
+    const rollups = new Map<string, { lineCount: number; totalQuantity: number }>();
+    rollups.set(ORDER_1, { lineCount: 0, totalQuantity: 5 });
+
+    const result = buildShiftWorkHierarchy(SHIFT_ID, lineRows, orders, rollups, [], []);
+
+    expect(result.areas).toHaveLength(1);
+    expect(result.areas[0].areaName).toBe('שפלה 1');
+    expect(result.areas[0].lines[0].lineGroupName).toBe("צ'יטה");
+    expect(result.areas[0].lines[0].lineKind).toBe('delivery_channel');
+  });
+
+  it('sets lineKind delivery_channel for Chita variant names', () => {
+    const lineRows = [makeLineRow({ name: "צ'יטה מוכן", distribution_area: 'שפלה 1' })];
+    const orders = [makeOrder({ sourceZone: 'שפלה 1' })];
+    const rollups = new Map<string, { lineCount: number; totalQuantity: number }>();
+    rollups.set(ORDER_1, { lineCount: 0, totalQuantity: 5 });
+
+    const result = buildShiftWorkHierarchy(SHIFT_ID, lineRows, orders, rollups, [], []);
+
+    expect(result.areas[0].lines[0].lineKind).toBe('delivery_channel');
+    expect(result.areas[0].lines[0].lineGroupName).toBe("צ'יטה מוכן");
+  });
+
+  it('sets lineKind route for normal geographic line', () => {
+    const lineRows = [makeLineRow({ name: 'גליל', distribution_area: 'גליל' })];
+    const orders = [makeOrder({ sourceZone: 'גליל' })];
+    const rollups = new Map<string, { lineCount: number; totalQuantity: number }>();
+    rollups.set(ORDER_1, { lineCount: 0, totalQuantity: 5 });
+
+    const result = buildShiftWorkHierarchy(SHIFT_ID, lineRows, orders, rollups, [], []);
+
+    expect(result.areas[0].lines[0].lineKind).toBe('route');
+    expect(result.areas[0].lines[0].lineGroupName).toBe('גליל');
+  });
+
+  describe('buildShiftWorkHierarchy — routeGroups (RG2)', () => {
   const SHIFT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const LINE = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 

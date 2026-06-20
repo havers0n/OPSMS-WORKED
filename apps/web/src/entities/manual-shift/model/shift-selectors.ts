@@ -681,6 +681,7 @@ export interface LineHierarchySummary {
   areaLineKey?: string;
   lineId: string;
   lineName: string;
+  lineKind?: 'route' | 'delivery_channel';
   distributionArea?: string | null;
   lineStatus: LineSummary['lineStatus'];
   ordersCount: number;
@@ -879,6 +880,7 @@ export function selectWorkHierarchyLineSummariesByArea(
     areaLineKey: resolveAreaLineKey(line),
     lineId: line.lineId,
     lineName: line.lineGroupName,
+    lineKind: line.lineKind,
     distributionArea: line.distributionArea,
     lineStatus: line.status,
     ordersCount: line.totalOrders,
@@ -903,6 +905,7 @@ export function selectWorkHierarchyLineSummaries(
         areaLineKey: resolveAreaLineKey(line),
         lineId: line.lineId,
         lineName: line.lineGroupName,
+        lineKind: line.lineKind,
         distributionArea: line.distributionArea,
         lineStatus: line.status,
         ordersCount: line.totalOrders,

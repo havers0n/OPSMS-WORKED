@@ -1252,4 +1252,73 @@ describe('DesktopHierarchyPanel', () => {
       expect(screen.queryByTestId('order-mini-card-g-o-1')).toBeNull();
     });
   });
+
+  describe('delivery channel lineKind display', () => {
+    const deliveryLine: LineHierarchySummary = {
+      lineId: 'line-chita',
+      lineName: "צ'יטה",
+      lineKind: 'delivery_channel',
+      distributionArea: 'שפלה 1',
+      lineStatus: 'open',
+      ordersCount: 2,
+      itemLinesCount: 4,
+      totalQuantity: 20,
+      statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 }
+    };
+
+    const normalLine: LineHierarchySummary = {
+      lineId: 'line-galil',
+      lineName: 'גליל',
+      distributionArea: 'גליל',
+      lineStatus: 'open',
+      ordersCount: 4,
+      itemLinesCount: 10,
+      totalQuantity: 100,
+      statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 }
+    };
+
+    it('shows "ערוץ משלוח:" for delivery_channel in breadcrumb', () => {
+      renderPanel({
+        selectedAreaKey: 'שפלה 1',
+        selectedLineId: 'line-chita',
+        lineHierarchySummaries: [deliveryLine],
+        workBucketSummaries: mockWorkBucketSummaries
+      });
+      expect(screen.getByText(`ערוץ משלוח: צ'יטה`)).toBeTruthy();
+    });
+
+    it('shows "קו:" for normal line in breadcrumb', () => {
+      renderPanel({
+        selectedAreaKey: 'גליל',
+        selectedLineId: 'line-galil',
+        lineHierarchySummaries: [normalLine],
+        workBucketSummaries: mockWorkBucketSummaries
+      });
+      expect(screen.getByText('קו: גליל')).toBeTruthy();
+    });
+
+    it('shows "ערוץ משלוח:" in auto-skipped single-line area for delivery_channel', () => {
+      renderPanel({
+        selectedAreaKey: 'שפלה 1',
+        selectedLineId: 'line-chita',
+        areaLineSummaries: [deliveryLine],
+        lineHierarchySummaries: [deliveryLine],
+        workBucketSummaries: mockWorkBucketSummaries
+      });
+      expect(screen.getByText(`ערוץ משלוח: צ'יטה`)).toBeTruthy();
+      expect(screen.queryByText('קו הפצה:')).toBeNull();
+    });
+
+    it('shows "קו הפצה:" in auto-skipped single-line area for normal line', () => {
+      renderPanel({
+        selectedAreaKey: 'גליל',
+        selectedLineId: 'line-galil',
+        areaLineSummaries: [normalLine],
+        lineHierarchySummaries: [normalLine],
+        workBucketSummaries: mockWorkBucketSummaries
+      });
+      expect(screen.getByText('קו הפצה: גליל')).toBeTruthy();
+      expect(screen.queryByText('ערוץ משלוח:')).toBeNull();
+    });
+  });
 });

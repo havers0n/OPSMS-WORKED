@@ -646,6 +646,67 @@ describe('manual shift work hierarchy schemas', () => {
       orders: []
     })).toThrow();
   });
+
+  it('accepts lineKind delivery_channel for Chita lines', () => {
+    const result = manualShiftWorkHierarchyResponseSchema.parse({
+      shiftId: '33333333-3333-4333-8333-333333333333',
+      areas: [{
+        areaName: 'שפלה 1', displayName: 'שפלה 1',
+        totalLines: 1, totalBuckets: 0, totalOrders: 0, totalQuantity: 0,
+        statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+        lines: [{
+          lineId: '44444444-4444-4444-8444-444444444444',
+          lineGroupName: "צ'יטה",
+          distributionArea: 'שפלה 1', status: 'open',
+          lineKind: 'delivery_channel',
+          totalBuckets: 0, totalOrders: 0, totalQuantity: 0,
+          statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          buckets: []
+        }]
+      }]
+    });
+    expect(result.areas[0].lines[0].lineKind).toBe('delivery_channel');
+  });
+
+  it('defaults lineKind to undefined when omitted', () => {
+    const result = manualShiftWorkHierarchyResponseSchema.parse({
+      shiftId: '33333333-3333-4333-8333-333333333333',
+      areas: [{
+        areaName: 'גליל', displayName: 'גליל',
+        totalLines: 1, totalBuckets: 0, totalOrders: 0, totalQuantity: 0,
+        statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+        lines: [{
+          lineId: '44444444-4444-4444-8444-444444444444',
+          lineGroupName: 'גליל',
+          distributionArea: 'גליל', status: 'open',
+          totalBuckets: 0, totalOrders: 0, totalQuantity: 0,
+          statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          buckets: []
+        }]
+      }]
+    });
+    expect(result.areas[0].lines[0].lineKind).toBeUndefined();
+  });
+
+  it('rejects invalid lineKind value', () => {
+    expect(() => manualShiftWorkHierarchyResponseSchema.parse({
+      shiftId: '33333333-3333-4333-8333-333333333333',
+      areas: [{
+        areaName: 'גליל', displayName: 'גליל',
+        totalLines: 1, totalBuckets: 0, totalOrders: 0, totalQuantity: 0,
+        statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+        lines: [{
+          lineId: '44444444-4444-4444-8444-444444444444',
+          lineGroupName: 'גליל',
+          distributionArea: 'גליל', status: 'open',
+          lineKind: 'invalid',
+          totalBuckets: 0, totalOrders: 0, totalQuantity: 0,
+          statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          buckets: []
+        }]
+      }]
+    })).toThrow();
+  });
 });
 
 describe('manual shift order item schema', () => {

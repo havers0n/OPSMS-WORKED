@@ -258,7 +258,7 @@ export function DesktopHierarchyPanel({
                 {selectedArea?.displayName ?? ''}
               </button>
               <span className="text-xs text-gray-400">&gt;</span>
-              <span className="text-xs text-gray-700 font-medium">קו: {selectedLine?.lineName ?? ''}</span>
+              <span className="text-xs text-gray-700 font-medium">{selectedLine?.lineKind === 'delivery_channel' ? 'ערוץ משלוח: ' : 'קו: '}{selectedLine?.lineName ?? ''}</span>
             </>
           )}
         </div>
@@ -270,7 +270,7 @@ export function DesktopHierarchyPanel({
           <>
             {isAutoSkippedSingleLine && !!selectedLine && (
               <>
-                <p className="text-xs text-gray-500 mb-1">קו הפצה: {selectedLine.lineName}</p>
+                <p className="text-xs text-gray-500 mb-1">{selectedLine.lineKind === 'delivery_channel' ? 'ערוץ משלוח: ' : 'קו הפצה: '}{selectedLine.lineName}</p>
                 <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">קבוצות עבודה</h2>
               </>
             )}
@@ -358,9 +358,9 @@ export function DesktopHierarchyPanel({
               type="button"
               className="text-xs text-blue-600 hover:text-blue-800"
               onClick={onClearLine}
-              aria-label={`חזרה לקבוצות עבודה קו ${selectedLine?.lineName ?? ''}`}
+              aria-label={`חזרה לקבוצות עבודה ${selectedLine?.lineKind === 'delivery_channel' ? 'ערוץ משלוח' : 'קו'} ${selectedLine?.lineName ?? ''}`}
             >
-              קו: {selectedLine?.lineName ?? ''}
+              {selectedLine?.lineKind === 'delivery_channel' ? 'ערוץ משלוח: ' : 'קו: '}{selectedLine?.lineName ?? ''}
             </button>
           </>
         )}
