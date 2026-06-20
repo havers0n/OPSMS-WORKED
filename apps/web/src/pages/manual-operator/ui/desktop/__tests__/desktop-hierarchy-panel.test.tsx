@@ -89,6 +89,7 @@ const mockWorkBucketSummaries: WorkBucketSummary[] = [
         orderId: 'order-1',
         orderNumber: 'SO26015545',
         customerName: 'Customer A',
+        pointName: 'Point A',
         status: 'picking',
         workBucketName: 'Point A',
         pickerName: 'David',
@@ -100,6 +101,7 @@ const mockWorkBucketSummaries: WorkBucketSummary[] = [
         orderId: 'order-2',
         orderNumber: null,
         customerName: null,
+        pointName: null,
         status: 'returned',
         workBucketName: 'Point A',
         pickerName: null,
@@ -120,6 +122,7 @@ const mockWorkBucketSummaries: WorkBucketSummary[] = [
         orderId: 'order-3',
         orderNumber: null,
         customerName: null,
+        pointName: null,
         status: 'queued',
         workBucketName: 'No Point',
         pickerName: null,
@@ -139,17 +142,24 @@ describe('DesktopHierarchyPanel', () => {
       <DesktopHierarchyPanel
         selectedAreaKey={null}
         selectedLineId={null}
+        selectedRouteGroupKey={null}
         selectedWorkBucketName={null}
         areaSummaries={mockAreaSummaries}
         lineHierarchySummaries={[]}
         areaLineSummaries={mockLineHierarchySummaries}
         workBucketSummaries={[]}
+        routeGroupSummaries={[]}
+        routeGroupWorkBucketSummaries={[]}
+        hasRouteGroups={false}
+        showProductRollupDeferred={false}
         onSelectArea={noop}
         onSelectLine={noop}
+        onSelectRouteGroup={noop}
         onSelectBucket={noop}
         onSelectOrder={noop}
         onClearArea={noop}
         onClearLine={noop}
+        onClearRouteGroup={noop}
         onClearBucket={noop}
         workBucketView="products"
         productRollup={undefined}
@@ -387,6 +397,7 @@ describe('DesktopHierarchyPanel', () => {
               orderId: 'order-99',
               orderNumber: 'SO-100',
               customerName: null,
+              pointName: null,
               status: 'queued',
               workBucketName: 'Line South',
               pickerName: null,
@@ -436,6 +447,7 @@ describe('DesktopHierarchyPanel', () => {
               orderId: 'order-99',
               orderNumber: 'SO-100',
               customerName: null,
+              pointName: null,
               status: 'queued',
               workBucketName: 'Line South',
               pickerName: null,
@@ -600,6 +612,7 @@ describe('DesktopHierarchyPanel', () => {
               orderId: 'order-99',
               orderNumber: 'SO-100',
               customerName: null,
+              pointName: null,
               status: 'queued',
               workBucketName: 'Line South',
               pickerName: null,
@@ -659,6 +672,7 @@ describe('DesktopHierarchyPanel', () => {
               orderId: 'order-50',
               orderNumber: 'SO-200',
               customerName: null,
+              pointName: null,
               status: 'queued',
               workBucketName: 'Bucket B',
               pickerName: null,

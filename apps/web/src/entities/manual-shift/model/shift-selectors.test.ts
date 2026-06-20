@@ -18,6 +18,8 @@ import {
   selectWorkHierarchyBucketSummaries,
   selectWorkHierarchyAreaSummaries,
   selectWorkHierarchyLineSummariesByArea,
+  selectLineRouteGroupSummaries,
+  selectRouteGroupWorkBucketSummaries,
   NO_DISTRIBUTION_AREA_KEY,
   normalizePointName,
   NO_POINT_LABEL,
@@ -2118,7 +2120,6 @@ describe('selectWorkHierarchyLineSummariesByArea', () => {
     const LINE_GALIL = 'line-galil-1111-1111-111111111111';
     const LINE_JERUSALEM = 'line-jeru-2222-2222-222222222222';
     const LINE_AMAKIM = 'line-amak-3333-3333-333333333333';
-    const LINE_CHITA = 'line-chit-4444-4444-444444444444';
     const LINE_TZAFON = 'line-tzfn-5555-5555-555555555555';
     const LINE_SHFELA2 = 'line-shf2-6666-6666-666666666666';
     const LINE_SHFELA_DAROM = 'line-shfd-7777-7777-777777777777';
@@ -2173,5 +2174,506 @@ describe('selectWorkHierarchyLineSummariesByArea', () => {
     expect(allLineNames).not.toContain('צפון');
     expect(allLineNames).not.toContain("צ'יטה");
     expect(allLineNames).not.toContain('שפלה דרומית');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// selectLineRouteGroupSummaries
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('selectLineRouteGroupSummaries', () => {
+  const SHIFT_ID = 'shift-0000-0000-0000-000000000000';
+  const LINE_GALIL = 'line-galil-1111-1111-111111111111';
+
+  function makeRouteGroupFixture(): ManualShiftWorkHierarchyResponse {
+    return {
+      shiftId: SHIFT_ID,
+      areas: [
+        {
+          areaName: 'גליל',
+          displayName: 'גליל',
+          totalLines: 1,
+          totalBuckets: 4,
+          totalOrders: 8,
+          totalQuantity: 200,
+          statusBreakdown: { queued: 8, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          lines: [
+            {
+              lineId: LINE_GALIL,
+              lineGroupName: 'גליל',
+              distributionArea: 'גליל',
+              status: 'open',
+              totalBuckets: 4,
+              totalOrders: 8,
+              totalQuantity: 200,
+              statusBreakdown: { queued: 8, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              buckets: [],
+              routeGroups: [
+                {
+                  routeGroupKey: 'galil-general',
+                  routeGroupName: 'גליל כללי',
+                  routeGroupKind: 'general',
+                  classificationConfidence: 'high',
+                  classificationReasons: [],
+                  orderCount: 4,
+                  itemLinesCount: 10,
+                  totalQuantity: 100,
+                  statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                  workBuckets: [
+                    {
+                      workBucketKey: 'wb-klali',
+                      workBucketName: 'כללי',
+                      workBucketDisplayName: 'כללי',
+                      workBucketKind: 'general',
+                      classificationConfidence: 'high',
+                      classificationReasons: [],
+                      orderCount: 1,
+                      itemLinesCount: 2,
+                      totalQuantity: 20,
+                      statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                      orders: []
+                    },
+                    {
+                      workBucketKey: 'wb-sellular',
+                      workBucketName: 'סלולר',
+                      workBucketDisplayName: 'סלולר',
+                      workBucketKind: 'category',
+                      classificationConfidence: 'high',
+                      classificationReasons: [],
+                      orderCount: 1,
+                      itemLinesCount: 3,
+                      totalQuantity: 30,
+                      statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                      orders: []
+                    },
+                    {
+                      workBucketKey: 'wb-rechev-paz-nahariya',
+                      workBucketName: 'רכב-פז נהריה',
+                      workBucketDisplayName: 'רכב-פז נהריה',
+                      workBucketKind: 'category',
+                      classificationConfidence: 'high',
+                      classificationReasons: [],
+                      orderCount: 1,
+                      itemLinesCount: 3,
+                      totalQuantity: 25,
+                      statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                      orders: []
+                    },
+                    {
+                      workBucketKey: 'wb-rechev-paz-maker',
+                      workBucketName: 'רכב-פז מכר',
+                      workBucketDisplayName: 'רכב-פז מכר',
+                      workBucketKind: 'category',
+                      classificationConfidence: 'high',
+                      classificationReasons: [],
+                      orderCount: 1,
+                      itemLinesCount: 2,
+                      totalQuantity: 25,
+                      statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                      orders: []
+                    }
+                  ]
+                },
+                {
+                  routeGroupKey: 'dbeach',
+                  routeGroupName: 'דבאח עין המפרץ',
+                  routeGroupKind: 'standalone',
+                  classificationConfidence: 'high',
+                  classificationReasons: [],
+                  orderCount: 2,
+                  itemLinesCount: 5,
+                  totalQuantity: 50,
+                  statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                  workBuckets: [
+                    {
+                      workBucketKey: 'wb-klali-dbeach',
+                      workBucketName: 'כללי',
+                      workBucketDisplayName: 'כללי',
+                      workBucketKind: 'standalone-general',
+                      classificationConfidence: 'high',
+                      classificationReasons: [],
+                      orderCount: 2,
+                      itemLinesCount: 5,
+                      totalQuantity: 50,
+                      statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                      orders: []
+                    }
+                  ]
+                },
+                {
+                  routeGroupKey: 'sonol',
+                  routeGroupName: 'סונול צומת עדי',
+                  routeGroupKind: 'standalone',
+                  classificationConfidence: 'medium',
+                  classificationReasons: ['ambiguous-route-base'],
+                  orderCount: 1,
+                  itemLinesCount: 3,
+                  totalQuantity: 30,
+                  statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                  workBuckets: [
+                    {
+                      workBucketKey: 'wb-klali-sonol',
+                      workBucketName: 'כללי',
+                      workBucketDisplayName: 'כללי',
+                      workBucketKind: 'standalone-general',
+                      classificationConfidence: 'medium',
+                      classificationReasons: ['ambiguous-route-base'],
+                      orderCount: 1,
+                      itemLinesCount: 3,
+                      totalQuantity: 30,
+                      statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                      orders: []
+                    }
+                  ]
+                },
+                {
+                  routeGroupKey: 'paz-lohamei',
+                  routeGroupName: 'פז לוחמי הגטאות',
+                  routeGroupKind: 'standalone',
+                  classificationConfidence: 'high',
+                  classificationReasons: [],
+                  orderCount: 1,
+                  itemLinesCount: 2,
+                  totalQuantity: 20,
+                  statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                  workBuckets: [
+                    {
+                      workBucketKey: 'wb-klali-paz',
+                      workBucketName: 'כללי',
+                      workBucketDisplayName: 'כללי',
+                      workBucketKind: 'standalone-general',
+                      classificationConfidence: 'high',
+                      classificationReasons: [],
+                      orderCount: 1,
+                      itemLinesCount: 2,
+                      totalQuantity: 20,
+                      statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                      orders: []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    };
+  }
+
+  it('returns route group summaries when routeGroups present on line', () => {
+    const hierarchy = makeRouteGroupFixture();
+    const result = selectLineRouteGroupSummaries(hierarchy, LINE_GALIL);
+    expect(result).toHaveLength(4);
+    expect(result[0].routeGroupName).toBe('גליל כללי');
+    expect(result[1].routeGroupName).toBe('דבאח עין המפרץ');
+    expect(result[2].routeGroupName).toBe('סונול צומת עדי');
+    expect(result[3].routeGroupName).toBe('פז לוחמי הגטאות');
+  });
+
+  it('returns correct summary metrics per route group', () => {
+    const hierarchy = makeRouteGroupFixture();
+    const result = selectLineRouteGroupSummaries(hierarchy, LINE_GALIL);
+    const galilGeneral = result.find((rg) => rg.routeGroupKey === 'galil-general')!;
+    expect(galilGeneral.orderCount).toBe(4);
+    expect(galilGeneral.itemLinesCount).toBe(10);
+    expect(galilGeneral.totalQuantity).toBe(100);
+    expect(galilGeneral.workBucketCount).toBe(4);
+    expect(galilGeneral.classificationConfidence).toBe('high');
+
+    const dbeach = result.find((rg) => rg.routeGroupKey === 'dbeach')!;
+    expect(dbeach.orderCount).toBe(2);
+    expect(dbeach.workBucketCount).toBe(1);
+  });
+
+  it('preserves classificationConfidence on route group summary', () => {
+    const hierarchy = makeRouteGroupFixture();
+    const result = selectLineRouteGroupSummaries(hierarchy, LINE_GALIL);
+    const sonol = result.find((rg) => rg.routeGroupKey === 'sonol')!;
+    expect(sonol.classificationConfidence).toBe('medium');
+  });
+
+  it('returns empty array when routeGroups is missing on line', () => {
+    const hierarchy: ManualShiftWorkHierarchyResponse = {
+      shiftId: SHIFT_ID,
+      areas: [
+        {
+          areaName: 'גליל',
+          displayName: 'גליל',
+          totalLines: 1,
+          totalBuckets: 1,
+          totalOrders: 5,
+          totalQuantity: 100,
+          statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          lines: [{
+            lineId: LINE_GALIL,
+            lineGroupName: 'גליל',
+            distributionArea: 'גליל',
+            status: 'open',
+            totalBuckets: 1,
+            totalOrders: 5,
+            totalQuantity: 100,
+            statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            buckets: [{ bucketName: 'נ׳צ', displayName: 'נ׳צ', totalOrders: 5, totalQuantity: 100, statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, orders: [] }]
+          }]
+        }
+      ]
+    };
+    const result = selectLineRouteGroupSummaries(hierarchy, LINE_GALIL);
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array when routeGroups is empty array', () => {
+    const hierarchy: ManualShiftWorkHierarchyResponse = {
+      shiftId: SHIFT_ID,
+      areas: [
+        {
+          areaName: 'גליל',
+          displayName: 'גליל',
+          totalLines: 1,
+          totalBuckets: 1,
+          totalOrders: 5,
+          totalQuantity: 100,
+          statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          lines: [{
+            lineId: LINE_GALIL,
+            lineGroupName: 'גליל',
+            distributionArea: 'גליל',
+            status: 'open',
+            totalBuckets: 1,
+            totalOrders: 5,
+            totalQuantity: 100,
+            statusBreakdown: { queued: 5, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            buckets: [],
+            routeGroups: []
+          }]
+        }
+      ]
+    };
+    const result = selectLineRouteGroupSummaries(hierarchy, LINE_GALIL);
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array for unknown lineId', () => {
+    const hierarchy = makeRouteGroupFixture();
+    const result = selectLineRouteGroupSummaries(hierarchy, 'unknown-line');
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array for undefined hierarchy', () => {
+    const result = selectLineRouteGroupSummaries(undefined, LINE_GALIL);
+    expect(result).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// selectRouteGroupWorkBucketSummaries
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('selectRouteGroupWorkBucketSummaries', () => {
+  const SHIFT_ID = 'shift-0000-0000-0000-000000000000';
+  const LINE_GALIL = 'line-galil-1111-1111-111111111111';
+
+  function makeHierarchyWithOrders(): ManualShiftWorkHierarchyResponse {
+    return {
+      shiftId: SHIFT_ID,
+      areas: [
+        {
+          areaName: 'גליל',
+          displayName: 'גליל',
+          totalLines: 1,
+          totalBuckets: 4,
+          totalOrders: 8,
+          totalQuantity: 200,
+          statusBreakdown: { queued: 8, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          lines: [
+            {
+              lineId: LINE_GALIL,
+              lineGroupName: 'גליל',
+              distributionArea: 'גליל',
+              status: 'open',
+              totalBuckets: 4,
+              totalOrders: 8,
+              totalQuantity: 200,
+              statusBreakdown: { queued: 8, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              buckets: [],
+              routeGroups: [
+                {
+                  routeGroupKey: 'galil-general',
+                  routeGroupName: 'גליל כללי',
+                  routeGroupKind: 'general',
+                  classificationConfidence: 'high',
+                  classificationReasons: [],
+                  orderCount: 4,
+                  itemLinesCount: 10,
+                  totalQuantity: 100,
+                  statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                  workBuckets: [
+                    {
+                      workBucketKey: 'wb-klali',
+                      workBucketName: 'כללי',
+                      workBucketDisplayName: 'כללי',
+                      workBucketKind: 'general',
+                      classificationConfidence: 'high',
+                      classificationReasons: [],
+                      orderCount: 1,
+                      itemLinesCount: 2,
+                      totalQuantity: 20,
+                      statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                      orders: [
+                        { orderId: 'o-1', orderNumber: 'SO-1', customerName: 'לקוח א', pointName: 'גליל כללי', status: 'queued', lineCount: 2, totalQuantity: 20, hasAshlama: false, hasCheckUnits: false }
+                      ]
+                    },
+                    {
+                      workBucketKey: 'wb-sellular',
+                      workBucketName: 'סלולר',
+                      workBucketDisplayName: 'סלולר',
+                      workBucketKind: 'category',
+                      classificationConfidence: 'high',
+                      classificationReasons: [],
+                      orderCount: 1,
+                      itemLinesCount: 3,
+                      totalQuantity: 30,
+                      statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                      orders: [
+                        { orderId: 'o-2', orderNumber: 'SO-2', customerName: 'לקוח ב', pointName: 'גליל כללי', status: 'queued', lineCount: 3, totalQuantity: 30, hasAshlama: false, hasCheckUnits: false }
+                      ]
+                    },
+                    {
+                      workBucketKey: 'wb-rechev-paz-nahariya',
+                      workBucketName: 'רכב-פז נהריה',
+                      workBucketDisplayName: 'רכב-פז נהריה',
+                      workBucketKind: 'category',
+                      classificationConfidence: 'high',
+                      classificationReasons: [],
+                      orderCount: 1,
+                      itemLinesCount: 3,
+                      totalQuantity: 25,
+                      statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                      orders: [
+                        { orderId: 'o-3', orderNumber: 'SO-3', customerName: 'לקוח ג', pointName: 'גליל כללי', status: 'queued', lineCount: 3, totalQuantity: 25, hasAshlama: false, hasCheckUnits: false }
+                      ]
+                    },
+                    {
+                      workBucketKey: 'wb-rechev-paz-maker',
+                      workBucketName: 'רכב-פז מכר',
+                      workBucketDisplayName: 'רכב-פז מכר',
+                      workBucketKind: 'category',
+                      classificationConfidence: 'high',
+                      classificationReasons: [],
+                      orderCount: 1,
+                      itemLinesCount: 2,
+                      totalQuantity: 25,
+                      statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                      orders: [
+                        { orderId: 'o-4', orderNumber: 'SO-4', customerName: 'לקוח ד', pointName: 'גליל כללי', status: 'queued', lineCount: 2, totalQuantity: 25, hasAshlama: false, hasCheckUnits: false }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  routeGroupKey: 'dbeach',
+                  routeGroupName: 'דבאח עין המפרץ',
+                  routeGroupKind: 'standalone',
+                  classificationConfidence: 'high',
+                  classificationReasons: [],
+                  orderCount: 2,
+                  itemLinesCount: 5,
+                  totalQuantity: 50,
+                  statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                  workBuckets: [
+                    {
+                      workBucketKey: 'wb-klali-dbeach',
+                      workBucketName: 'כללי',
+                      workBucketDisplayName: 'כללי',
+                      workBucketKind: 'standalone-general',
+                      classificationConfidence: 'high',
+                      classificationReasons: [],
+                      orderCount: 2,
+                      itemLinesCount: 5,
+                      totalQuantity: 50,
+                      statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                      orders: [
+                        { orderId: 'o-5', orderNumber: 'SO-5', customerName: 'לקוח ה', pointName: 'דבאח עין המפרץ', status: 'queued', lineCount: 2, totalQuantity: 20, hasAshlama: false, hasCheckUnits: false },
+                        { orderId: 'o-6', orderNumber: 'SO-6', customerName: 'לקוח ו', pointName: 'דבאח עין המפרץ', status: 'queued', lineCount: 3, totalQuantity: 30, hasAshlama: false, hasCheckUnits: false }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    };
+  }
+
+  it('returns work bucket summaries for a given routeGroupKey', () => {
+    const hierarchy = makeHierarchyWithOrders();
+    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'galil-general');
+    expect(result).toHaveLength(4);
+    const names = result.map((wb) => wb.workBucketDisplayName);
+    expect(names).toContain('כללי');
+    expect(names).toContain('סלולר');
+    expect(names).toContain('רכב-פז נהריה');
+    expect(names).toContain('רכב-פז מכר');
+  });
+
+  it('גליל כללי contains work buckets כללי, סלולר, רכב-פז נהריה, רכב-פז מכר', () => {
+    const hierarchy = makeHierarchyWithOrders();
+    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'galil-general');
+    expect(result).toHaveLength(4);
+    expect(result[0].workBucketDisplayName).toBe('כללי');
+    expect(result[1].workBucketDisplayName).toBe('סלולר');
+    expect(result[2].workBucketDisplayName).toBe('רכב-פז נהריה');
+    expect(result[3].workBucketDisplayName).toBe('רכב-פז מכר');
+  });
+
+  it('דבאח עין המפרץ contains work bucket כללי (standalone)', () => {
+    const hierarchy = makeHierarchyWithOrders();
+    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'dbeach');
+    expect(result).toHaveLength(1);
+    expect(result[0].workBucketDisplayName).toBe('כללי');
+    expect(result[0].orderCount).toBe(2);
+    expect(result[0].itemLinesCount).toBe(5);
+  });
+
+  it('preserves pointName on each order', () => {
+    const hierarchy = makeHierarchyWithOrders();
+    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'dbeach');
+    const wb = result[0];
+    expect(wb.orders).toHaveLength(2);
+    expect(wb.orders[0].pointName).toBe('דבאח עין המפרץ');
+    expect(wb.orders[1].pointName).toBe('דבאח עין המפרץ');
+  });
+
+  it('returns empty array for unknown routeGroupKey', () => {
+    const hierarchy = makeHierarchyWithOrders();
+    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'nonexistent');
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array for unknown lineId', () => {
+    const hierarchy = makeHierarchyWithOrders();
+    const result = selectRouteGroupWorkBucketSummaries(hierarchy, 'unknown-line', 'galil-general');
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array for undefined hierarchy', () => {
+    const result = selectRouteGroupWorkBucketSummaries(undefined, LINE_GALIL, 'galil-general');
+    expect(result).toEqual([]);
+  });
+
+  it('workBucketName maps to workBucketDisplayName on each work bucket', () => {
+    const hierarchy = makeHierarchyWithOrders();
+    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'galil-general');
+    expect(result[0].workBucketName).toBe('כללי');
+    expect(result[0].workBucketDisplayName).toBe('כללי');
+  });
+
+  it('sets workBucketName on each order to workBucketDisplayName', () => {
+    const hierarchy = makeHierarchyWithOrders();
+    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'galil-general');
+    const wb = result[0];
+    expect(wb.orders[0].workBucketName).toBe('כללי');
   });
 });

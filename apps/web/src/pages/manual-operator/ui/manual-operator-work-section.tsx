@@ -10,8 +10,10 @@ import {
   workHierarchyQueryOptions
 } from '@/entities/manual-shift/api/queries';
 import {
+  selectLineRouteGroupSummaries,
   selectLineSummaries,
   selectOrderDetail,
+  selectRouteGroupWorkBucketSummaries,
   selectShiftSummary,
   selectWorkHierarchyAreaSummaries,
   selectWorkHierarchyLineSummaries,
@@ -80,6 +82,7 @@ export function ManualOperatorWorkSection({
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const [selectedWorkBucketName, setSelectedWorkBucketName] = useState<string | null>(null);
   const [selectedAreaKey, setSelectedAreaKey] = useState<string | null>(null);
+  const [selectedRouteGroupKey, setSelectedRouteGroupKey] = useState<string | null>(null);
   const [workBucketView, setWorkBucketView] = useState<'products' | 'orders'>('products');
 
   const { data: daySummary, isLoading: isDaySummaryLoading } = useQuery({
@@ -95,8 +98,46 @@ const { data: workHierarchy } = useQuery({
     enabled: !!shift?.id && isDesktop
   });
 
+  const selectedHierarchyLine = workHierarchy?.areas
+    .flatMap(a => a.lines)
+    .find(l => l.lineId === selectedLineId);
+
+  const hasRouteGroups = !!(selectedHierarchyLine?.routeGroups && selectedHierarchyLine.routeGroups.length > 0);
+
+  const routeGroupSummaries = useMemo(
+    () => hasRouteGroups && selectedLineId
+      ? selectLineRouteGroupSummaries(workHierarchy, selectedLineId)
+      : [],
+    [hasRouteGroups, selectedLineId, workHierarchy]
+  );
+
+  const routeGroupWorkBucketSummaries = useMemo(
+    () => hasRouteGroups && selectedLineId && selectedRouteGroupKey
+      ? selectRouteGroupWorkBucketSummaries(workHierarchy, selectedLineId, selectedRouteGroupKey)
+      : [],
+    [hasRouteGroups, selectedLineId, selectedRouteGroupKey, workHierarchy]
+  );
+
+  const workBucketSummaries = useMemo(
+    () => !hasRouteGroups && selectedLineId
+      ? selectWorkHierarchyBucketSummaries(workHierarchy, selectedLineId)
+      : [],
+    [hasRouteGroups, selectedLineId, workHierarchy]
+  );
+
   const selectedWorkBucketRawName: string = useMemo(() => {
     if (!selectedLineId || !selectedWorkBucketName || !workHierarchy) return '';
+
+    if (hasRouteGroups && selectedRouteGroupKey) {
+      const wb = routeGroupWorkBucketSummaries.find(
+        (w) => w.workBucketDisplayName === selectedWorkBucketName || w.workBucketName === selectedWorkBucketName
+      );
+      if (!wb || wb.orders.length === 0) return '';
+      const uniquePointNames = [...new Set(wb.orders.map((o) => o.pointName).filter(Boolean))];
+      if (uniquePointNames.length === 1) return uniquePointNames[0]!;
+      return '';
+    }
+
     for (const area of workHierarchy.areas) {
       const line = area.lines.find((l) => l.lineId === selectedLineId);
       if (!line) continue;
@@ -105,11 +146,13 @@ const { data: workHierarchy } = useQuery({
       return bucket.bucketName ?? '';
     }
     return '';
-  }, [selectedLineId, selectedWorkBucketName, workHierarchy]);
+  }, [selectedLineId, selectedWorkBucketName, workHierarchy, hasRouteGroups, selectedRouteGroupKey, routeGroupWorkBucketSummaries]);
+
+  const showProductRollupDeferred = !!(hasRouteGroups && selectedRouteGroupKey && !selectedWorkBucketRawName);
 
   const { data: productRollup, isLoading: isProductRollupLoading } = useQuery({
     ...bucketProductRollupQueryOptions(shift?.id ?? '', selectedLineId ?? '', selectedWorkBucketRawName),
-    enabled: !!shift?.id && !!selectedLineId && selectedWorkBucketRawName !== null && workBucketView === 'products'
+    enabled: !!shift?.id && !!selectedLineId && selectedWorkBucketRawName !== '' && workBucketView === 'products'
   });
 
   const canFetchReplaceSafety = canMonthlyImport && hasExistingWork && !!shift?.id;
@@ -143,13 +186,9 @@ const { data: workHierarchy } = useQuery({
     () => selectWorkHierarchyLineSummariesByArea(workHierarchy, selectedAreaKey),
     [workHierarchy, selectedAreaKey]
   );
-  const workBucketSummaries = useMemo(
-    () => (selectedLineId ? selectWorkHierarchyBucketSummaries(workHierarchy, selectedLineId) : []),
-    [selectedLineId, workHierarchy]
-  );
-
   function handleSelectArea(areaKey: string | null) {
     setSelectedAreaKey(areaKey);
+    setSelectedRouteGroupKey(null);
     setSelectedWorkBucketName(null);
 
     if (areaKey !== null) {
@@ -166,6 +205,12 @@ const { data: workHierarchy } = useQuery({
 
   function handleSelectHierarchyLine(lineId: string) {
     setSelectedLineId(lineId);
+    setSelectedRouteGroupKey(null);
+    setSelectedWorkBucketName(null);
+  }
+
+  function handleSelectHierarchyRouteGroup(routeGroupKey: string) {
+    setSelectedRouteGroupKey(routeGroupKey);
     setSelectedWorkBucketName(null);
   }
 
@@ -177,11 +222,18 @@ const { data: workHierarchy } = useQuery({
   function handleClearArea() {
     setSelectedAreaKey(null);
     setSelectedLineId(null);
+    setSelectedRouteGroupKey(null);
     setSelectedWorkBucketName(null);
   }
 
   function handleClearHierarchyLine() {
     setSelectedLineId(null);
+    setSelectedRouteGroupKey(null);
+    setSelectedWorkBucketName(null);
+  }
+
+  function handleClearHierarchyRouteGroup() {
+    setSelectedRouteGroupKey(null);
     setSelectedWorkBucketName(null);
   }
 
@@ -199,18 +251,25 @@ const { data: workHierarchy } = useQuery({
         selectedDetailType={selectedOrderId ? 'order' : null}
         selectedAreaKey={selectedAreaKey}
         selectedLineId={selectedLineId}
+        selectedRouteGroupKey={selectedRouteGroupKey}
         selectedWorkBucketName={selectedWorkBucketName}
         areaSummaries={areaSummaries}
         lineHierarchySummaries={lineHierarchySummaries}
         areaLineSummaries={areaLineSummaries}
         workBucketSummaries={workBucketSummaries}
+        routeGroupSummaries={routeGroupSummaries}
+        routeGroupWorkBucketSummaries={routeGroupWorkBucketSummaries}
+        hasRouteGroups={hasRouteGroups}
+        showProductRollupDeferred={showProductRollupDeferred}
         onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
         onCloseDetail={() => setSelectedOrderId(null)}
         onSelectArea={handleSelectArea}
         onSelectHierarchyLine={handleSelectHierarchyLine}
+        onSelectHierarchyRouteGroup={handleSelectHierarchyRouteGroup}
         onSelectHierarchyBucket={handleSelectHierarchyBucket}
         onClearArea={handleClearArea}
         onClearHierarchyLine={handleClearHierarchyLine}
+        onClearHierarchyRouteGroup={handleClearHierarchyRouteGroup}
         onClearHierarchyBucket={handleClearHierarchyBucket}
         workBucketView={workBucketView}
         productRollup={productRollup?.products}

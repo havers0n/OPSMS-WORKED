@@ -1,34 +1,63 @@
-import type { WorkBucketSummary } from '@/entities/manual-shift/model/shift-selectors';
+import type {
+  RouteGroupWorkBucketSummary,
+  WorkBucketSummary
+} from '@/entities/manual-shift/model/shift-selectors';
+
+type BucketForCard = WorkBucketSummary | RouteGroupWorkBucketSummary;
 
 interface DesktopWorkBucketCardProps {
-  bucket: WorkBucketSummary;
+  bucket: BucketForCard;
   lineName?: string;
+  routeGroupName?: string;
   onClick?: (workBucketName: string) => void;
 }
 
-function bucketDisplayName(workBucketName: string, lineName?: string): string {
-  if (lineName && workBucketName === lineName) {
-    return 'כללי';
-  }
+function getWorkBucketName(bucket: BucketForCard): string {
+  if ('workBucketDisplayName' in bucket) return bucket.workBucketDisplayName;
+  return bucket.workBucketName;
+}
+
+function getOrdersCount(bucket: BucketForCard): number {
+  if ('ordersCount' in bucket) return bucket.ordersCount;
+  return bucket.orderCount;
+}
+
+function getItemLinesCount(bucket: BucketForCard): number {
+  if ('itemLinesCount' in bucket) return bucket.itemLinesCount;
+  return (bucket as WorkBucketSummary).itemLinesCount;
+}
+
+function getTotalQuantity(bucket: BucketForCard): number {
+  if ('totalQuantity' in bucket) return bucket.totalQuantity;
+  return (bucket as WorkBucketSummary).totalQuantity;
+}
+
+function bucketDisplayName(workBucketName: string, lineName?: string, routeGroupName?: string): string {
+  if (routeGroupName && workBucketName === routeGroupName) return 'כללי';
+  if (lineName && workBucketName === lineName) return 'כללי';
   return workBucketName;
 }
 
-export function DesktopWorkBucketCard({ bucket, lineName, onClick }: DesktopWorkBucketCardProps) {
-  const displayName = bucketDisplayName(bucket.workBucketName, lineName);
+export function DesktopWorkBucketCard({ bucket, lineName, routeGroupName, onClick }: DesktopWorkBucketCardProps) {
+  const rawName = getWorkBucketName(bucket);
+  const displayName = bucketDisplayName(rawName, lineName, routeGroupName);
   const sb = bucket.statusBreakdown;
+  const ordersCount = getOrdersCount(bucket);
+  const itemLinesCount = getItemLinesCount(bucket);
+  const totalQuantity = getTotalQuantity(bucket);
   return (
     <button
       type="button"
       className="bg-white border border-gray-200 rounded-lg p-4 text-right w-full hover:bg-gray-50 hover:border-gray-300 transition-colors"
-      onClick={() => onClick?.(bucket.workBucketName)}
-      data-testid={`work-bucket-card-${bucket.workBucketName}`}
+      onClick={() => onClick?.(rawName)}
+      data-testid={`work-bucket-card-${rawName}`}
       aria-label={`קבוצת עבודה ${displayName}`}
     >
       <p className="text-sm font-semibold text-gray-900 mb-2">{displayName}</p>
       <div className="flex items-baseline gap-3 mb-2 text-xs text-gray-600">
-        <span>{bucket.ordersCount} הזמנה{bucket.ordersCount !== 1 ? 'ות' : ''}</span>
-        {bucket.itemLinesCount > 0 && <span>{bucket.itemLinesCount} פריטים / שורות</span>}
-        <span>{bucket.totalQuantity} יח'</span>
+        <span>{ordersCount} הזמנה{ordersCount !== 1 ? 'ות' : ''}</span>
+        {itemLinesCount > 0 && <span>{itemLinesCount} פריטים / שורות</span>}
+        <span>{totalQuantity} יח'</span>
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
         {sb.queued > 0 && <span className="text-gray-500">{sb.queued} בתור</span>}

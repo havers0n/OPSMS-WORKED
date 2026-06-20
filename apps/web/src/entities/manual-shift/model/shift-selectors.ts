@@ -1,10 +1,13 @@
 import type {
+  ClassificationConfidence,
   ManualShiftDaySummary,
   ManualShiftLineSummary,
   ManualShiftOrder,
   ManualShiftOrderStatus,
   ManualShiftOrderCheckUnit,
-  ManualShiftWorkHierarchyResponse
+  ManualShiftWorkHierarchyResponse,
+  ManualShiftWorkHierarchyRouteGroup,
+  ManualShiftWorkHierarchyWorkBucket
 } from '@wos/domain';
 import {
   summarizeManualShiftOrderCheckUnits as domainSummarizeManualShiftOrderCheckUnits,
@@ -689,6 +692,7 @@ export interface HierarchyOrder {
   orderId: string;
   orderNumber: string | null;
   customerName?: string | null;
+  pointName: string | null;
   status: ManualShiftOrderStatus;
   workBucketName: string;
   pickerName: string | null;
@@ -770,6 +774,7 @@ export function selectWorkBucketSummaries(
         orderId: o.id,
         orderNumber: o.orderNumber,
         customerName: o.customerName,
+        pointName: o.pointName,
         status: o.status,
         workBucketName: normalizeWorkBucketName(o.pointName),
         pickerName: o.pickerName,
@@ -894,6 +899,7 @@ export function selectWorkHierarchyBucketSummaries(
         orderId: order.orderId,
         orderNumber: order.orderNumber,
         customerName: order.customerName,
+        pointName: order.pointName,
         status: order.status,
         workBucketName: toHierarchyBucketName(order.pointName, bucket.displayName),
         pickerName: null,
@@ -907,6 +913,109 @@ export function selectWorkHierarchyBucketSummaries(
         itemLinesCount: orders.reduce((sum, o) => sum + o.lineCount, 0),
         totalQuantity: bucket.totalQuantity,
         statusBreakdown: bucket.statusBreakdown,
+        orders
+      };
+    });
+  }
+
+  return [];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RouteGroup selectors (RouteGroup → WorkBucket drill-down)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface RouteGroupSummary {
+  routeGroupKey: string;
+  routeGroupName: string;
+  classificationConfidence: ClassificationConfidence;
+  orderCount: number;
+  itemLinesCount: number;
+  totalQuantity: number;
+  statusBreakdown: StatusBreakdown;
+  workBucketCount: number;
+}
+
+export interface RouteGroupWorkBucketSummary {
+  workBucketKey: string;
+  workBucketName: string | null;
+  workBucketDisplayName: string;
+  classificationConfidence: ClassificationConfidence;
+  orderCount: number;
+  itemLinesCount: number;
+  totalQuantity: number;
+  statusBreakdown: StatusBreakdown;
+  orders: HierarchyOrder[];
+}
+
+export function selectLineRouteGroupSummaries(
+  hierarchy: ManualShiftWorkHierarchyResponse | undefined,
+  lineId: string
+): RouteGroupSummary[] {
+  if (!hierarchy || !lineId) return [];
+
+  for (const area of hierarchy.areas) {
+    const line = area.lines.find((entry) => entry.lineId === lineId);
+    if (!line) continue;
+
+    const groups = line.routeGroups;
+    if (!groups || groups.length === 0) return [];
+
+    return groups.map((rg: ManualShiftWorkHierarchyRouteGroup): RouteGroupSummary => ({
+      routeGroupKey: rg.routeGroupKey,
+      routeGroupName: rg.routeGroupName,
+      classificationConfidence: rg.classificationConfidence,
+      orderCount: rg.orderCount,
+      itemLinesCount: rg.itemLinesCount,
+      totalQuantity: rg.totalQuantity,
+      statusBreakdown: rg.statusBreakdown,
+      workBucketCount: rg.workBuckets.length
+    }));
+  }
+
+  return [];
+}
+
+export function selectRouteGroupWorkBucketSummaries(
+  hierarchy: ManualShiftWorkHierarchyResponse | undefined,
+  lineId: string,
+  routeGroupKey: string
+): RouteGroupWorkBucketSummary[] {
+  if (!hierarchy || !lineId || !routeGroupKey) return [];
+
+  for (const area of hierarchy.areas) {
+    const line = area.lines.find((entry) => entry.lineId === lineId);
+    if (!line) continue;
+
+    const groups = line.routeGroups;
+    if (!groups) return [];
+
+    const routeGroup = groups.find((rg: ManualShiftWorkHierarchyRouteGroup) => rg.routeGroupKey === routeGroupKey);
+    if (!routeGroup) return [];
+
+    return routeGroup.workBuckets.map((wb: ManualShiftWorkHierarchyWorkBucket): RouteGroupWorkBucketSummary => {
+      const orders: HierarchyOrder[] = wb.orders.map((order) => ({
+        orderId: order.orderId,
+        orderNumber: order.orderNumber,
+        customerName: order.customerName,
+        pointName: order.pointName,
+        status: order.status,
+        workBucketName: wb.workBucketDisplayName,
+        pickerName: null,
+        checkerName: null,
+        lineCount: order.lineCount ?? 0,
+        totalQuantity: order.totalQuantity
+      }));
+
+      return {
+        workBucketKey: wb.workBucketKey,
+        workBucketName: wb.workBucketName,
+        workBucketDisplayName: wb.workBucketDisplayName,
+        classificationConfidence: wb.classificationConfidence,
+        orderCount: wb.orderCount,
+        itemLinesCount: wb.itemLinesCount,
+        totalQuantity: wb.totalQuantity,
+        statusBreakdown: wb.statusBreakdown,
         orders
       };
     });

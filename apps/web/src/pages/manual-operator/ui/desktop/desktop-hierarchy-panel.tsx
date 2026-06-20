@@ -1,11 +1,14 @@
 import type {
   AreaHierarchySummary,
   LineHierarchySummary,
+  RouteGroupSummary,
+  RouteGroupWorkBucketSummary,
   WorkBucketSummary
 } from '@/entities/manual-shift/model/shift-selectors';
 import type { BucketProductRollupRow } from '@wos/domain';
 import { DesktopAreaCard } from './desktop-area-card';
 import { DesktopLineSummaryCard } from './desktop-line-summary-card';
+import { DesktopRouteGroupCard } from './desktop-route-group-card';
 import { DesktopWorkBucketCard } from './desktop-work-bucket-card';
 import { DesktopOrderMiniCard } from './desktop-order-mini-card';
 import { DesktopBucketProductTable } from './desktop-bucket-product-table';
@@ -13,44 +16,76 @@ import { DesktopBucketProductTable } from './desktop-bucket-product-table';
 interface DesktopHierarchyPanelProps {
   selectedAreaKey: string | null;
   selectedLineId: string | null;
+  selectedRouteGroupKey: string | null;
   selectedWorkBucketName: string | null;
   areaSummaries: AreaHierarchySummary[];
   lineHierarchySummaries: LineHierarchySummary[];
   areaLineSummaries: LineHierarchySummary[];
   workBucketSummaries: WorkBucketSummary[];
+  routeGroupSummaries: RouteGroupSummary[];
+  routeGroupWorkBucketSummaries: RouteGroupWorkBucketSummary[];
+  hasRouteGroups: boolean;
   onSelectArea: (areaKey: string | null) => void;
   onSelectLine: (lineId: string) => void;
+  onSelectRouteGroup: (routeGroupKey: string) => void;
   onSelectBucket: (workBucketName: string) => void;
   onSelectOrder: (orderId: string) => void;
   onClearArea: () => void;
   onClearLine: () => void;
+  onClearRouteGroup: () => void;
   onClearBucket: () => void;
   workBucketView: 'products' | 'orders';
   productRollup: BucketProductRollupRow[] | undefined;
   productRollupLoading: boolean;
+  showProductRollupDeferred: boolean;
   onSetWorkBucketView: (view: 'products' | 'orders') => void;
+}
+
+function AreaBreadcrumb({ areaName, onClearArea }: { areaName: string; onClearArea: () => void }) {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <button
+        type="button"
+        className="text-xs text-blue-600 hover:text-blue-800"
+        onClick={onClearArea}
+        aria-label="חזרה לאזורי הפצה"
+      >
+        אזורי הפצה
+      </button>
+      <span className="text-xs text-gray-400">&gt;</span>
+      <span className="text-xs text-gray-700 font-medium">{areaName}</span>
+    </div>
+  );
 }
 
 export function DesktopHierarchyPanel({
   selectedAreaKey,
   selectedLineId,
+  selectedRouteGroupKey,
   selectedWorkBucketName,
   areaSummaries,
   lineHierarchySummaries,
   areaLineSummaries,
   workBucketSummaries,
+  routeGroupSummaries,
+  routeGroupWorkBucketSummaries,
+  hasRouteGroups,
   onSelectArea,
   onSelectLine,
+  onSelectRouteGroup,
   onSelectBucket,
   onSelectOrder,
   onClearArea,
   onClearLine,
+  onClearRouteGroup,
   onClearBucket,
   workBucketView,
   productRollup,
   productRollupLoading,
+  showProductRollupDeferred,
   onSetWorkBucketView
 }: DesktopHierarchyPanelProps) {
+  // ── State 1: No area selected → area cards ──────────────────────────────
   if (!selectedAreaKey) {
     if (areaSummaries.length === 0) {
       return (
@@ -76,22 +111,12 @@ export function DesktopHierarchyPanel({
   const selectedArea = areaSummaries.find((a) => a.areaKey === selectedAreaKey);
   const isAutoSkippedSingleLine = selectedLineId !== null && areaLineSummaries.length === 1;
 
+  // ── State 2: Area selected, no line → line cards ────────────────────────
   if (!selectedLineId) {
     if (areaLineSummaries.length === 0) {
       return (
         <div className="p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <button
-              type="button"
-              className="text-xs text-blue-600 hover:text-blue-800"
-              onClick={onClearArea}
-              aria-label="חזרה לאזורי הפצה"
-            >
-              אזורי הפצה
-            </button>
-            <span className="text-xs text-gray-400">&gt;</span>
-            <span className="text-xs text-gray-700 font-medium">{selectedArea?.displayName ?? ''}</span>
-          </div>
+          <AreaBreadcrumb areaName={selectedArea?.displayName ?? ''} onClearArea={onClearArea} />
           <div className="flex flex-col items-center justify-center h-32 px-4 gap-1">
             <p className="text-sm font-medium text-gray-500">אין קווים באזור זה</p>
           </div>
@@ -99,6 +124,73 @@ export function DesktopHierarchyPanel({
       );
     }
 
+    return (
+      <div className="p-4">
+        <AreaBreadcrumb areaName={selectedArea?.displayName ?? ''} onClearArea={onClearArea} />
+        <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">קווים</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {areaLineSummaries.map((line) => (
+            <DesktopLineSummaryCard key={line.lineId} line={line} onClick={onSelectLine} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const selectedLine = lineHierarchySummaries.find((l) => l.lineId === selectedLineId);
+
+  // ── State 3: Route group selected, but no work bucket yet ──────────────
+  if (hasRouteGroups && selectedRouteGroupKey && !selectedWorkBucketName) {
+    const selectedRouteGroup = routeGroupSummaries.find((rg) => rg.routeGroupKey === selectedRouteGroupKey);
+
+    return (
+      <div className="p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <button
+            type="button"
+            className="text-xs text-blue-600 hover:text-blue-800"
+            onClick={onClearArea}
+            aria-label="חזרה לאזורי הפצה"
+          >
+            אזורי הפצה
+          </button>
+          <span className="text-xs text-gray-400">&gt;</span>
+          <button
+            type="button"
+            className="text-xs text-blue-600 hover:text-blue-800"
+            onClick={onClearRouteGroup}
+            aria-label="חזרה לקבוצות חלוקה"
+          >
+            {selectedArea?.displayName ?? ''}
+          </button>
+          <span className="text-xs text-gray-400">&gt;</span>
+          <span className="text-xs text-gray-700 font-medium">קבוצת חלוקה: {selectedRouteGroup?.routeGroupName ?? ''}</span>
+        </div>
+        {routeGroupWorkBucketSummaries.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-32 px-4 gap-1">
+            <p className="text-sm font-medium text-gray-500">אין קבוצות עבודה בקבוצת חלוקה זו</p>
+          </div>
+        ) : (
+          <>
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">קבוצות עבודה</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {routeGroupWorkBucketSummaries.map((wb) => (
+                <DesktopWorkBucketCard
+                  key={wb.workBucketKey}
+                  bucket={wb}
+                  routeGroupName={selectedRouteGroup?.routeGroupName}
+                  onClick={onSelectBucket}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // ── State 4: Line selected, route groups shown (no route group selected) ──
+  if (hasRouteGroups && !selectedRouteGroupKey && !selectedWorkBucketName) {
     return (
       <div className="p-4">
         <div className="flex items-center gap-2 mb-3">
@@ -113,18 +205,25 @@ export function DesktopHierarchyPanel({
           <span className="text-xs text-gray-400">&gt;</span>
           <span className="text-xs text-gray-700 font-medium">{selectedArea?.displayName ?? ''}</span>
         </div>
-        <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">קווים</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {areaLineSummaries.map((line) => (
-            <DesktopLineSummaryCard key={line.lineId} line={line} onClick={onSelectLine} />
-          ))}
-        </div>
+        {routeGroupSummaries.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-32 px-4 gap-1">
+            <p className="text-sm font-medium text-gray-500">אין קבוצות חלוקה בקו זה</p>
+          </div>
+        ) : (
+          <>
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">קבוצות חלוקה</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {routeGroupSummaries.map((rg) => (
+                <DesktopRouteGroupCard key={rg.routeGroupKey} routeGroup={rg} onClick={onSelectRouteGroup} />
+              ))}
+            </div>
+          </>
+        )}
       </div>
     );
   }
 
-  const selectedLine = lineHierarchySummaries.find((l) => l.lineId === selectedLineId);
-
+  // ── State 5: Legacy fallback — no route groups, no work bucket selected ──
   if (!selectedWorkBucketName) {
     return (
       <div className="p-4">
@@ -178,7 +277,20 @@ export function DesktopHierarchyPanel({
     );
   }
 
-  const selectedBucket = workBucketSummaries.find((p) => p.workBucketName === selectedWorkBucketName);
+  // ── State 6: Work bucket selected → products/orders ──────────────────────
+  const selectedBucketLegacy = workBucketSummaries.find((p) => p.workBucketName === selectedWorkBucketName);
+  const selectedBucketRouteGroup = routeGroupWorkBucketSummaries.find(
+    (wb) => wb.workBucketDisplayName === selectedWorkBucketName || wb.workBucketName === selectedWorkBucketName
+  );
+
+  const isRouteGroupBucket = hasRouteGroups && !!selectedRouteGroupKey;
+  const selectedRouteGroup = isRouteGroupBucket
+    ? routeGroupSummaries.find((rg) => rg.routeGroupKey === selectedRouteGroupKey)
+    : undefined;
+
+  const bucketOrders = isRouteGroupBucket
+    ? (selectedBucketRouteGroup?.orders ?? [])
+    : (selectedBucketLegacy?.orders ?? []);
 
   return (
     <div className="p-4">
@@ -192,7 +304,27 @@ export function DesktopHierarchyPanel({
           אזורי הפצה
         </button>
         <span className="text-xs text-gray-400">&gt;</span>
-        {isAutoSkippedSingleLine ? (
+        {isRouteGroupBucket ? (
+          <>
+            <button
+              type="button"
+              className="text-xs text-blue-600 hover:text-blue-800"
+              onClick={onClearRouteGroup}
+              aria-label={`חזרה לקבוצות חלוקה באזור ${selectedArea?.displayName ?? ''}`}
+            >
+              {selectedArea?.displayName ?? ''}
+            </button>
+            <span className="text-xs text-gray-400">&gt;</span>
+            <button
+              type="button"
+              className="text-xs text-blue-600 hover:text-blue-800"
+              onClick={onClearRouteGroup}
+              aria-label={`חזרה לקבוצות עבודה בקבוצת חלוקה ${selectedRouteGroup?.routeGroupName ?? ''}`}
+            >
+              קבוצת חלוקה: {selectedRouteGroup?.routeGroupName ?? ''}
+            </button>
+          </>
+        ) : isAutoSkippedSingleLine ? (
           <button
             type="button"
             className="text-xs text-blue-600 hover:text-blue-800"
@@ -254,20 +386,24 @@ export function DesktopHierarchyPanel({
       </div>
 
       {workBucketView === 'products' ? (
-        productRollupLoading ? (
+        showProductRollupDeferred ? (
+          <div className="flex flex-col items-center justify-center h-32 px-4 gap-1">
+            <p className="text-sm font-medium text-gray-500">תצוגת מוצרים לקבוצת חלוקה מרובת מקורות תתווסף בשלב הבא</p>
+          </div>
+        ) : productRollupLoading ? (
           <div className="flex items-center justify-center h-32">
             <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
           <DesktopBucketProductTable products={productRollup ?? []} />
         )
-      ) : !selectedBucket || selectedBucket.orders.length === 0 ? (
+      ) : bucketOrders.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-32 px-4 gap-1">
           <p className="text-sm font-medium text-gray-500">אין הזמנות בקבוצת עבודה זו</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {selectedBucket.orders.map((order) => (
+          {bucketOrders.map((order) => (
             <DesktopOrderMiniCard key={order.orderId} order={order} onClick={onSelectOrder} />
           ))}
         </div>

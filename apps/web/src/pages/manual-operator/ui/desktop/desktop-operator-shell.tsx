@@ -4,6 +4,8 @@ import type {
   AreaHierarchySummary,
   LineHierarchySummary,
   OrderDetail,
+  RouteGroupSummary,
+  RouteGroupWorkBucketSummary,
   WorkBucketSummary,
   ShiftSummary
 } from '@/entities/manual-shift/model/shift-selectors';
@@ -20,18 +22,25 @@ export interface DesktopOperatorShellProps {
   selectedDetailType: 'order' | null;
   selectedAreaKey: string | null;
   selectedLineId: string | null;
+  selectedRouteGroupKey: string | null;
   selectedWorkBucketName: string | null;
   areaSummaries: AreaHierarchySummary[];
   lineHierarchySummaries: LineHierarchySummary[];
   areaLineSummaries: LineHierarchySummary[];
   workBucketSummaries: WorkBucketSummary[];
+  routeGroupSummaries: RouteGroupSummary[];
+  routeGroupWorkBucketSummaries: RouteGroupWorkBucketSummary[];
+  hasRouteGroups: boolean;
+  showProductRollupDeferred: boolean;
   onSelectOrder: (orderId: string) => void;
   onCloseDetail: () => void;
   onSelectArea: (areaName: string | null) => void;
   onSelectHierarchyLine: (lineId: string) => void;
+  onSelectHierarchyRouteGroup: (routeGroupKey: string) => void;
   onSelectHierarchyBucket: (workBucketName: string) => void;
   onClearArea: () => void;
   onClearHierarchyLine: () => void;
+  onClearHierarchyRouteGroup: () => void;
   onClearHierarchyBucket: () => void;
   workBucketView: 'products' | 'orders';
   productRollup: BucketProductRollupRow[] | undefined;
@@ -96,18 +105,25 @@ export function DesktopOperatorShell({
   selectedDetailType,
   selectedAreaKey,
   selectedLineId,
+  selectedRouteGroupKey,
   selectedWorkBucketName,
   areaSummaries,
   lineHierarchySummaries,
   areaLineSummaries,
   workBucketSummaries,
+  routeGroupSummaries,
+  routeGroupWorkBucketSummaries,
+  hasRouteGroups,
+  showProductRollupDeferred,
   onSelectOrder,
   onCloseDetail,
   onSelectArea,
   onSelectHierarchyLine,
+  onSelectHierarchyRouteGroup,
   onSelectHierarchyBucket,
   onClearArea,
   onClearHierarchyLine,
+  onClearHierarchyRouteGroup,
   onClearHierarchyBucket,
   workBucketView,
   productRollup,
@@ -205,17 +221,24 @@ export function DesktopOperatorShell({
             <DesktopHierarchyPanel
               selectedAreaKey={selectedAreaKey}
               selectedLineId={selectedLineId}
+              selectedRouteGroupKey={selectedRouteGroupKey}
               selectedWorkBucketName={selectedWorkBucketName}
               areaSummaries={areaSummaries}
               lineHierarchySummaries={lineHierarchySummaries}
               areaLineSummaries={areaLineSummaries}
               workBucketSummaries={workBucketSummaries}
+              routeGroupSummaries={routeGroupSummaries}
+              routeGroupWorkBucketSummaries={routeGroupWorkBucketSummaries}
+              hasRouteGroups={hasRouteGroups}
+              showProductRollupDeferred={showProductRollupDeferred}
               onSelectArea={onSelectArea}
               onSelectLine={onSelectHierarchyLine}
+              onSelectRouteGroup={onSelectHierarchyRouteGroup}
               onSelectBucket={onSelectHierarchyBucket}
               onSelectOrder={onSelectOrder}
               onClearArea={onClearArea}
               onClearLine={onClearHierarchyLine}
+              onClearRouteGroup={onClearHierarchyRouteGroup}
               onClearBucket={onClearHierarchyBucket}
               workBucketView={workBucketView}
               productRollup={productRollup}
