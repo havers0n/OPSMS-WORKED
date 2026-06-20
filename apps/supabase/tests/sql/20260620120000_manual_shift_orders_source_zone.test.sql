@@ -7,7 +7,6 @@ declare
   shift_a uuid;
   shift_b uuid;
   line_a uuid;
-  line_b uuid;
   order_zero uuid;
   order_single uuid;
   order_mixed uuid;
@@ -138,17 +137,9 @@ begin
     tenant_id, date, name, status, created_by_profile_id, created_by_name
   )
   values (
-    tenant_a, date '2026-06-20', 'Source Zone Apply Shift', 'active', admin_a, 'Manual Shift SZ'
+    tenant_a, date '2026-06-21', 'Source Zone Apply Shift', 'active', admin_a, 'Manual Shift SZ'
   )
   returning id into shift_b;
-
-  insert into public.manual_shift_lines (
-    tenant_id, shift_id, name, sort_order, distribution_area
-  )
-  values (
-    tenant_a, shift_b, 'שפלה 2', 1, 'שפלה אמצעי'
-  )
-  returning id into line_b;
 
   plan := jsonb_build_object(
     'preview', jsonb_build_object(
@@ -222,7 +213,7 @@ begin
   );
 
   select * from public.manual_shift_apply_monthly_import(
-    tenant_a, shift_b, date '2026-06-20', plan, 'initial'
+    tenant_a, shift_b, date '2026-06-21', plan, 'initial'
   ) into result;
 
   assert result.orders_created = 2,
@@ -237,17 +228,23 @@ begin
   assert zone_count = 2,
     'SZ-5: expected two persisted order rows with distinct source_zone values, got ' || zone_count;
 
-  for zone_value in
-    select o.source_zone
+  assert exists (
+    select 1
     from public.manual_shift_orders o
     where o.shift_id = shift_b
       and o.deleted_at is null
       and o.order_number = 'SO-1'
-    order by o.source_zone
-  loop
-    assert zone_value in ('שפלה 2', 'שפלה אמצעי'),
-      'SZ-6: unexpected persisted order source_zone value ' || coalesce(zone_value, 'NULL');
-  end loop;
+      and o.source_zone = 'שפלה 2'
+  ), 'SZ-6: expected persisted order source_zone שפלה 2';
+
+  assert exists (
+    select 1
+    from public.manual_shift_orders o
+    where o.shift_id = shift_b
+      and o.deleted_at is null
+      and o.order_number = 'SO-1'
+      and o.source_zone = 'שפלה אמצעי'
+  ), 'SZ-7: expected persisted order source_zone שפלה אמצעי';
 
   select count(*)::int into zone_count
   from public.manual_shift_order_items i
@@ -258,7 +255,7 @@ begin
     and i.zone in ('שפלה 2', 'שפלה אמצעי');
 
   assert zone_count = 2,
-    'SZ-7: expected item zone to stay aligned with source zone on both rows, got ' || zone_count;
+    'SZ-8: expected item zone to stay aligned with source zone on both rows, got ' || zone_count;
 end
 $$;
 
