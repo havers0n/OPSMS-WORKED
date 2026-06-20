@@ -255,7 +255,7 @@ describe('ManualOperatorPage URL sections', () => {
     expect(screen.getByTestId('manual-section-work').className).toContain('text-gray-500');
   });
 
-  it('renders placeholders for future sections without mutating data', async () => {
+  it('renders product control for products section without mutating data', async () => {
     mockWorkspaceData();
     renderAt(routes.operatorManualProducts);
 
@@ -264,7 +264,24 @@ describe('ManualOperatorPage URL sections', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId('manual-placeholder-products')).toBeTruthy();
+      expect(screen.getByText('בקרת מוצרים וחוסרים')).toBeTruthy();
+    });
+    expect(screen.queryByTestId('manual-placeholder-products')).toBeNull();
+    expect(
+      mockedBffRequest.mock.calls.some(([, init]) => (init?.method ?? 'GET') !== 'GET')
+    ).toBe(false);
+  });
+
+  it('still renders placeholders for other unimplemented sections', async () => {
+    mockWorkspaceData();
+    renderAt(routes.operatorManualAshlamot);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location').textContent).toBe(routes.operatorManualAshlamot);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('manual-placeholder-ashlamot')).toBeTruthy();
     });
     expect(
       mockedBffRequest.mock.calls.some(([, init]) => (init?.method ?? 'GET') !== 'GET')

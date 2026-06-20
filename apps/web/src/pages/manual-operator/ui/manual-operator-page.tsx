@@ -18,6 +18,7 @@ import { ShiftDatePicker } from './shift-date-picker';
 import { CheckTab } from './check-tab';
 import { PeopleTab } from './people-tab';
 import { DayTab } from './day-tab';
+import { ProductControlTab } from './product-control-tab';
 import { ManualOperatorPlaceholder } from './manual-operator-placeholder';
 import { ManualOperatorWorkSection } from './manual-operator-work-section';
 import { manualOperatorSectionItems } from './manual-operator-navigation';
@@ -71,6 +72,10 @@ function ManualOperatorSectionContent({
 
   if (section === 'people') {
     return shift ? <PeopleTab shiftId={shift.id} /> : null;
+  }
+
+  if (section === 'products') {
+    return shift ? <ProductControlTab /> : null;
   }
 
   return (
