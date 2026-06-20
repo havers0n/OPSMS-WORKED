@@ -149,7 +149,8 @@ export const manualShiftMonthlyAggregatedGroupSchema = z.object({
   rawRouteLine: z.string().nullable(),
   routeBase: z.string().nullable(),
   workBucketName: z.string().nullable(),
-  workBucketType: workBucketTypeSchema.nullable()
+  workBucketType: workBucketTypeSchema.nullable(),
+  sourceZone: z.string().nullable()
 });
 export type ManualShiftMonthlyAggregatedGroup = z.infer<typeof manualShiftMonthlyAggregatedGroupSchema>;
 
@@ -175,6 +176,7 @@ export const manualShiftMonthlyApplyOrderSchema = z.object({
   pointName: z.string().min(1),
   customerName: z.string().nullable().optional(),
   orderNumber: z.string().min(1),
+  sourceZone: z.string().nullable().optional(),
   totalQuantity: z.number().positive(),
   sourceRows: z.array(z.number().int().min(1)).min(1),
   sortOrder: z.number().int().min(1),
@@ -333,6 +335,24 @@ function compareStrings(a: string, b: string): number {
   return a.localeCompare(b, 'he');
 }
 
+export function deriveManualShiftOrderSourceZone(
+  itemZones: Array<string | null | undefined>
+): string | null {
+  const distinctZones = Array.from(
+    new Set(
+      itemZones
+        .map((value) => normalizeTrimmedString(value))
+        .filter((value): value is string => value !== null)
+    )
+  );
+
+  if (distinctZones.length !== 1) {
+    return null;
+  }
+
+  return distinctZones[0] ?? null;
+}
+
 type WorkingRow = {
   rowIndex: number;
   normalizedDate: string | null;
@@ -346,6 +366,7 @@ type WorkingRow = {
   quantity: number | null;
   notes: string | null;
   rawDistributionValue: string | null;
+  sourceZone: string | null;
   usedPointFallback: boolean;
   hadSlash: boolean;
   distributionArea: string | null;
@@ -419,6 +440,7 @@ function buildWorkingRow(row: ManualShiftMonthlyParsedRow): WorkingRow {
     quantity: parseQuantity(row.quantity),
     notes: normalizeTrimmedString(row.notes),
     rawDistributionValue,
+    sourceZone: normalizeTrimmedString(row.zone),
     usedPointFallback,
     hadSlash,
     distributionArea: normalizeTrimmedString(row.zone),
@@ -547,6 +569,7 @@ export function parseManualShiftMonthlyPreview(
       row.lineName,
       row.pointName,
       row.orderNumber,
+      row.sourceZone ?? '',
       row.sku
     ].join('\u0001');
 
@@ -590,7 +613,8 @@ export function parseManualShiftMonthlyPreview(
         rawRouteLine: row.rawRouteLine,
         routeBase: row.routeBase,
         workBucketName: row.workBucketName,
-        workBucketType: row.workBucketType
+        workBucketType: row.workBucketType,
+        sourceZone: row.sourceZone
       });
     }
 
@@ -613,7 +637,7 @@ export function parseManualShiftMonthlyPreview(
     lineEntry.itemRows += 1;
     lineEntry.pointNames.add(row.pointName);
     lineEntry.orderNumbers.add(row.orderNumber);
-    lineEntry.orderGroups.add(`${row.pointName}\u0001${row.orderNumber}`);
+    lineEntry.orderGroups.add(`${row.sourceZone ?? ''}\u0001${row.pointName}\u0001${row.orderNumber}`);
     lineEntry.skus.add(row.sku);
     lineEntry.totalQuantity += row.quantity;
 
@@ -831,7 +855,13 @@ export function planManualShiftMonthlyImportApply(
     }
     const lineOrders = lineEntry.orders;
 
-    const orderKey = `${group.pointName}\u0001${group.orderNumber}`;
+    const sourceZone = group.sourceZone ?? null;
+    const orderKey = [
+      sourceZone ?? '',
+      group.routeBase ?? group.rawRouteLine ?? group.lineName,
+      group.pointName,
+      group.orderNumber
+    ].join('\u0001');
     const existingOrder = lineOrders.get(orderKey);
     const sourceRows = positiveRows.map((row) => row.rowIndex).sort((a, b) => a - b);
     const itemNotes = Array.from(
@@ -846,7 +876,7 @@ export function planManualShiftMonthlyImportApply(
       notes: itemNotes.length > 0 ? itemNotes.join('\n') : null,
       sourceRows,
       sortOrder: existingOrder ? existingOrder.items.length + 1 : 1,
-      zone: group.distributionArea
+      zone: sourceZone
     };
 
     if (existingOrder) {
@@ -875,7 +905,8 @@ export function planManualShiftMonthlyImportApply(
       workBucketName: group.workBucketName,
       workBucketType: group.workBucketType,
       rawRouteLine: group.rawRouteLine,
-      routeBase: group.routeBase
+      routeBase: group.routeBase,
+      sourceZone
     });
   }
 

@@ -165,7 +165,7 @@ describe('manual shift monthly import parser', () => {
     expect(result.preview.totals.orderGroups).toBe(2);
   });
 
-  it('documents the current monthly aggregation collision risk when zone differs but all other key fields match', () => {
+  it('preserves separate source zones in monthly aggregation and apply plan', () => {
     const result = parseManualShiftMonthlyPreview(buildInput([
       {
         rowIndex: 2,
@@ -189,21 +189,28 @@ describe('manual shift monthly import parser', () => {
       }
     ]));
 
-    expect(result.groups).toHaveLength(1);
-    expect(result.groups[0]).toMatchObject({
-      lineName: 'שפלה 2',
-      pointName: 'סלולר',
-      orderNumber: 'SO-1',
-      sku: '1001',
-      totalQuantity: 5,
-      sourceRows: [2, 3]
-    });
-    expect(result.preview.totals.aggregatedSkuGroups).toBe(1);
+    expect(result.groups).toHaveLength(2);
+    expect(result.groups.map((group) => group.sourceZone).sort()).toEqual(['שפלה 2', 'שפלה אמצעי']);
+    expect(result.preview.totals.aggregatedSkuGroups).toBe(2);
     expect(result.preview.lines[0]).toMatchObject({
       lineName: 'שפלה 2',
       itemRows: 2,
-      aggregatedSkuGroups: 1
+      aggregatedSkuGroups: 2
     });
+
+    const plan = planManualShiftMonthlyImportApply(result);
+    expect(plan.lines[0].orders).toHaveLength(2);
+    expect(plan.lines[0].orders.map((order) => order.sourceZone).sort()).toEqual(['שפלה 2', 'שפלה אמצעי']);
+    expect(plan.lines[0].orders).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        sourceZone: 'שפלה 2',
+        items: expect.arrayContaining([expect.objectContaining({ zone: 'שפלה 2' })])
+      }),
+      expect.objectContaining({
+        sourceZone: 'שפלה אמצעי',
+        items: expect.arrayContaining([expect.objectContaining({ zone: 'שפלה אמצעי' })])
+      })
+    ]));
   });
 
   it('counts negative quantity and note anomalies', () => {

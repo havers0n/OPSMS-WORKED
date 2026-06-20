@@ -163,7 +163,8 @@ export const manualShiftOrderSchema = z.object({
   rawRouteLine: z.string().nullable().optional(),
   routeBase: z.string().nullable().optional(),
   workBucketName: z.string().nullable().optional(),
-  workBucketType: z.string().nullable().optional()
+  workBucketType: z.string().nullable().optional(),
+  sourceZone: z.string().nullable().optional()
 });
 export type ManualShiftOrder = z.infer<typeof manualShiftOrderSchema>;
 

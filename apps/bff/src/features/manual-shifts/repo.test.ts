@@ -8,7 +8,11 @@ import type {
   ManualShiftOrderItem,
   ManualShiftWorkHierarchyResponse
 } from '@wos/domain';
-import { buildManualShiftSourceZoneDiagnostics, buildShiftWorkHierarchy } from './repo.js';
+import {
+  buildManualShiftSourceZoneDiagnostics,
+  buildShiftWorkHierarchy,
+  inferManualShiftOrderSourceZone
+} from './repo.js';
 
 type ManualShiftLineRow = {
   id: string;
@@ -338,6 +342,29 @@ describe('buildShiftWorkHierarchy', () => {
     expect(order1.orderNumber).toBe('SO26014230');
     expect(order1.totalQuantity).toBe(88);
     expect(order1.lineCount).toBe(7);
+  });
+});
+
+describe('inferManualShiftOrderSourceZone', () => {
+  it('returns null when there are no non-null zones', () => {
+    expect(inferManualShiftOrderSourceZone([
+      { zone: null },
+      { zone: '   ' }
+    ])).toBeNull();
+  });
+
+  it('returns the single zone when all item zones match', () => {
+    expect(inferManualShiftOrderSourceZone([
+      { zone: 'שפלה 2' },
+      { zone: '  שפלה 2  ' }
+    ])).toBe('שפלה 2');
+  });
+
+  it('returns null when item zones are mixed', () => {
+    expect(inferManualShiftOrderSourceZone([
+      { zone: 'שפלה 2' },
+      { zone: 'שפלה אמצעי' }
+    ])).toBeNull();
   });
 });
 

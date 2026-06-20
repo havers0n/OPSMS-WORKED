@@ -118,6 +118,7 @@ type ManualShiftOrderRow = {
   route_base: string | null;
   work_bucket_name: string | null;
   work_bucket_type: string | null;
+  source_zone: string | null;
 };
 
 type ManualShiftOrderCheckUnitRow = {
@@ -239,7 +240,7 @@ const lineColumns =
 const workerColumns =
   'id,tenant_id,shift_id,name,role,active,sort_order,auth_user_id,created_at,updated_at';
 const orderColumns =
-  'id,tenant_id,shift_id,line_id,order_number,customer_name,point_name,pallet_count,picker_name,picker_worker_id,checker_name,line_count,sort_order,size,status,started_at,check_started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at,deleted_at,deleted_by_profile_id,deleted_by_name,delete_reason,raw_route_line,route_base,work_bucket_name,work_bucket_type';
+  'id,tenant_id,shift_id,line_id,order_number,customer_name,point_name,pallet_count,picker_name,picker_worker_id,checker_name,line_count,sort_order,size,status,started_at,check_started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at,deleted_at,deleted_by_profile_id,deleted_by_name,delete_reason,raw_route_line,route_base,work_bucket_name,work_bucket_type,source_zone';
 const checkUnitColumns =
   'id,tenant_id,shift_id,line_id,order_id,unit_number,status,note,reason,checked_at,returned_at,voided_at,created_at,updated_at';
 const ashlamaColumns =
@@ -367,7 +368,8 @@ function mapOrderRow(row: ManualShiftOrderRow): ManualShiftOrder {
     rawRouteLine: row.raw_route_line,
     routeBase: row.route_base,
     workBucketName: row.work_bucket_name,
-    workBucketType: row.work_bucket_type
+    workBucketType: row.work_bucket_type,
+    sourceZone: row.source_zone
   };
 }
 
@@ -1874,6 +1876,20 @@ function normalizeOptionalString(value: string | null | undefined): string | nul
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+export function inferManualShiftOrderSourceZone(
+  itemZones: Array<Pick<ManualShiftOrderItem, 'zone'>>
+): string | null {
+  const zones = Array.from(
+    new Set(
+      itemZones
+        .map((item) => normalizeOptionalString(item.zone))
+        .filter((zone): zone is string => zone !== null)
+    )
+  );
+
+  return zones.length === 1 ? zones[0] : null;
 }
 
 export function buildManualShiftSourceZoneDiagnostics(input: {
