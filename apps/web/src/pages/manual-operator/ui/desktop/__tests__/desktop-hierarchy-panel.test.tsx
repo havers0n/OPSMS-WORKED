@@ -146,6 +146,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId={null}
         selectedRouteGroupKey={null}
         selectedWorkBucketKey={null}
+        selectedRouteGroupWorkBucket={undefined}
         selectedWorkBucketName={null}
         areaSummaries={mockAreaSummaries}
         lineHierarchySummaries={[]}
@@ -767,12 +768,16 @@ describe('DesktopHierarchyPanel', () => {
       }
     ];
 
+    const mockSelectedGalilBucket = mockRouteGroupWorkBucketSummaries[0];
+    const mockSelectedSellularBucket = mockRouteGroupWorkBucketSummaries[1];
+
     it('does NOT render deferred message when showProductRollupDeferred=false', () => {
       renderPanel({
         selectedAreaKey: 'גליל',
         selectedLineId: 'line-galil',
         selectedRouteGroupKey: 'galil-general',
         selectedWorkBucketKey: 'wb-klali',
+        selectedRouteGroupWorkBucket: mockSelectedGalilBucket,
         selectedWorkBucketName: 'כללי',
         areaSummaries: [{ areaKey: 'גליל', displayName: 'גליל', areaName: 'גליל', totalLines: 1, totalBuckets: 2, totalOrders: 4, totalQuantity: 100, statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
         areaLineSummaries: [{ lineId: 'line-galil', lineName: 'גליל', distributionArea: 'גליל', lineStatus: 'open', ordersCount: 4, itemLinesCount: 10, totalQuantity: 100, statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
@@ -804,6 +809,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-galil',
         selectedRouteGroupKey: 'galil-general',
         selectedWorkBucketKey: 'wb-klali',
+        selectedRouteGroupWorkBucket: mockSelectedGalilBucket,
         selectedWorkBucketName: 'כללי',
         areaSummaries: [{ areaKey: 'גליל', displayName: 'גליל', areaName: 'גליל', totalLines: 1, totalBuckets: 2, totalOrders: 4, totalQuantity: 100, statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
         areaLineSummaries: [{ lineId: 'line-galil', lineName: 'גליל', distributionArea: 'גליל', lineStatus: 'open', ordersCount: 4, itemLinesCount: 10, totalQuantity: 100, statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
@@ -819,6 +825,67 @@ describe('DesktopHierarchyPanel', () => {
       expect(screen.getByText('תצוגת מוצרים לקבוצת חלוקה מרובת מקורות תתווסף בשלב הבא')).toBeTruthy();
       // Product table should NOT render
       expect(screen.queryByTestId('bucket-product-table')).toBeNull();
+    });
+
+    it('orders tab only renders the selected bucket orders', () => {
+      renderPanel({
+        selectedAreaKey: 'גליל',
+        selectedLineId: 'line-galil',
+        selectedRouteGroupKey: 'galil-general',
+        selectedWorkBucketKey: 'wb-klali',
+        selectedRouteGroupWorkBucket: mockSelectedGalilBucket,
+        selectedWorkBucketName: 'כללי',
+        areaSummaries: [{ areaKey: 'גליל', displayName: 'גליל', areaName: 'גליל', totalLines: 1, totalBuckets: 2, totalOrders: 4, totalQuantity: 100, statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
+        areaLineSummaries: [{ lineId: 'line-galil', lineName: 'גליל', distributionArea: 'גליל', lineStatus: 'open', ordersCount: 4, itemLinesCount: 10, totalQuantity: 100, statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
+        lineHierarchySummaries: [{ lineId: 'line-galil', lineName: 'גליל', distributionArea: 'גליל', lineStatus: 'open', ordersCount: 4, itemLinesCount: 10, totalQuantity: 100, statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
+        hasRouteGroups: true,
+        routeGroupSummaries: mockRouteGroupSummaries,
+        routeGroupWorkBucketSummaries: mockRouteGroupWorkBucketSummaries,
+        showProductRollupDeferred: false,
+        workBucketView: 'orders'
+      });
+
+      expect(screen.getByTestId('order-mini-card-o-1')).toBeTruthy();
+      expect(screen.getByTestId('order-mini-card-o-2')).toBeTruthy();
+      expect(screen.getByTestId('order-mini-card-o-3')).toBeTruthy();
+      expect(screen.queryByTestId('order-mini-card-o-4')).toBeNull();
+    });
+
+    it('standalone route-group bucket still renders its own orders', () => {
+      const standaloneBucket: RouteGroupWorkBucketSummary = {
+        workBucketKey: 'wb-dabach',
+        workBucketName: 'כללי',
+        workBucketDisplayName: 'כללי',
+        classificationConfidence: 'high',
+        orderCount: 1,
+        itemLinesCount: 2,
+        totalQuantity: 20,
+        statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+        orders: [
+          { orderId: 'd-1', orderNumber: 'SO26000001', customerName: 'לקוח ז', pointName: 'דבאח עין המפרץ', status: 'queued', workBucketName: 'כללי', pickerName: null, checkerName: null, lineCount: 2, totalQuantity: 20 }
+        ]
+      };
+
+      renderPanel({
+        selectedAreaKey: 'גליל',
+        selectedLineId: 'line-galil',
+        selectedRouteGroupKey: 'dbeach',
+        selectedWorkBucketKey: 'wb-dabach',
+        selectedRouteGroupWorkBucket: standaloneBucket,
+        selectedWorkBucketName: 'כללי',
+        areaSummaries: [{ areaKey: 'גליל', displayName: 'גליל', areaName: 'גליל', totalLines: 1, totalBuckets: 1, totalOrders: 1, totalQuantity: 20, statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
+        areaLineSummaries: [{ lineId: 'line-galil', lineName: 'גליל', distributionArea: 'גליל', lineStatus: 'open', ordersCount: 1, itemLinesCount: 2, totalQuantity: 20, statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
+        lineHierarchySummaries: [{ lineId: 'line-galil', lineName: 'גליל', distributionArea: 'גליל', lineStatus: 'open', ordersCount: 1, itemLinesCount: 2, totalQuantity: 20, statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
+        hasRouteGroups: true,
+        routeGroupSummaries: [
+          { routeGroupKey: 'dbeach', routeGroupName: 'דבאח עין המפרץ', classificationConfidence: 'high', orderCount: 1, itemLinesCount: 2, totalQuantity: 20, statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, workBucketCount: 1 }
+        ],
+        routeGroupWorkBucketSummaries: [standaloneBucket],
+        showProductRollupDeferred: false,
+        workBucketView: 'orders'
+      });
+
+      expect(screen.getByTestId('order-mini-card-d-1')).toBeTruthy();
     });
   });
 });

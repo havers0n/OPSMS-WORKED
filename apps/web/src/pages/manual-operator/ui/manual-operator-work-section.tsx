@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import type { ManualShiftLineSummary, ManualShiftSession } from '@wos/domain';
@@ -20,6 +20,7 @@ import {
   selectWorkHierarchyLineSummariesByArea,
   selectWorkHierarchyBucketSummaries
 } from '@/entities/manual-shift/model/shift-selectors';
+import type { RouteGroupWorkBucketSummary } from '@/entities/manual-shift/model/shift-selectors';
 import type { ManualOperatorSection } from '@/shared/config/routes';
 import { DesktopOperatorShell } from './desktop/desktop-operator-shell';
 import { MobileOperatorShell } from './mobile-operator-shell';
@@ -119,6 +120,14 @@ export function ManualOperatorWorkSection({
     [hasRouteGroups, selectedLineId, selectedRouteGroupKey, workHierarchy]
   );
 
+  const selectedRouteGroupWorkBucket: RouteGroupWorkBucketSummary | undefined = useMemo(
+    () => {
+      if (!hasRouteGroups || !selectedRouteGroupKey || !selectedWorkBucketKey) return undefined;
+      return routeGroupWorkBucketSummaries.find((w) => w.workBucketKey === selectedWorkBucketKey);
+    },
+    [hasRouteGroups, routeGroupWorkBucketSummaries, selectedRouteGroupKey, selectedWorkBucketKey]
+  );
+
   const workBucketSummaries = useMemo(
     () => !hasRouteGroups && selectedLineId
       ? selectWorkHierarchyBucketSummaries(workHierarchy, selectedLineId)
@@ -130,8 +139,7 @@ export function ManualOperatorWorkSection({
     if (!selectedLineId || !workHierarchy) return '';
 
     if (hasRouteGroups && selectedRouteGroupKey) {
-      if (!selectedWorkBucketKey) return '';
-      const wb = routeGroupWorkBucketSummaries.find((w) => w.workBucketKey === selectedWorkBucketKey);
+      const wb = selectedRouteGroupWorkBucket;
       if (!wb || wb.orders.length === 0) return '';
       const uniquePointNames = [...new Set(wb.orders.map((o) => o.pointName).filter(Boolean))];
       if (uniquePointNames.length === 1) return uniquePointNames[0]!;
@@ -148,7 +156,7 @@ export function ManualOperatorWorkSection({
       return bucket.bucketName ?? '';
     }
     return '';
-  }, [selectedLineId, selectedWorkBucketName, selectedWorkBucketKey, workHierarchy, hasRouteGroups, selectedRouteGroupKey, routeGroupWorkBucketSummaries]);
+  }, [selectedLineId, selectedWorkBucketName, selectedWorkBucketKey, workHierarchy, hasRouteGroups, selectedRouteGroupKey, selectedRouteGroupWorkBucket]);
 
   const showProductRollupDeferred = !!(hasRouteGroups && selectedRouteGroupKey && !selectedWorkBucketRawName);
 
@@ -193,6 +201,7 @@ export function ManualOperatorWorkSection({
     setSelectedRouteGroupKey(null);
     setSelectedWorkBucketKey(null);
     setSelectedWorkBucketName(null);
+    setSelectedOrderId(null);
 
     if (areaKey !== null) {
       const areaLines = selectWorkHierarchyLineSummariesByArea(workHierarchy, areaKey);
@@ -211,12 +220,14 @@ export function ManualOperatorWorkSection({
     setSelectedRouteGroupKey(null);
     setSelectedWorkBucketKey(null);
     setSelectedWorkBucketName(null);
+    setSelectedOrderId(null);
   }
 
   function handleSelectHierarchyRouteGroup(routeGroupKey: string) {
     setSelectedRouteGroupKey(routeGroupKey);
     setSelectedWorkBucketKey(null);
     setSelectedWorkBucketName(null);
+    setSelectedOrderId(null);
   }
 
   function handleSelectHierarchyBucket(workBucketIdentifier: string) {
@@ -228,6 +239,7 @@ export function ManualOperatorWorkSection({
       setSelectedWorkBucketKey(null);
       setSelectedWorkBucketName(workBucketIdentifier);
     }
+    setSelectedOrderId(null);
     setWorkBucketView('products');
   }
 
@@ -237,6 +249,7 @@ export function ManualOperatorWorkSection({
     setSelectedRouteGroupKey(null);
     setSelectedWorkBucketKey(null);
     setSelectedWorkBucketName(null);
+    setSelectedOrderId(null);
   }
 
   function handleClearHierarchyLine() {
@@ -244,18 +257,25 @@ export function ManualOperatorWorkSection({
     setSelectedRouteGroupKey(null);
     setSelectedWorkBucketKey(null);
     setSelectedWorkBucketName(null);
+    setSelectedOrderId(null);
   }
 
   function handleClearHierarchyRouteGroup() {
     setSelectedRouteGroupKey(null);
     setSelectedWorkBucketKey(null);
     setSelectedWorkBucketName(null);
+    setSelectedOrderId(null);
   }
 
   function handleClearHierarchyBucket() {
     setSelectedWorkBucketKey(null);
     setSelectedWorkBucketName(null);
+    setSelectedOrderId(null);
   }
+
+  useEffect(() => {
+    setSelectedOrderId(null);
+  }, [shift?.id, selectedAreaKey, selectedLineId, selectedRouteGroupKey, selectedWorkBucketKey]);
 
   if (isDesktop) {
     return (
@@ -269,6 +289,7 @@ export function ManualOperatorWorkSection({
         selectedLineId={selectedLineId}
         selectedRouteGroupKey={selectedRouteGroupKey}
         selectedWorkBucketKey={selectedWorkBucketKey}
+        selectedRouteGroupWorkBucket={selectedRouteGroupWorkBucket}
         selectedWorkBucketName={selectedWorkBucketName}
         areaSummaries={areaSummaries}
         lineHierarchySummaries={lineHierarchySummaries}

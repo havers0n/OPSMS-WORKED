@@ -24,6 +24,7 @@ export interface DesktopOperatorShellProps {
   selectedLineId: string | null;
   selectedRouteGroupKey: string | null;
   selectedWorkBucketKey: string | null;
+  selectedRouteGroupWorkBucket: RouteGroupWorkBucketSummary | undefined;
   selectedWorkBucketName: string | null;
   areaSummaries: AreaHierarchySummary[];
   lineHierarchySummaries: LineHierarchySummary[];
@@ -108,6 +109,7 @@ export function DesktopOperatorShell({
   selectedLineId,
   selectedRouteGroupKey,
   selectedWorkBucketKey,
+  selectedRouteGroupWorkBucket,
   selectedWorkBucketName,
   areaSummaries,
   lineHierarchySummaries,
@@ -225,6 +227,7 @@ export function DesktopOperatorShell({
               selectedLineId={selectedLineId}
               selectedRouteGroupKey={selectedRouteGroupKey}
               selectedWorkBucketKey={selectedWorkBucketKey}
+              selectedRouteGroupWorkBucket={selectedRouteGroupWorkBucket}
               selectedWorkBucketName={selectedWorkBucketName}
               areaSummaries={areaSummaries}
               lineHierarchySummaries={lineHierarchySummaries}

@@ -31,6 +31,7 @@ const defaultProps = {
   selectedLineId: null as string | null,
   selectedRouteGroupKey: null as string | null,
   selectedWorkBucketKey: null as string | null,
+  selectedRouteGroupWorkBucket: undefined,
   selectedWorkBucketName: null as string | null,
   areaSummaries: mockAreaSummaries,
   lineHierarchySummaries: mockLineHierarchySummaries,

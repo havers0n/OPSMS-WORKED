@@ -18,6 +18,7 @@ interface DesktopHierarchyPanelProps {
   selectedLineId: string | null;
   selectedRouteGroupKey: string | null;
   selectedWorkBucketKey: string | null;
+  selectedRouteGroupWorkBucket: RouteGroupWorkBucketSummary | undefined;
   selectedWorkBucketName: string | null;
   areaSummaries: AreaHierarchySummary[];
   lineHierarchySummaries: LineHierarchySummary[];
@@ -64,6 +65,7 @@ export function DesktopHierarchyPanel({
   selectedLineId,
   selectedRouteGroupKey,
   selectedWorkBucketKey,
+  selectedRouteGroupWorkBucket,
   selectedWorkBucketName,
   areaSummaries,
   lineHierarchySummaries,
@@ -281,7 +283,8 @@ export function DesktopHierarchyPanel({
 
   // ── State 6: Work bucket selected → products/orders ──────────────────────
   const selectedBucketLegacy = workBucketSummaries.find((p) => p.workBucketName === selectedWorkBucketName);
-  const selectedBucketRouteGroup = routeGroupWorkBucketSummaries.find((wb) => wb.workBucketKey === selectedWorkBucketKey);
+  const selectedBucketRouteGroup = selectedRouteGroupWorkBucket
+    ?? routeGroupWorkBucketSummaries.find((wb) => wb.workBucketKey === selectedWorkBucketKey);
 
   const isRouteGroupBucket = hasRouteGroups && !!selectedRouteGroupKey;
   const selectedRouteGroup = isRouteGroupBucket
