@@ -264,7 +264,7 @@ describe('ManualOperatorPage URL sections', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('בקרת מוצרים וחוסרים')).toBeTruthy();
+      expect(screen.getByText('חוסרים להיום + כיסוי בונדד')).toBeTruthy();
     });
     expect(screen.queryByTestId('manual-placeholder-products')).toBeNull();
     expect(

@@ -22,4 +22,14 @@ export interface ProductControlRow {
   affectedOrdersCount?: number;
   bondedCandidateLabel?: string;
   notes?: string;
+
+  bondedCandidateBlock?: string;
+  bondedCandidateSource?: string;
+  bondedCandidateUnitsPerPallet?: number;
+  bondedCandidateCartonsPerPallet?: number;
+  bondedCandidatePackFactor?: number;
+  bondedCandidateAlreadyPulled?: number;
+  bondedCandidateAvailableBalance?: number;
+
+  workLines?: { name: string; units: number; blockedOrders: number }[];
 }

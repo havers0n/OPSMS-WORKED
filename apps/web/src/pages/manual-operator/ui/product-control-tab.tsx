@@ -6,30 +6,15 @@ import { ShortageTable } from '@/entities/product-control/shortage-table';
 import { ProductControlDetailPanel } from '@/entities/product-control/product-control-detail-panel';
 import type { ProductControlRow } from '@/entities/product-control/product-control-types';
 
-function KpiCard({ label, value, color }: { label: string; value: number; color?: string }) {
-  const colorMap: Record<string, string> = {
-    green: 'text-green-700',
-    amber: 'text-amber-700',
-    red: 'text-red-700',
-    blue: 'text-blue-700',
-  };
-
-  return (
-    <div className="flex flex-col gap-1 rounded-lg bg-gray-50 p-3">
-      <span className={`font-bold text-2xl ${color ? colorMap[color] : 'text-gray-900'}`}>{value}</span>
-      <span className="text-xs font-medium text-gray-500">{label}</span>
-    </div>
-  );
-}
-
 export function ProductControlTab() {
   const rows = productControlFixtures;
   const [selectedRow, setSelectedRow] = useState<ProductControlRow | null>(null);
 
   const totalSkus = rows.filter((r) => r.status !== 'data_issue').length;
   const shortageSkus = rows.filter((r) => r.shortageQty > 0).length;
-  const bondedCovered = rows.filter((r) => r.status === 'covered_by_bonded').length;
-  const unresolved = rows.filter((r) => r.status === 'unresolved').length;
+  const coverable = rows.filter(
+    (r) => r.shortageQty > 0 && r.bondedAvailableQty >= r.shortageQty
+  ).length;
 
   const handleSelectRow = (row: ProductControlRow) => {
     if (row.status === 'data_issue') return;
@@ -49,33 +34,55 @@ export function ProductControlTab() {
   }
 
   return (
-    <div className="flex flex-col gap-4 p-4" dir="rtl">
-      <div>
-        <h2 className="text-lg font-bold text-gray-900">בקרת מוצרים וחוסרים</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          תצוגת בקרת חוסרים וכיסוי מבונדד — נתוני דמו בשלב זה
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <KpiCard label="סה״כ מק״טים" value={totalSkus} color="blue" />
-        <KpiCard label="מק״טים בחוסר" value={shortageSkus} color="amber" />
-        <KpiCard label="מכוסים מבונדד" value={bondedCovered} color="green" />
-        <KpiCard label="חוסר לא פתור" value={unresolved} color="red" />
-      </div>
-
-      <div className="flex gap-4">
-        <div className="min-w-0 flex-1">
-          <ShortageTable
-            rows={rows}
-            selectedSku={selectedRow?.sku ?? null}
-            onSelectRow={handleSelectRow}
-          />
+    <div className="flex flex-col gap-6 h-full" dir="rtl">
+      {/* Header with inline KPI cards */}
+      <div className="flex items-center justify-between shrink-0">
+        <div>
+          <h1 className="text-2xl font-bold text-[#111827]">חוסרים להיום + כיסוי בונדד</h1>
+          <p className="text-sm text-gray-500 mt-1">סקירת מלאי זמין מול דרישות הזמנה יומיות</p>
         </div>
-        {selectedRow && (
-          <ProductControlDetailPanel row={selectedRow} onClose={handleCloseDetail} />
-        )}
+        <div className="flex gap-3">
+          <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex flex-col items-center min-w-[100px]">
+            <span className="text-xs text-gray-400">סה״כ מק״טים</span>
+            <span className="text-xl font-bold">{totalSkus}</span>
+          </div>
+          <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex flex-col items-center min-w-[100px]">
+            <span className="text-xs text-gray-400 text-red-500">בחוסר</span>
+            <span className="text-xl font-bold text-red-600">{shortageSkus}</span>
+          </div>
+          <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex flex-col items-center min-w-[100px]">
+            <span className="text-xs text-gray-400 text-green-500">ניתן לכיסוי</span>
+            <span className="text-xl font-bold text-green-600">{coverable}</span>
+          </div>
+        </div>
       </div>
+
+      {/* Shortage table */}
+      <div className="flex-1 min-h-0">
+        <ShortageTable
+          rows={rows}
+          selectedSku={selectedRow?.sku ?? null}
+          onSelectRow={handleSelectRow}
+        />
+      </div>
+
+      {/* Bottom drawer overlay */}
+      {selectedRow && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={handleCloseDetail}
+          />
+          {/* Sheet panel */}
+          <div
+            className="relative z-10 w-full max-w-7xl mx-auto bg-white shadow-xl rounded-b-2xl border-b border-gray-200 overflow-hidden flex flex-col"
+            style={{ maxHeight: '80vh' }}
+          >
+            <ProductControlDetailPanel row={selectedRow} onClose={handleCloseDetail} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

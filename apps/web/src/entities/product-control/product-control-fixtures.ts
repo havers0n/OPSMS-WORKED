@@ -3,7 +3,7 @@ import type { ProductControlRow, ProductControlStatus } from './product-control-
 function deriveStatus(
   shortageQty: number,
   bondedCoverQty: number,
-  bondedAvailableQty: number
+  _bondedAvailableQty: number
 ): ProductControlStatus {
   if (shortageQty === 0) return 'ok';
   if (bondedCoverQty >= shortageQty) return 'covered_by_bonded';
@@ -23,6 +23,14 @@ function makeRow(data: {
   affectedOrdersCount?: number;
   bondedCandidateLabel?: string;
   notes?: string;
+  bondedCandidateBlock?: string;
+  bondedCandidateSource?: string;
+  bondedCandidateUnitsPerPallet?: number;
+  bondedCandidateCartonsPerPallet?: number;
+  bondedCandidatePackFactor?: number;
+  bondedCandidateAlreadyPulled?: number;
+  bondedCandidateAvailableBalance?: number;
+  workLines?: { name: string; units: number; blockedOrders: number }[];
 }): ProductControlRow {
   const shortageQty = Math.max(0, data.demandQty - data.warehouseQty);
   const bondedCoverQty = Math.min(shortageQty, data.bondedAvailableQty);
@@ -47,6 +55,7 @@ export const productControlFixtures: ProductControlRow[] = [
     demandQty: 500,
     warehouseQty: 500,
     bondedAvailableQty: 0,
+    workLines: [],
   }),
   makeRow({
     sku: '100002',
@@ -58,7 +67,19 @@ export const productControlFixtures: ProductControlRow[] = [
     affectedLinesCount: 8,
     affectedOrdersCount: 3,
     bondedCandidateLabel: 'מחסן בונדד A — מדף 12',
+    bondedCandidateBlock: '3346/26',
+    bondedCandidateSource: 'נעמן',
+    bondedCandidateUnitsPerPallet: 960,
+    bondedCandidateCartonsPerPallet: 40,
+    bondedCandidatePackFactor: 24,
+    bondedCandidateAlreadyPulled: 0,
+    bondedCandidateAvailableBalance: 200,
     notes: 'בוצעה הזמנת רכש חלופית לספק משנה',
+    workLines: [
+      { name: 'משלוח דרום הגדול', units: 80, blockedOrders: 2 },
+      { name: 'קמעונאות מרכז', units: 50, blockedOrders: 0 },
+      { name: 'סיטונאי צפון', units: 70, blockedOrders: 1 },
+    ],
   }),
   makeRow({
     sku: '100003',
@@ -70,6 +91,17 @@ export const productControlFixtures: ProductControlRow[] = [
     affectedLinesCount: 4,
     affectedOrdersCount: 2,
     bondedCandidateLabel: 'מחסן בונדד B — מדף 7',
+    bondedCandidateBlock: '3772/24',
+    bondedCandidateSource: 'בונדד',
+    bondedCandidateUnitsPerPallet: 180,
+    bondedCandidateCartonsPerPallet: 30,
+    bondedCandidatePackFactor: 6,
+    bondedCandidateAlreadyPulled: 0,
+    bondedCandidateAvailableBalance: 100,
+    workLines: [
+      { name: 'משלוח דרום הגדול', units: 80, blockedOrders: 1 },
+      { name: 'סיטונאי צפון', units: 120, blockedOrders: 2 },
+    ],
   }),
   makeRow({
     sku: '100004',
@@ -80,6 +112,12 @@ export const productControlFixtures: ProductControlRow[] = [
     bondedAvailableQty: 0,
     affectedLinesCount: 12,
     affectedOrdersCount: 5,
+    notes: 'מלאי מבונדד אזל — נדרשת רכש',
+    workLines: [
+      { name: 'משלוח דרום הגדול', units: 150, blockedOrders: 3 },
+      { name: 'קמעונאות מרכז', units: 100, blockedOrders: 1 },
+      { name: 'סיטונאי צפון', units: 70, blockedOrders: 2 },
+    ],
   }),
   {
     sku: '999999',
@@ -96,5 +134,6 @@ export const productControlFixtures: ProductControlRow[] = [
     affectedLinesCount: 0,
     affectedOrdersCount: 0,
     notes: 'ביקורת נתונים נדרשת: כמות דרישה שלילית',
+    workLines: [],
   },
 ];
