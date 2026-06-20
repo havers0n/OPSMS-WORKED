@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { classifyRouteFragments, type RouteFragmentInput } from '@wos/domain';
 import type {
   ManualShiftOrder,
   ManualShiftOrderCheckUnit,
@@ -531,5 +532,129 @@ describe('buildShiftWorkHierarchy — routeGroups (RG2)', () => {
     // Each line's totals are independent
     expect(galilLine.totalQuantity).toBe(5);
     expect(tzfonLine.totalQuantity).toBe(10);
+  });
+
+  // ── Test 8: Reordered input regression ───────────────────────────────────
+  it('reordered input: standalone-before-base-before-category must not leak orders between work buckets', () => {
+    // Deliberately put category before base in input order.
+    // With index-based matching, this would cause the base classification
+    // to be applied to a category order and vice-versa.
+    const O1 = 'o1-cat'; const O2 = 'o2-base'; const O3 = 'o3-standalone';
+    const lineRows = [makeLine('גליל')];
+    const orders = [
+      makeOrder({ id: O1, orderNumber: 'SO-REORDER', pointName: 'סלולר', rawRouteLine: 'גליל/סלולר', routeBase: 'גליל', workBucketName: 'סלולר' }),
+      makeOrder({ id: O2, orderNumber: 'SO-REORDER', pointName: 'גליל', rawRouteLine: 'גליל', routeBase: 'גליל', workBucketName: null }),
+      makeOrder({ id: O3, orderNumber: 'SO-REORDER', pointName: 'רכב-פז נהריה', rawRouteLine: 'גליל/רכב-פז נהריה', routeBase: 'גליל', workBucketName: 'רכב-פז נהריה' }),
+    ];
+    const rollups = new Map([rollup(O1, 1, 5), rollup(O2, 2, 10), rollup(O3, 1, 3)]);
+
+    const result = buildShiftWorkHierarchy(SHIFT, lineRows, orders, rollups, [], []);
+    const line = result.areas[0].lines[0];
+
+    expect(line.routeGroups!).toHaveLength(1);
+    const rg = line.routeGroups![0];
+    expect(rg.routeGroupName).toBe('גליל כללי');
+    expect(rg.workBuckets).toHaveLength(3);
+
+    // ── Bucket كلלי: must contain only the base order ──
+    const generalWb = rg.workBuckets.find((w) => w.workBucketName === 'כללי')!;
+    expect(generalWb).toBeDefined();
+    expect(generalWb.orders).toHaveLength(1);
+    expect(generalWb.orders[0].orderId).toBe(O2);   // base order
+    expect(generalWb.orders[0].pointName).toBe('גליל');
+
+    // ── Bucket סלולר: must contain only the category order ──
+    const cellWb = rg.workBuckets.find((w) => w.workBucketName === 'סלולר')!;
+    expect(cellWb).toBeDefined();
+    expect(cellWb.orders).toHaveLength(1);
+    expect(cellWb.orders[0].orderId).toBe(O1);      // cat order
+    expect(cellWb.orders[0].pointName).toBe('סלולר');
+
+    // ── Bucket רכב-פז נהריה: must contain only the standalone order ──
+    const rkvWb = rg.workBuckets.find((w) => w.workBucketName === 'רכב-פז נהריה')!;
+    expect(rkvWb).toBeDefined();
+    expect(rkvWb.orders).toHaveLength(1);
+    expect(rkvWb.orders[0].orderId).toBe(O3);       // standalone order
+    expect(rkvWb.orders[0].pointName).toBe('רכב-פז נהריה');
+  });
+
+  // ── Test 9: Invariant — every order matches its container ─────────────────
+  it('every routeGroups[].workBuckets[].orders[] re-classifies to its containing routeGroupKey and workBucketKey', () => {
+    const orders: ManualShiftOrder[] = [
+      makeOrder({ id: 'o-a1', orderNumber: 'SO-A', pointName: 'גליל', rawRouteLine: 'גליל', routeBase: 'גליל', workBucketName: null }),
+      makeOrder({ id: 'o-a2', orderNumber: 'SO-A', pointName: 'סלולר-גליל', rawRouteLine: 'גליל/סלולר', routeBase: 'גליל', workBucketName: 'סלולר' }),
+      makeOrder({ id: 'o-a3', orderNumber: 'SO-A', pointName: 'רכב-פז נהריה', rawRouteLine: 'גליל/רכב-פז נהריה', routeBase: 'גליל', workBucketName: 'רכב-פז נהריה' }),
+      makeOrder({ id: 'o-b1', orderNumber: 'SO-B', pointName: 'דבאח עין המפרץ', rawRouteLine: 'גליל/דבאח עין המפרץ', routeBase: 'גליל', workBucketName: 'דבאח עין המפרץ' }),
+      makeOrder({ id: 'o-c1', orderNumber: 'SO-C', pointName: 'פז לוחמי הגטאות', rawRouteLine: 'גליל/פז לוחמי הגטאות', routeBase: 'גליל', workBucketName: 'פז לוחמי הגטאות' }),
+    ];
+    const lineRows = [makeLine('גליל')];
+    const rollups = new Map(orders.map((o) => [o.id, { lineCount: 1, totalQuantity: 10 }] as const));
+
+    const result = buildShiftWorkHierarchy(SHIFT, lineRows, orders, rollups, [], []);
+    const line = result.areas[0].lines[0];
+
+    // Assert the invariant: every order inside a work bucket, when re-classified
+    // from its original fragment values, must produce the same routeGroupKey
+    // and workBucketKey as the container it was placed in.
+    for (const routeGroup of line.routeGroups!) {
+      for (const workBucket of routeGroup.workBuckets) {
+        for (const bucketOrder of workBucket.orders) {
+          const original = orders.find((o) => o.id === bucketOrder.orderId)!;
+          expect(original).toBeDefined();
+
+          const fragment: RouteFragmentInput = {
+            orderNumber: original.orderNumber ?? '',
+            rawRouteLine: original.rawRouteLine ?? null,
+            routeBase: original.routeBase ?? null,
+            workBucketName: original.workBucketName ?? null,
+            pointName: original.pointName,
+          };
+
+          const [classification] = classifyRouteFragments([fragment]);
+          expect(classification).toBeDefined();
+          expect(classification.routeGroupKey).toBe(routeGroup.routeGroupKey);
+          expect(classification.workBucketKey).toBe(workBucket.workBucketKey);
+        }
+      }
+    }
+  });
+
+  // ── Test 10: Unique pointName per work bucket (5 cases) ──────────────────
+  it('each work bucket carries only orders with the expected single unique pointName', () => {
+    const orders = [
+      makeOrder({ id: 'o-a1', orderNumber: 'SO-A', pointName: 'גליל', rawRouteLine: 'גליל', routeBase: 'גליל', workBucketName: null }),
+      makeOrder({ id: 'o-a2', orderNumber: 'SO-A', pointName: 'סלולר', rawRouteLine: 'גליל/סלולר', routeBase: 'גליל', workBucketName: 'סלולר' }),
+      makeOrder({ id: 'o-a3', orderNumber: 'SO-A', pointName: 'רכב-פז נהריה', rawRouteLine: 'גליל/רכב-פז נהריה', routeBase: 'גליל', workBucketName: 'רכב-פז נהריה' }),
+      makeOrder({ id: 'o-b1', orderNumber: 'SO-B', pointName: 'דבאח עין המפרץ', rawRouteLine: 'גליל/דבאח עין המפרץ', routeBase: 'גליל', workBucketName: 'דבאח עין המפרץ' }),
+      makeOrder({ id: 'o-c1', orderNumber: 'SO-C', pointName: 'פז לוחמי הגטאות', rawRouteLine: 'גליל/פז לוחמי הגטאות', routeBase: 'גליל', workBucketName: 'פז לוחמי הגטאות' }),
+    ];
+    const lineRows = [makeLine('גליל')];
+    const rollups = new Map(orders.map((o) => [o.id, { lineCount: 1, totalQuantity: 5 }] as const));
+
+    const result = buildShiftWorkHierarchy(SHIFT, lineRows, orders, rollups, [], []);
+    const line = result.areas[0].lines[0];
+
+    function uniquePointNames(routeGroupName: string, workBucketName: string): string[] {
+      const rg = line.routeGroups!.find((g) => g.routeGroupName === routeGroupName)!;
+      expect(rg).toBeDefined();
+      const wb = rg.workBuckets.find((b) => b.workBucketName === workBucketName)!;
+      expect(wb).toBeDefined();
+      return [...new Set(wb.orders.map((o) => o.pointName).filter((p): p is string => Boolean(p)))];
+    }
+
+    // Case 1 — גליל כללי > כללי → ["גליל"]
+    expect(uniquePointNames('גליל כללי', 'כללי')).toEqual(['גליל']);
+
+    // Case 2 — גליל כללי > סלולר → ["סלולר"]
+    expect(uniquePointNames('גליל כללי', 'סלולר')).toEqual(['סלולר']);
+
+    // Case 3 — גליל כללי > רכב-פז נהריה → ["רכב-פז נהריה"]
+    expect(uniquePointNames('גליל כללי', 'רכב-פז נהריה')).toEqual(['רכב-פז נהריה']);
+
+    // Case 4 — דבאח עין המפרץ > כללי → ["דבאח עין המפרץ"]
+    expect(uniquePointNames('דבאח עין המפרץ', 'כללי')).toEqual(['דבאח עין המפרץ']);
+
+    // Case 5 — פז לוחמי הגטאות > כללי → ["פז לוחמי הגטאות"]
+    expect(uniquePointNames('פז לוחמי הגטאות', 'כללי')).toEqual(['פז לוחמי הגטאות']);
   });
 });
