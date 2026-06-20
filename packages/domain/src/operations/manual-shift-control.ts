@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+  classificationConfidenceSchema,
+  routeGroupKindSchema,
+  workBucketKindSchema
+} from './manual-shift-route-classification';
 
 export const manualShiftWorkerRoleSchema = z.enum(['picker', 'checker', 'packer', 'other']);
 export type ManualShiftWorkerRole = z.infer<typeof manualShiftWorkerRoleSchema>;
@@ -153,7 +158,12 @@ export const manualShiftOrderSchema = z.object({
   deletedAt: z.string().nullable(),
   deletedByProfileId: z.string().uuid().nullable(),
   deletedByName: z.string().trim().min(1).nullable(),
-  deleteReason: z.string().trim().min(1).nullable()
+  deleteReason: z.string().trim().min(1).nullable(),
+  // Canonical route columns (added by monthly import, nullable for legacy orders)
+  rawRouteLine: z.string().nullable().optional(),
+  routeBase: z.string().nullable().optional(),
+  workBucketName: z.string().nullable().optional(),
+  workBucketType: z.string().nullable().optional()
 });
 export type ManualShiftOrder = z.infer<typeof manualShiftOrderSchema>;
 
@@ -552,6 +562,37 @@ export const manualShiftWorkHierarchyBucketSchema = z.object({
 });
 export type ManualShiftWorkHierarchyBucket = z.infer<typeof manualShiftWorkHierarchyBucketSchema>;
 
+// ── Route group / Work bucket schemas (RG2) ──
+
+export const manualShiftWorkHierarchyWorkBucketSchema = z.object({
+  workBucketKey: z.string(),
+  workBucketName: z.string().nullable(),
+  workBucketDisplayName: z.string(),
+  workBucketKind: workBucketKindSchema,
+  classificationConfidence: classificationConfidenceSchema,
+  classificationReasons: z.array(z.string()),
+  orderCount: z.number().int().min(0),
+  itemLinesCount: z.number().int().min(0),
+  totalQuantity: z.number().min(0),
+  statusBreakdown: manualShiftOrderStatusBreakdownSchema,
+  orders: z.array(manualShiftWorkHierarchyOrderSchema)
+});
+export type ManualShiftWorkHierarchyWorkBucket = z.infer<typeof manualShiftWorkHierarchyWorkBucketSchema>;
+
+export const manualShiftWorkHierarchyRouteGroupSchema = z.object({
+  routeGroupKey: z.string(),
+  routeGroupName: z.string(),
+  routeGroupKind: routeGroupKindSchema,
+  classificationConfidence: classificationConfidenceSchema,
+  classificationReasons: z.array(z.string()),
+  orderCount: z.number().int().min(0),
+  itemLinesCount: z.number().int().min(0),
+  totalQuantity: z.number().min(0),
+  statusBreakdown: manualShiftOrderStatusBreakdownSchema,
+  workBuckets: z.array(manualShiftWorkHierarchyWorkBucketSchema)
+});
+export type ManualShiftWorkHierarchyRouteGroup = z.infer<typeof manualShiftWorkHierarchyRouteGroupSchema>;
+
 export const manualShiftWorkHierarchyLineSchema = z.object({
   lineId: z.string().uuid(),
   lineGroupName: z.string(),
@@ -561,7 +602,8 @@ export const manualShiftWorkHierarchyLineSchema = z.object({
   totalOrders: z.number().int().min(0),
   totalQuantity: z.number().min(0),
   statusBreakdown: manualShiftOrderStatusBreakdownSchema,
-  buckets: z.array(manualShiftWorkHierarchyBucketSchema)
+  buckets: z.array(manualShiftWorkHierarchyBucketSchema),
+  routeGroups: z.array(manualShiftWorkHierarchyRouteGroupSchema).optional()
 });
 export type ManualShiftWorkHierarchyLine = z.infer<typeof manualShiftWorkHierarchyLineSchema>;
 

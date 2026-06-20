@@ -2120,41 +2120,42 @@ describe('manual shifts routes', () => {
                         hasAshlama: true,
                         hasCheckUnits: true
                       }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      };
-      const service = createServiceMock({
-        getShiftWorkHierarchy: vi.fn(async () => hierarchy)
-      });
-      const app = await buildTestApp(service);
+                  ]
+                }
+              ],
+              routeGroups: []
+            }
+          ]
+        }
+      ]
+    };
+    const service = createServiceMock({
+      getShiftWorkHierarchy: vi.fn(async () => hierarchy)
+    });
+    const app = await buildTestApp(service);
 
-      const response = await app.inject({
-        method: 'GET',
-        url: `/api/manual-shifts/${ids.shift}/work-hierarchy`
-      });
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/manual-shifts/${ids.shift}/work-hierarchy`
+    });
 
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toMatchObject({
-        shiftId: ids.shift,
-        areas: [
-          {
-            areaName: 'דרום',
-            displayName: 'דרום',
-            totalLines: 1,
-            lines: [
-              {
-                lineId: ids.line,
-                lineGroupName: 'קו דרום',
-                distributionArea: 'דרום',
-                buckets: [
-                  { bucketName: 'סלולר', displayName: 'סלולר', totalOrders: 1 },
-                  { bucketName: 'פז השקמה', displayName: 'פז השקמה', totalOrders: 1 }
-                ]
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      shiftId: ids.shift,
+      areas: [
+        {
+          areaName: 'דרום',
+          displayName: 'דרום',
+          totalLines: 1,
+          lines: [
+            {
+              lineId: ids.line,
+              lineGroupName: 'קו דרום',
+              distributionArea: 'דרום',
+              buckets: [
+                { bucketName: 'סלולר', displayName: 'סלולר', totalOrders: 1 },
+                { bucketName: 'פז השקמה', displayName: 'פז השקמה', totalOrders: 1 }
+              ],
               }
             ]
           }
@@ -2211,7 +2212,8 @@ describe('manual shifts routes', () => {
                       }
                     ]
                   }
-                ]
+                ],
+                routeGroups: []
               }
             ]
           }
@@ -2291,7 +2293,8 @@ describe('manual shifts routes', () => {
                       }
                     ]
                   }
-                ]
+                ],
+                routeGroups: []
               }
             ]
           }
@@ -2401,7 +2404,8 @@ describe('manual shifts routes', () => {
                       }
                     ]
                   }
-                ]
+                ],
+                routeGroups: []
               }
             ]
           }
@@ -2505,7 +2509,8 @@ describe('manual shifts routes', () => {
                       }
                     ]
                   }
-                ]
+                ],
+                routeGroups: []
               }
             ]
           }

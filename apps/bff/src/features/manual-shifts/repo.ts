@@ -23,10 +23,17 @@ import type {
   ManualShiftWorkHierarchyLine,
   ManualShiftWorkHierarchyOrder,
   ManualShiftWorkHierarchyResponse,
+  ManualShiftWorkHierarchyRouteGroup,
+  ManualShiftWorkHierarchyWorkBucket,
   OpenAshlamaBoardItem,
   BucketProductRollupRow
 } from '@wos/domain';
-import { deriveManualShiftLineStatus } from '@wos/domain';
+import {
+  classifyRouteFragments,
+  deriveManualShiftLineStatus,
+  type ClassificationConfidence,
+  type RouteFragmentInput
+} from '@wos/domain';
 
 type PostgrestLikeError = {
   code?: string;
@@ -107,6 +114,10 @@ type ManualShiftOrderRow = {
   deleted_by_profile_id: string | null;
   deleted_by_name: string | null;
   delete_reason: string | null;
+  raw_route_line: string | null;
+  route_base: string | null;
+  work_bucket_name: string | null;
+  work_bucket_type: string | null;
 };
 
 type ManualShiftOrderCheckUnitRow = {
@@ -228,7 +239,7 @@ const lineColumns =
 const workerColumns =
   'id,tenant_id,shift_id,name,role,active,sort_order,auth_user_id,created_at,updated_at';
 const orderColumns =
-  'id,tenant_id,shift_id,line_id,order_number,customer_name,point_name,pallet_count,picker_name,picker_worker_id,checker_name,line_count,sort_order,size,status,started_at,check_started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at,deleted_at,deleted_by_profile_id,deleted_by_name,delete_reason';
+  'id,tenant_id,shift_id,line_id,order_number,customer_name,point_name,pallet_count,picker_name,picker_worker_id,checker_name,line_count,sort_order,size,status,started_at,check_started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at,deleted_at,deleted_by_profile_id,deleted_by_name,delete_reason,raw_route_line,route_base,work_bucket_name,work_bucket_type';
 const checkUnitColumns =
   'id,tenant_id,shift_id,line_id,order_id,unit_number,status,note,reason,checked_at,returned_at,voided_at,created_at,updated_at';
 const ashlamaColumns =
@@ -352,7 +363,11 @@ function mapOrderRow(row: ManualShiftOrderRow): ManualShiftOrder {
     deletedAt: row.deleted_at,
     deletedByProfileId: row.deleted_by_profile_id,
     deletedByName: row.deleted_by_name,
-    deleteReason: row.delete_reason
+    deleteReason: row.delete_reason,
+    rawRouteLine: row.raw_route_line,
+    routeBase: row.route_base,
+    workBucketName: row.work_bucket_name,
+    workBucketType: row.work_bucket_type
   };
 }
 
@@ -1763,6 +1778,126 @@ function computeStatusBreakdown(
   };
 }
 
+const CONFIDENCE_RANK: Record<ClassificationConfidence, number> = {
+  high: 3,
+  medium: 2,
+  low: 1,
+};
+
+function lowestConfidence(values: ClassificationConfidence[]): ClassificationConfidence {
+  let lowest: ClassificationConfidence = 'high';
+  for (const v of values) {
+    if (CONFIDENCE_RANK[v] < CONFIDENCE_RANK[lowest]) lowest = v;
+  }
+  return lowest;
+}
+
+function buildRouteGroupsForLine(
+  lineOrders: ManualShiftOrder[],
+  rollups: Map<string, { lineCount: number; totalQuantity: number }>,
+  checkUnitsByOrderId: Map<string, ManualShiftOrderCheckUnit[]>,
+  ashlamotByOrderId: Map<string, ManualShiftOrderAshlama[]>
+): ManualShiftWorkHierarchyRouteGroup[] {
+  const fragments: RouteFragmentInput[] = lineOrders.map((o) => ({
+    orderNumber: o.orderNumber ?? '',
+    customerName: o.customerName,
+    rawRouteLine: o.rawRouteLine ?? null,
+    routeBase: o.routeBase ?? null,
+    workBucketName: o.workBucketName ?? null,
+    pointName: o.pointName,
+  }));
+
+  const classified = classifyRouteFragments(fragments);
+
+  // Index-based matching: classified[i] matches lineOrders[i]
+  const classifiedOrders = classified.map((classification, index) => ({
+    classification,
+    order: lineOrders[index],
+  }));
+
+  // Group by routeGroupKey
+  const rgMap = new Map<string, typeof classifiedOrders>();
+  for (const co of classifiedOrders) {
+    const key = co.classification.routeGroupKey;
+    const list = rgMap.get(key) ?? [];
+    list.push(co);
+    rgMap.set(key, list);
+  }
+
+  const routeGroups: ManualShiftWorkHierarchyRouteGroup[] = [];
+  for (const [, rgEntries] of rgMap) {
+    // Group by workBucketKey within this route group
+    const wbMap = new Map<string, typeof rgEntries>();
+    for (const entry of rgEntries) {
+      const key = entry.classification.workBucketKey;
+      const list = wbMap.get(key) ?? [];
+      list.push(entry);
+      wbMap.set(key, list);
+    }
+
+    const workBuckets: ManualShiftWorkHierarchyWorkBucket[] = [];
+    for (const [, wbEntries] of wbMap) {
+      const reasonSet = new Set(wbEntries.map((e) => e.classification.classificationReason));
+      const confidenceLevels = wbEntries.map((e) => e.classification.classificationConfidence);
+
+      const bucketOrders: ManualShiftWorkHierarchyOrder[] = wbEntries.map((e) => {
+        const o = e.order;
+        const ru = rollups.get(o.id);
+        const totalQuantity = ru ? ru.totalQuantity : 0;
+        const orderCheckUnits = checkUnitsByOrderId.get(o.id) ?? [];
+        const orderAshlamot = ashlamotByOrderId.get(o.id) ?? [];
+        return {
+          orderId: o.id,
+          orderNumber: o.orderNumber,
+          customerName: o.customerName,
+          pointName: o.pointName,
+          status: o.status,
+          lineCount: ru ? ru.lineCount : 0,
+          totalQuantity,
+          hasAshlama: orderAshlamot.some((a) => a.status === 'open'),
+          hasCheckUnits: orderCheckUnits.length > 0,
+        };
+      });
+
+      workBuckets.push({
+        workBucketKey: wbEntries[0].classification.workBucketKey,
+        workBucketName: wbEntries[0].classification.workBucketDisplayName,
+        workBucketDisplayName: wbEntries[0].classification.workBucketDisplayName,
+        workBucketKind: wbEntries[0].classification.workBucketKind,
+        classificationConfidence: lowestConfidence(confidenceLevels),
+        classificationReasons: Array.from(reasonSet),
+        orderCount: wbEntries.length,
+        itemLinesCount: wbEntries.reduce((s, e) => {
+          const ru = rollups.get(e.order.id);
+          return s + (ru ? ru.lineCount : 0);
+        }, 0),
+        totalQuantity: bucketOrders.reduce((s, o) => s + o.totalQuantity, 0),
+        statusBreakdown: computeStatusBreakdown(wbEntries.map((e) => e.order)),
+        orders: bucketOrders,
+      });
+    }
+
+    const rgAllOrders = rgEntries.map((e) => e.order);
+    const rgReasonSet = new Set(rgEntries.map((e) => e.classification.classificationReason));
+    const rgConfidenceLevels = rgEntries.map((e) => e.classification.classificationConfidence);
+
+    routeGroups.push({
+      routeGroupKey: rgEntries[0].classification.routeGroupKey,
+      routeGroupName: rgEntries[0].classification.routeGroupName,
+      routeGroupKind: rgEntries[0].classification.routeGroupKind,
+      classificationConfidence: lowestConfidence(rgConfidenceLevels),
+      classificationReasons: Array.from(rgReasonSet),
+      orderCount: workBuckets.reduce((s, wb) => s + wb.orderCount, 0),
+      itemLinesCount: workBuckets.reduce((s, wb) => s + wb.itemLinesCount, 0),
+      totalQuantity: workBuckets.reduce((s, wb) => s + wb.totalQuantity, 0),
+      statusBreakdown: computeStatusBreakdown(rgAllOrders),
+      workBuckets,
+    });
+  }
+
+  return routeGroups;
+}
+
 export function buildShiftWorkHierarchy(
   shiftId: string,
   lineRows: ManualShiftLineRow[],
@@ -1796,9 +1931,9 @@ export function buildShiftWorkHierarchy(
   for (const row of lineRows) {
     const lineOrders = ordersByLineId.get(row.id) ?? [];
 
+    // ── Legacy buckets (unchanged) ──
     const bucketsMap = new Map<string | null, ManualShiftOrder[]>();
     for (const order of lineOrders) {
-      // pointName is legacy storage for route/work bucket suffix
       const bucketName = order.pointName;
       const list = bucketsMap.get(bucketName) ?? [];
       list.push(order);
@@ -1841,6 +1976,11 @@ export function buildShiftWorkHierarchy(
       return a.bucketName.localeCompare(b.bucketName);
     });
 
+    // ── Route groups (RG2) ──
+    const routeGroups = buildRouteGroupsForLine(
+      lineOrders, rollups, checkUnitsByOrderId, ashlamotByOrderId
+    );
+
     lines.push({
       lineId: row.id,
       lineGroupName: row.name,
@@ -1850,7 +1990,8 @@ export function buildShiftWorkHierarchy(
       totalOrders: lineOrders.length,
       totalQuantity: buckets.reduce((s, b) => s + b.totalQuantity, 0),
       statusBreakdown: computeStatusBreakdown(lineOrders),
-      buckets
+      buckets,
+      routeGroups
     });
   }
 

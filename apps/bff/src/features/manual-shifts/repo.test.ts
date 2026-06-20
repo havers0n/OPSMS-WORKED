@@ -296,3 +296,240 @@ describe('buildShiftWorkHierarchy', () => {
     expect(order1.lineCount).toBe(7);
   });
 });
+
+describe('buildShiftWorkHierarchy — routeGroups (RG2)', () => {
+  const SHIFT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const LINE = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+  function makeLine(name: string, area = 'גליל'): ManualShiftLineRow {
+    return {
+      id: LINE, tenant_id: 't1', shift_id: SHIFT, name, distribution_area: area,
+      sort_order: 1, created_at: '2026-06-14T06:00:00.000Z',
+      deleted_at: null, deleted_by_profile_id: null, deleted_by_name: null, delete_reason: null
+    };
+  }
+
+  function makeOrder(overrides: Partial<ManualShiftOrder> & { id: string; orderNumber: string }): ManualShiftOrder {
+    return {
+      tenantId: 't1', shiftId: SHIFT, lineId: LINE,
+      customerName: null, pointName: null, palletCount: null,
+      pickerName: null, pickerWorkerId: null, checkerName: null,
+      lineCount: null, sortOrder: null, size: 'unknown' as const,
+      status: 'queued' as const,
+      startedAt: null, checkStartedAt: null, waitingCheckAt: null,
+      checkedAt: null, finishedAt: null, comment: null,
+      createdAt: '2026-06-14T06:00:00.000Z',
+      updatedAt: '2026-06-14T06:00:00.000Z',
+      deletedAt: null, deletedByProfileId: null, deletedByName: null,
+      deleteReason: null,
+      rawRouteLine: null, routeBase: null, workBucketName: null, workBucketType: null,
+      ...overrides
+    };
+  }
+
+  function rollup(id: string, lc: number, qty: number) {
+    return [id, { lineCount: lc, totalQuantity: qty }] as const;
+  }
+
+  // ── Test 1: Base + category split ────────────────────────────────────────
+  it('SO26013614: base + category suffixes → routeGroup גליל כללי with 3 work buckets', () => {
+    const O1 = 'o1-base';     const O2 = 'o2-cat-slr'; const O3 = 'o3-cat-rkv';
+    const lineRows = [makeLine('גליל')];
+    const orders = [
+      makeOrder({ id: O1, orderNumber: 'SO26013614', pointName: null, rawRouteLine: 'גליל', routeBase: 'גליל', workBucketName: null }),
+      makeOrder({ id: O2, orderNumber: 'SO26013614', pointName: 'סלולר', rawRouteLine: 'גליל/סלולר', routeBase: 'גליל', workBucketName: 'סלולר' }),
+      makeOrder({ id: O3, orderNumber: 'SO26013614', pointName: 'רכב-פז נהריה', rawRouteLine: 'גליל/רכב-פז נהריה', routeBase: 'גליל', workBucketName: 'רכב-פז נהריה' }),
+    ];
+    const rollups = new Map([rollup(O1, 3, 15), rollup(O2, 1, 4), rollup(O3, 5, 30)]);
+
+    const result = buildShiftWorkHierarchy(SHIFT, lineRows, orders, rollups, [], []);
+    const line = result.areas[0].lines[0];
+
+    expect(line.routeGroups!).toHaveLength(1);
+    const rg = line.routeGroups![0];
+    expect(rg.routeGroupName).toBe('גליל כללי');
+    expect(rg.routeGroupKind).toBe('general');
+    expect(rg.classificationConfidence).toBe('high');
+    expect(rg.workBuckets).toHaveLength(3);
+
+    const generalWb = rg.workBuckets.find((w) => w.workBucketName === 'כללי')!;
+    expect(generalWb).toBeDefined();
+    expect(generalWb.workBucketKind).toBe('general');
+    expect(generalWb.orders).toHaveLength(1);
+    expect(generalWb.orders[0].orderId).toBe(O1);
+
+    const cellWb = rg.workBuckets.find((w) => w.workBucketName === 'סלולר')!;
+    expect(cellWb).toBeDefined();
+    expect(cellWb.workBucketKind).toBe('category');
+    expect(cellWb.orders[0].orderId).toBe(O2);
+
+    const rkvWb = rg.workBuckets.find((w) => w.workBucketName === 'רכב-פז נהריה')!;
+    expect(rkvWb).toBeDefined();
+    expect(rkvWb.workBucketKind).toBe('category');
+    expect(rkvWb.orders[0].orderId).toBe(O3);
+  });
+
+  // ── Test 2: Standalone group ─────────────────────────────────────────────
+  it('SO26014230: standalone route group דבאח עין המפרץ with work bucket כללי', () => {
+    const O1 = 'o1-standalone';
+    const lineRows = [makeLine('גליל')];
+    const orders = [
+      makeOrder({ id: O1, orderNumber: 'SO26014230', pointName: 'דבאח עין המפרץ', rawRouteLine: 'גליל/דבאח עין המפרץ', routeBase: 'גליל', workBucketName: 'דבאח עין המפרץ' }),
+    ];
+    const rollups = new Map([rollup(O1, 3, 15)]);
+
+    const result = buildShiftWorkHierarchy(SHIFT, lineRows, orders, rollups, [], []);
+    const line = result.areas[0].lines[0];
+
+    expect(line.routeGroups!).toHaveLength(1);
+    const rg = line.routeGroups![0];
+    expect(rg.routeGroupName).toBe('דבאח עין המפרץ');
+    expect(rg.routeGroupKind).toBe('standalone');
+    expect(rg.workBuckets).toHaveLength(1);
+    expect(rg.workBuckets[0].workBucketName).toBe('כללי');
+    expect(rg.workBuckets[0].workBucketDisplayName).toBe('כללי');
+    expect(rg.workBuckets[0].workBucketKind).toBe('standalone-general');
+  });
+
+  // ── Test 3: Slash-only mixed ─────────────────────────────────────────────
+  it('SO26012206: slash-only mixed without bare base → group name = פז נהריה', () => {
+    const O1 = 'o1-paz';   const O2 = 'o2-sig';  const O3 = 'o3-slr';  const O4 = 'o4-rkv';
+    const lineRows = [makeLine('גליל')];
+    const orders = [
+      makeOrder({ id: O1, orderNumber: 'SO26012206', pointName: 'פז נהריה', rawRouteLine: 'גליל/פז נהריה', routeBase: 'גליל', workBucketName: 'פז נהריה' }),
+      makeOrder({ id: O2, orderNumber: 'SO26012206', pointName: 'סיגריות-פז נהריה', rawRouteLine: 'גליל/סיגריות-פז נהריה', routeBase: 'גליל', workBucketName: 'סיגריות-פז נהריה' }),
+      makeOrder({ id: O3, orderNumber: 'SO26012206', pointName: 'סלולר-פז נהריה', rawRouteLine: 'גליל/סלולר-פז נהריה', routeBase: 'גליל', workBucketName: 'סלולר-פז נהריה' }),
+      makeOrder({ id: O4, orderNumber: 'SO26012206', pointName: 'רכב-פז נהריה', rawRouteLine: 'גליל/רכב-פז נהריה', routeBase: 'גליל', workBucketName: 'רכב-פז נהריה' }),
+    ];
+    const rollups = new Map([rollup(O1, 2, 10), rollup(O2, 3, 15), rollup(O3, 1, 5), rollup(O4, 4, 20)]);
+
+    const result = buildShiftWorkHierarchy(SHIFT, lineRows, orders, rollups, [], []);
+    const line = result.areas[0].lines[0];
+
+    expect(line.routeGroups!).toHaveLength(1);
+    const rg = line.routeGroups![0];
+    expect(rg.routeGroupName).toBe('פז נהריה');
+    expect(rg.routeGroupKind).toBe('derived-from-non-category-suffix');
+    expect(rg.workBuckets).toHaveLength(4);
+
+    const generalWb = rg.workBuckets.find((w) => w.workBucketName === 'כללי')!;
+    expect(generalWb).toBeDefined();
+    expect(generalWb.orders[0].orderId).toBe(O1);
+
+    const sigWb = rg.workBuckets.find((w) => w.workBucketName === 'סיגריות-פז נהריה')!;
+    expect(sigWb).toBeDefined();
+    expect(sigWb.workBucketKind).toBe('category');
+  });
+
+  // ── Test 4: Low-confidence category-only ─────────────────────────────────
+  it('category-only suffix (no base/standalone context) → low confidence', () => {
+    const O1 = 'o1-cat-only';
+    const lineRows = [makeLine('גליל')];
+    const orders = [
+      makeOrder({ id: O1, orderNumber: 'SO-CAT', pointName: 'סלולר', rawRouteLine: 'גליל/סלולר', routeBase: 'גליל', workBucketName: 'סלולר' }),
+    ];
+    const rollups = new Map([rollup(O1, 1, 5)]);
+
+    const result = buildShiftWorkHierarchy(SHIFT, lineRows, orders, rollups, [], []);
+    const line = result.areas[0].lines[0];
+
+    expect(line.routeGroups!).toHaveLength(1);
+    const rg = line.routeGroups![0];
+    expect(rg.classificationConfidence).toBe('low');
+    expect(rg.routeGroupKind).toBe('low-confidence');
+    expect(rg.classificationReasons[0]).toContain('category-like suffix');
+    expect(rg.workBuckets).toHaveLength(1);
+    expect(rg.workBuckets[0].classificationConfidence).toBe('low');
+    expect(rg.workBuckets[0].workBucketKind).toBe('unknown');
+  });
+
+  // ── Test 5: Backwards compatibility ──────────────────────────────────────
+  it('legacy buckets still exist and have the same shape/content', () => {
+    const O1 = 'o1-base'; const O2 = 'o2-slr'; const O3 = 'o3-mkt';
+    const lineRows = [makeLine('קו דרום', 'דרום')];
+    const orders = [
+      makeOrder({ id: O1, orderNumber: 'SO-1', pointName: null, rawRouteLine: 'דרום', routeBase: 'דרום', workBucketName: null, status: 'queued' }),
+      makeOrder({ id: O2, orderNumber: 'SO-1', pointName: 'סלולר', rawRouteLine: 'דרום/סלולר', routeBase: 'דרום', workBucketName: 'סלולר', status: 'waiting_check' }),
+      makeOrder({ id: O3, orderNumber: 'SO-2', pointName: 'מרכז', rawRouteLine: 'דרום/מרכז', routeBase: 'דרום', workBucketName: 'מרכז', status: 'done' }),
+    ];
+    const rollups = new Map([rollup(O1, 2, 10), rollup(O2, 1, 5), rollup(O3, 3, 20)]);
+
+    const result = buildShiftWorkHierarchy(SHIFT, lineRows, orders, rollups, [], []);
+    const line = result.areas[0].lines[0];
+
+    // Legacy buckets must still exist
+    expect(line.buckets).toBeDefined();
+    expect(line.buckets.length).toBeGreaterThan(0);
+    const bucketNames = line.buckets.map((b) => b.bucketName).sort();
+    expect(bucketNames).toContain(null);
+    expect(bucketNames).toContain('סלולר');
+    expect(bucketNames).toContain('מרכז');
+
+    // routeGroups is a separate field
+    expect(line.routeGroups!).toBeDefined();
+    expect(Array.isArray(line.routeGroups!)).toBe(true);
+  });
+
+  // ── Test 6: Metrics aggregation ──────────────────────────────────────────
+  it('route group totals equal sum of their work buckets; line totals unchanged', () => {
+    const O1 = 'o1-base'; const O2 = 'o2-slr';
+    const lineRows = [makeLine('מרכז', 'מרכז')];
+    const orders = [
+      makeOrder({ id: O1, orderNumber: 'SO-10', pointName: null, rawRouteLine: 'מרכז', routeBase: 'מרכז', workBucketName: null }),
+      makeOrder({ id: O2, orderNumber: 'SO-10', pointName: 'סלולר', rawRouteLine: 'מרכז/סלולר', routeBase: 'מרכז', workBucketName: 'סלולר' }),
+    ];
+    const rollups = new Map([rollup(O1, 3, 12), rollup(O2, 2, 8)]);
+
+    const result = buildShiftWorkHierarchy(SHIFT, lineRows, orders, rollups, [], []);
+    const line = result.areas[0].lines[0];
+
+    expect(line.routeGroups!).toHaveLength(1);
+    const rg = line.routeGroups![0];
+    const rgTotalOrders = rg.workBuckets.reduce((s, wb) => s + wb.orderCount, 0);
+    const rgTotalQty = rg.workBuckets.reduce((s, wb) => s + wb.totalQuantity, 0);
+    const rgTotalLines = rg.workBuckets.reduce((s, wb) => s + wb.itemLinesCount, 0);
+
+    expect(rg.orderCount).toBe(rgTotalOrders);
+    expect(rg.totalQuantity).toBe(rgTotalQty);
+    expect(rg.itemLinesCount).toBe(rgTotalLines);
+
+    // Work bucket totals match contained orders
+    for (const wb of rg.workBuckets) {
+      const wbOrderQty = wb.orders.reduce((s, o) => s + o.totalQuantity, 0);
+      expect(wb.totalQuantity).toBe(wbOrderQty);
+    }
+
+    // Line totalQuantity unchanged from existing behavior
+    expect(line.totalQuantity).toBe(20);
+    expect(line.totalOrders).toBe(2);
+  });
+
+  // ── Test 7: No cross-line/order leakage ──────────────────────────────────
+  it('same orderNumber under different routeBase classifies independently', () => {
+    const LINE_B = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    const O1 = 'o1-base'; const O2 = 'o2-standalone';
+    const lineRows = [
+      { ...makeLine('גליל', 'צפון'), id: LINE },
+      { ...makeLine('צפון', 'צפון'), id: LINE_B },
+    ];
+    const orders = [
+      makeOrder({ id: O1, orderNumber: 'SO-SAME', lineId: LINE, pointName: null, rawRouteLine: 'גליל', routeBase: 'גליל', workBucketName: null }),
+      makeOrder({ id: O2, orderNumber: 'SO-SAME', lineId: LINE_B, pointName: 'דבאח עכו', rawRouteLine: 'צפון/דבאח עכו', routeBase: 'צפון', workBucketName: 'דבאח עכו' }),
+    ];
+    const rollups = new Map([rollup(O1, 1, 5), rollup(O2, 2, 10)]);
+
+    const result = buildShiftWorkHierarchy(SHIFT, lineRows, orders, rollups, [], []);
+    const area = result.areas[0];
+
+    const galilLine = area.lines.find((l) => l.lineGroupName === 'גליל')!;
+    const tzfonLine = area.lines.find((l) => l.lineGroupName === 'צפון')!;
+
+    expect(galilLine.routeGroups![0].routeGroupName).toBe('גליל כללי');
+    expect(tzfonLine.routeGroups![0].routeGroupName).toBe('דבאח עכו');
+    expect(galilLine.routeGroups![0].routeGroupName).not.toBe(tzfonLine.routeGroups![0].routeGroupName);
+
+    // Each line's totals are independent
+    expect(galilLine.totalQuantity).toBe(5);
+    expect(tzfonLine.totalQuantity).toBe(10);
+  });
+});

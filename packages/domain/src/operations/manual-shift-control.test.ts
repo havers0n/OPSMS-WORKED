@@ -12,6 +12,8 @@ import {
   manualShiftOrderItemSchema,
   manualShiftOrderSchema,
   manualShiftWorkHierarchyResponseSchema,
+  manualShiftWorkHierarchyRouteGroupSchema,
+  manualShiftWorkHierarchyWorkBucketSchema,
   summarizeManualShiftOrderCheckUnits,
   manualShiftTodayResponseSchema
 } from './manual-shift-control';
@@ -402,7 +404,8 @@ describe('manual shift work hierarchy schemas', () => {
                     }
                   ]
                 }
-              ]
+              ],
+              routeGroups: []
             }
           ]
         }
@@ -474,7 +477,8 @@ describe('manual shift work hierarchy schemas', () => {
                     }
                   ]
                 }
-              ]
+              ],
+              routeGroups: []
             }
           ]
         }
@@ -544,6 +548,103 @@ describe('manual shift work hierarchy schemas', () => {
       returned: 1,
       done: 2
     });
+  });
+
+  it('parses hierarchy response with empty routeGroups', () => {
+    const result = manualShiftWorkHierarchyResponseSchema.parse({
+      shiftId: '33333333-3333-4333-8333-333333333333',
+      areas: [{
+        areaName: 'דרום', displayName: 'דרום',
+        totalLines: 1, totalBuckets: 0, totalOrders: 0, totalQuantity: 0,
+        statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+        lines: [{
+          lineId: '44444444-4444-4444-8444-444444444444',
+          lineGroupName: 'קו דרום', distributionArea: 'דרום', status: 'open',
+          totalBuckets: 0, totalOrders: 0, totalQuantity: 0,
+          statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          buckets: [],
+          routeGroups: []
+        }]
+      }]
+    });
+    expect(result.areas[0].lines[0].routeGroups!).toEqual([]);
+  });
+
+  it('parses hierarchy response with route groups and work buckets', () => {
+    const result = manualShiftWorkHierarchyResponseSchema.parse({
+      shiftId: '33333333-3333-4333-8333-333333333333',
+      areas: [{
+        areaName: 'צפון', displayName: 'צפון',
+        totalLines: 1, totalBuckets: 0, totalOrders: 0, totalQuantity: 0,
+        statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+        lines: [{
+          lineId: '44444444-4444-4444-8444-444444444444',
+          lineGroupName: 'גליל', distributionArea: 'צפון', status: 'open',
+          totalBuckets: 0, totalOrders: 0, totalQuantity: 0,
+          statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          buckets: [],
+          routeGroups: [{
+            routeGroupKey: 'rg\u0001גליל כללי',
+            routeGroupName: 'גליל כללי',
+            routeGroupKind: 'general',
+            classificationConfidence: 'high',
+            classificationReasons: ['base route with work bucket siblings'],
+            orderCount: 2,
+            itemLinesCount: 4,
+            totalQuantity: 30,
+            statusBreakdown: { queued: 1, picking: 0, waitingCheck: 1, returned: 0, done: 0 },
+            workBuckets: [{
+              workBucketKey: 'wb\u0001גליל כללי\u0001כללי',
+              workBucketName: 'כללי',
+              workBucketDisplayName: 'כללי',
+              workBucketKind: 'general',
+              classificationConfidence: 'high',
+              classificationReasons: ['base route with work bucket siblings'],
+              orderCount: 1,
+              itemLinesCount: 2,
+              totalQuantity: 10,
+              statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              orders: [{
+                orderId: '55555555-5555-4555-8555-555555555555',
+                orderNumber: 'SO-1', customerName: null, pointName: null,
+                status: 'queued', lineCount: 2, totalQuantity: 10,
+                hasAshlama: false, hasCheckUnits: false
+              }]
+            }]
+          }]
+        }]
+      }]
+    });
+    expect(result.areas[0].lines[0].routeGroups!).toHaveLength(1);
+    expect(result.areas[0].lines[0].routeGroups![0].routeGroupName).toBe('גליל כללי');
+    expect(result.areas[0].lines[0].routeGroups![0].workBuckets[0].workBucketDisplayName).toBe('כללי');
+  });
+
+  it('rejects invalid routeGroupKind in routeGroups', () => {
+    expect(() => manualShiftWorkHierarchyRouteGroupSchema.parse({
+      routeGroupKey: 'rg\u0001test',
+      routeGroupName: 'test',
+      routeGroupKind: 'invalid-kind',
+      classificationConfidence: 'high',
+      classificationReasons: [],
+      orderCount: 0, itemLinesCount: 0, totalQuantity: 0,
+      statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+      workBuckets: []
+    })).toThrow();
+  });
+
+  it('rejects invalid workBucketKind in workBuckets', () => {
+    expect(() => manualShiftWorkHierarchyWorkBucketSchema.parse({
+      workBucketKey: 'wb\u0001test\u0001כללי',
+      workBucketName: 'כללי',
+      workBucketDisplayName: 'כללי',
+      workBucketKind: 'invalid',
+      classificationConfidence: 'high',
+      classificationReasons: [],
+      orderCount: 0, itemLinesCount: 0, totalQuantity: 0,
+      statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+      orders: []
+    })).toThrow();
   });
 });
 
