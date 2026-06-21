@@ -1247,7 +1247,11 @@ describe('buildManualShiftSourceZoneDiagnostics', () => {
 
 // ── listBucketProductRollup sourceZone isolation ───────────────────────────
 
-function fakeSupabase(orders: Array<Record<string, unknown>>, items: Array<Record<string, unknown>>) {
+function fakeSupabase(
+  orders: Array<Record<string, unknown>>,
+  items: Array<Record<string, unknown>>,
+  lines: Array<Record<string, unknown>> = []
+) {
   function makeBuilder(rows: Array<Record<string, unknown>>) {
     let filtered = [...rows];
     const builder = {
@@ -1273,6 +1277,10 @@ function fakeSupabase(orders: Array<Record<string, unknown>>, items: Array<Recor
       range(_offset: number, _limit: number) {
         return builder;
       },
+      maybeSingle() {
+        const out = filtered.length > 0 ? filtered[0] : null;
+        return Promise.resolve({ data: out, error: null });
+      },
       then(resolve: (result: { data: Array<Record<string, unknown>> | null; error: null }) => void) {
         const out = filtered.length > 0 ? filtered : null;
         resolve({ data: out, error: null });
@@ -1283,10 +1291,12 @@ function fakeSupabase(orders: Array<Record<string, unknown>>, items: Array<Recor
 
   const orderRows = [...orders];
   const itemRows = [...items];
+  const lineRows = [...lines];
 
   return {
     from(table: string) {
-      const sourceRows = table === 'manual_shift_orders' ? orderRows : itemRows;
+      const sourceRows =
+        table === 'manual_shift_orders' ? orderRows : table === 'manual_shift_lines' ? lineRows : itemRows;
       return { select(cols: string) { return makeBuilder(sourceRows); } };
     }
   };
@@ -1419,5 +1429,168 @@ describe('listBucketProductRollup sourceZone isolation', () => {
     expect(result).toHaveLength(2);
     expect(result.map((r: BucketProductRollupRow) => r.sku).sort()).toEqual(['333', '444']);
     expect(result.reduce((sum: number, row: BucketProductRollupRow) => sum + row.totalQuantity, 0)).toBe(10);
+  });
+
+  it('aggregates same SKU across orders into one product row', async () => {
+    const orders = [
+      { id: 'o-agg-1', shift_id: SHIFT, line_id: LINE, point_name: 'סלולר', source_zone: null, deleted_at: null },
+      { id: 'o-agg-2', shift_id: SHIFT, line_id: LINE, point_name: 'סלולר', source_zone: null, deleted_at: null }
+    ];
+    const items = [
+      { sku: 'AGG-1', description: 'מוצר מצטבר', category: 'test', quantity: 5, order_id: 'o-agg-1' },
+      { sku: 'AGG-1', description: 'מוצר מצטבר', category: 'test', quantity: 7, order_id: 'o-agg-2' }
+    ];
+    const supabase = fakeSupabase(orders, items);
+    const repo = createManualShiftsRepo(supabase as never);
+
+    const result = await repo.listBucketProductRollup({
+      shiftId: SHIFT, lineId: LINE, bucketName: 'סלולר'
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].sku).toBe('AGG-1');
+    expect(result[0].totalQuantity).toBe(12);
+    expect(result[0].orderCount).toBe(2);
+  });
+});
+
+describe('listBucketProductRollup work bucket scoping', () => {
+  const SHIFT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const LINE = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const LINE_ROWS = [
+    {
+      id: LINE,
+      shift_id: SHIFT,
+      distribution_area: 'גליל'
+    }
+  ];
+
+  const orders = [
+    {
+      id: 'o-sig',
+      shift_id: SHIFT,
+      line_id: LINE,
+      point_name: 'גליל',
+      route_base: 'גליל',
+      work_bucket_name: 'סיגריות-מנטה עין המפרץ',
+      source_zone: 'גליל',
+      deleted_at: null
+    },
+    {
+      id: 'o-rav-1',
+      shift_id: SHIFT,
+      line_id: LINE,
+      point_name: 'גליל',
+      route_base: 'גליל',
+      work_bucket_name: 'רכב-פז ירכא',
+      source_zone: 'גליל',
+      deleted_at: null
+    },
+    {
+      id: 'o-rav-2',
+      shift_id: SHIFT,
+      line_id: LINE,
+      point_name: 'גליל',
+      route_base: 'גליל',
+      work_bucket_name: 'רכב-פז ירכא',
+      source_zone: 'גליל',
+      deleted_at: null
+    },
+    {
+      id: 'o-rav-3',
+      shift_id: SHIFT,
+      line_id: LINE,
+      point_name: 'גליל',
+      route_base: 'גליל',
+      work_bucket_name: 'רכב-פז ירכא',
+      source_zone: 'גליל',
+      deleted_at: null
+    },
+    ...Array.from({ length: 26 }, (_, index) => ({
+      id: `o-gen-${index + 1}`,
+      shift_id: SHIFT,
+      line_id: LINE,
+      point_name: 'כללי',
+      route_base: 'גליל',
+      work_bucket_name: 'כללי',
+      source_zone: 'גליל',
+      deleted_at: null
+    }))
+  ];
+
+  const items = [
+    { sku: '114000', description: 'סיגריות-מנטה', category: 'טבק', quantity: 10, order_id: 'o-sig' },
+    { sku: 'RAV-1', description: 'רכב 1', category: 'רכב', quantity: 10, order_id: 'o-rav-1' },
+    { sku: 'RAV-2', description: 'רכב 2', category: 'רכב', quantity: 10, order_id: 'o-rav-2' },
+    { sku: 'RAV-3', description: 'רכב 3', category: 'רכב', quantity: 10, order_id: 'o-rav-3' },
+    ...Array.from({ length: 25 }, (_, index) => ({
+      sku: `GEN-${index + 1}`,
+      description: `כללי ${index + 1}`,
+      category: 'כללי',
+      quantity: 3,
+      order_id: `o-gen-${index + 1}`
+    })),
+    {
+      sku: 'GEN-26',
+      description: 'כללי 26',
+      category: 'כללי',
+      quantity: 18,
+      order_id: 'o-gen-26'
+    }
+  ];
+
+  it('returns exactly one row for סיגריות-מנטה עין המפרץ', async () => {
+    const supabase = fakeSupabase(orders, items, LINE_ROWS);
+    const repo = createManualShiftsRepo(supabase as never);
+
+    const result = await repo.listBucketProductRollup({
+      shiftId: SHIFT,
+      lineId: LINE,
+      bucketName: 'סיגריות-מנטה עין המפרץ',
+      sourceZone: 'גליל',
+      sourceLineName: 'גליל',
+      workBucketName: 'סיגריות-מנטה עין המפרץ'
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      sku: '114000',
+      totalQuantity: 10,
+      orderCount: 1
+    });
+  });
+
+  it('returns exactly three rows for רכב-פז ירכא', async () => {
+    const supabase = fakeSupabase(orders, items, LINE_ROWS);
+    const repo = createManualShiftsRepo(supabase as never);
+
+    const result = await repo.listBucketProductRollup({
+      shiftId: SHIFT,
+      lineId: LINE,
+      bucketName: 'רכב-פז ירכא',
+      sourceZone: 'גליל',
+      sourceLineName: 'גליל',
+      workBucketName: 'רכב-פז ירכא'
+    });
+
+    expect(result).toHaveLength(3);
+    expect(result.reduce((sum: number, row: BucketProductRollupRow) => sum + row.totalQuantity, 0)).toBe(30);
+  });
+
+  it('returns only כללי bucket products for גליל line scoping', async () => {
+    const supabase = fakeSupabase(orders, items, LINE_ROWS);
+    const repo = createManualShiftsRepo(supabase as never);
+
+    const result = await repo.listBucketProductRollup({
+      shiftId: SHIFT,
+      lineId: LINE,
+      bucketName: 'כללי',
+      sourceZone: 'גליל',
+      sourceLineName: 'גליל',
+      workBucketName: 'כללי'
+    });
+
+    expect(result).toHaveLength(26);
+    expect(result.reduce((sum: number, row: BucketProductRollupRow) => sum + row.totalQuantity, 0)).toBe(93);
   });
 });

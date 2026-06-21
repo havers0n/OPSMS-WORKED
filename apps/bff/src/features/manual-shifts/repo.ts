@@ -730,7 +730,10 @@ export type ManualShiftsRepo = {
     shiftId: string;
     lineId: string;
     bucketName: string;
+    distributionArea?: string | null;
     sourceZone?: string | null;
+    workBucketName?: string | null;
+    sourceLineName?: string | null;
   }): Promise<BucketProductRollupRow[]>;
   listProductControlDemand(shiftId: string): Promise<ProductControlDemandRow[]>;
   listWarehouseStockBySku(skus: string[], tenantId: string): Promise<Map<string, number>>;
@@ -1694,30 +1697,74 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       return buildShiftWorkHierarchy(shiftId, lineRows, orders, rollups, checkUnits, ashlamot, items);
     },
 
-    async listBucketProductRollup({ shiftId, lineId, bucketName, sourceZone }) {
+    async listBucketProductRollup({
+      shiftId,
+      lineId,
+      bucketName,
+      distributionArea,
+      sourceZone,
+      workBucketName,
+      sourceLineName
+    }) {
       const normalizedSourceZone = normalizeOptionalString(sourceZone);
-      const sourceZoneMode = normalizedSourceZone !== null;
+      const normalizedDistributionArea = normalizeOptionalString(distributionArea);
+      const normalizedWorkBucketName = normalizeOptionalString(workBucketName);
+      const normalizedSourceLineName = normalizeOptionalString(sourceLineName);
+
+      if (normalizedDistributionArea !== null) {
+        const { data: lineRow, error: lineError } = await supabase
+          .from('manual_shift_lines')
+          .select('distribution_area')
+          .eq('shift_id', shiftId)
+          .eq('id', lineId)
+          .maybeSingle();
+
+        if (lineError) throw lineError;
+        if (normalizeOptionalString(lineRow?.distribution_area ?? null) !== normalizedDistributionArea) {
+          return [];
+        }
+      }
 
       let ordersQuery = supabase
         .from('manual_shift_orders')
-        .select('id')
+        .select('id,point_name,work_bucket_name')
         .eq('shift_id', shiftId)
         .eq('line_id', lineId)
         .is('deleted_at', null);
 
-      if (sourceZoneMode) {
+      if (normalizedSourceLineName !== null) {
+        ordersQuery = ordersQuery.eq('route_base', normalizedSourceLineName);
+      }
+
+      if (normalizedSourceZone !== null) {
         ordersQuery = ordersQuery.eq('source_zone', normalizedSourceZone);
-      } else if (bucketName === '') {
-        ordersQuery = ordersQuery.is('point_name', null);
-      } else {
-        ordersQuery = ordersQuery.eq('point_name', bucketName);
+      }
+
+      if (normalizedWorkBucketName !== null && normalizedWorkBucketName !== 'כללי') {
+        ordersQuery = ordersQuery.eq('work_bucket_name', normalizedWorkBucketName);
+      }
+
+      if (normalizedSourceZone === null && normalizedWorkBucketName === null) {
+        if (bucketName === '') {
+          ordersQuery = ordersQuery.is('point_name', null);
+        } else {
+          ordersQuery = ordersQuery.eq('point_name', bucketName);
+        }
       }
 
       const { data: bucketOrders, error: ordersError } = await ordersQuery;
 
       if (ordersError) throw ordersError;
 
-      const orderIds = (bucketOrders ?? []).map((row: { id: string }) => row.id);
+      const filteredBucketOrders =
+        normalizedWorkBucketName === 'כללי'
+          ? (bucketOrders ?? []).filter((row: { work_bucket_name?: string | null }) => {
+              const workBucket = normalizeOptionalString(row.work_bucket_name ?? null);
+              return workBucket === 'כללי' || workBucket === null;
+            })
+          : (bucketOrders ?? []);
+
+      const orderIds = filteredBucketOrders.map((row: { id: string }) => row.id);
       if (orderIds.length === 0) return [];
 
       const productMap = new Map<

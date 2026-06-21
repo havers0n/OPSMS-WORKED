@@ -11,6 +11,7 @@ import {
   manualShiftOrderCheckUnitSchema,
   manualShiftOrderItemSchema,
   manualShiftOrderSchema,
+  bucketProductRollupResponseSchema,
   manualShiftWorkHierarchyResponseSchema,
   manualShiftWorkHierarchyRouteGroupSchema,
   manualShiftWorkHierarchyWorkBucketSchema,
@@ -25,6 +26,24 @@ describe('manual shift control contracts', () => {
     expect(canTransitionManualShiftOrderStatus('waiting_check', 'done')).toBe(true);
     expect(canTransitionManualShiftOrderStatus('waiting_check', 'returned')).toBe(true);
     expect(canTransitionManualShiftOrderStatus('returned', 'waiting_check')).toBe(true);
+  });
+
+  it('accepts optional bucket product rollup scope fields', () => {
+    expect(
+      bucketProductRollupResponseSchema.parse({
+        shiftId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        lineId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        bucketName: 'סיגריות-מנטה עין המפרץ',
+        sourceZone: 'גליל',
+        workBucketName: 'סיגריות-מנטה עין המפרץ',
+        sourceLineName: 'גליל',
+        products: []
+      })
+    ).toMatchObject({
+      bucketName: 'סיגריות-מנטה עין המפרץ',
+      workBucketName: 'סיגריות-מנטה עין המפרץ',
+      sourceLineName: 'גליל'
+    });
   });
 
   it('rejects invalid manual order transitions', () => {

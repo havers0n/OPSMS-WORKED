@@ -405,11 +405,15 @@ async function openDesktopRouteGroupBucket(areaName: 'שפלה 2' | 'שפלה א
   fireEvent.click(screen.getByTestId('work-bucket-card-wb-cellular'));
 }
 
-function getProductRollupSourceZones() {
+function getProductRollupSearchParams() {
   return mockedBffRequest.mock.calls
     .map(([url]) => String(url))
     .filter((url) => url.includes(`/api/manual-shifts/${shift.id}/buckets/product-rollup`))
-    .map((url) => new URL(url, 'http://localhost').searchParams.get('sourceZone'));
+    .map((url) => new URL(url, 'http://localhost').searchParams);
+}
+
+function getProductRollupSourceZones() {
+  return getProductRollupSearchParams().map((params) => params.get('sourceZone'));
 }
 
 function makeChitaHierarchy() {

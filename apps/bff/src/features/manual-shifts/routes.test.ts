@@ -2684,6 +2684,42 @@ describe('manual shifts routes', () => {
       await app.close();
     });
 
+    it('forwards distributionArea, workBucketName and sourceLineName when provided', async () => {
+    const rollup = {
+      shiftId: ids.shift,
+      lineId: ids.line,
+      bucketName: 'סיגריות-מנטה עין המפרץ',
+      distributionArea: 'גליל',
+      sourceZone: 'גליל',
+      workBucketName: 'סיגריות-מנטה עין המפרץ',
+      sourceLineName: 'גליל',
+      products: []
+    };
+      const service = createServiceMock({
+        getBucketProductRollup: vi.fn(async () => rollup)
+      });
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/buckets/product-rollup?lineId=${ids.line}&bucketName=%D7%A1%D7%99%D7%92%D7%A8%D7%99%D7%95%D7%AA-%D7%9E%D7%A0%D7%98%D7%94+%D7%A2%D7%99%D7%9F+%D7%94%D7%9E%D7%A4%D7%A8%D7%A5&distributionArea=%D7%92%D7%9C%D7%99%D7%9C&sourceZone=%D7%92%D7%9C%D7%99%D7%9C&workBucketName=%D7%A1%D7%99%D7%92%D7%A8%D7%99%D7%95%D7%AA-%D7%9E%D7%A0%D7%98%D7%94+%D7%A2%D7%99%D7%9F+%D7%94%D7%9E%D7%A4%D7%A8%D7%A5&sourceLineName=%D7%92%D7%9C%D7%99%D7%9C`
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(service.getBucketProductRollup).toHaveBeenCalledWith({
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        lineId: ids.line,
+        bucketName: 'סיגריות-מנטה עין המפרץ',
+        distributionArea: 'גליל',
+        sourceZone: 'גליל',
+        workBucketName: 'סיגריות-מנטה עין המפרץ',
+        sourceLineName: 'גליל'
+      });
+
+      await app.close();
+    });
+
     it('treats empty sourceZone as unknown zone filter', async () => {
       const rollup = {
         shiftId: ids.shift,

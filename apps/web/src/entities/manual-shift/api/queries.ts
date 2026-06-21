@@ -41,8 +41,26 @@ export const manualShiftKeys = {
   bindableUsers: () => [...manualShiftKeys.all, 'bindable-users'] as const,
   monthlyReplaceSafety: (shiftId: string) =>
     [...manualShiftKeys.all, 'monthly-replace-safety', shiftId] as const,
-  bucketProductRollup: (shiftId: string, lineId: string, bucketName: string, sourceZone?: string) =>
-    [...manualShiftKeys.all, 'bucket-product-rollup', shiftId, lineId, bucketName, sourceZone ?? '__no_source_zone__'] as const,
+  bucketProductRollup: (
+    shiftId: string,
+    lineId: string,
+    bucketName: string,
+    distributionArea?: string,
+    sourceZone?: string,
+    workBucketName?: string,
+    sourceLineName?: string
+  ) =>
+    [
+      ...manualShiftKeys.all,
+      'bucket-product-rollup',
+      shiftId,
+      lineId,
+      bucketName,
+      distributionArea ?? '__no_distribution_area__',
+      sourceZone ?? '__no_source_zone__',
+      workBucketName ?? '__no_work_bucket__',
+      sourceLineName ?? '__no_source_line__'
+    ] as const,
   productControl: (shiftId: string) => [...manualShiftKeys.all, 'product-control', shiftId] as const
 };
 
@@ -257,11 +275,23 @@ async function fetchBucketProductRollup(
   shiftId: string,
   lineId: string,
   bucketName: string,
-  sourceZone?: string
+  distributionArea?: string,
+  sourceZone?: string,
+  workBucketName?: string,
+  sourceLineName?: string
 ): Promise<BucketProductRollupResponse> {
   const params = new URLSearchParams({ lineId, bucketName });
+  if (distributionArea !== undefined) {
+    params.append('distributionArea', distributionArea);
+  }
   if (sourceZone !== undefined) {
     params.append('sourceZone', sourceZone);
+  }
+  if (workBucketName !== undefined) {
+    params.append('workBucketName', workBucketName);
+  }
+  if (sourceLineName !== undefined) {
+    params.append('sourceLineName', sourceLineName);
   }
   return bffRequest<BucketProductRollupResponse>(
     `/api/manual-shifts/${shiftId}/buckets/product-rollup?${params}`
@@ -272,11 +302,31 @@ export function bucketProductRollupQueryOptions(
   shiftId: string,
   lineId: string,
   bucketName: string,
-  sourceZone?: string
+  distributionArea?: string,
+  sourceZone?: string,
+  workBucketName?: string,
+  sourceLineName?: string
 ) {
   return queryOptions({
-    queryKey: manualShiftKeys.bucketProductRollup(shiftId, lineId, bucketName, sourceZone),
-    queryFn: () => fetchBucketProductRollup(shiftId, lineId, bucketName, sourceZone),
+    queryKey: manualShiftKeys.bucketProductRollup(
+      shiftId,
+      lineId,
+      bucketName,
+      distributionArea,
+      sourceZone,
+      workBucketName,
+      sourceLineName
+    ),
+    queryFn: () =>
+      fetchBucketProductRollup(
+        shiftId,
+        lineId,
+        bucketName,
+        distributionArea,
+        sourceZone,
+        workBucketName,
+        sourceLineName
+      ),
     enabled: !!shiftId && !!lineId,
     staleTime: 10_000
   });
