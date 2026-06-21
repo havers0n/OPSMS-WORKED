@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  normalizeWorkbookDate,
   parseManualShiftMonthlyPreview,
   planManualShiftMonthlyImportApply,
   type ParseManualShiftMonthlyPreviewInput
@@ -68,7 +69,13 @@ describe('manual shift monthly import parser', () => {
       skuRows: 2,
       aggregatedSkuGroups: 1,
       uniqueSkus: 1,
-      totalQuantity: 5
+      totalQuantity: 5,
+      rawTotalQuantity: 5,
+      positiveTotalQuantity: 5,
+      negativeTotalQuantity: 0,
+      zeroQuantityRowsCount: 0,
+      negativeQuantityRowsCount: 0,
+      positiveQuantityRowsCount: 2
     });
     expect(result.groups).toEqual([
       expect.objectContaining({
@@ -1080,6 +1087,237 @@ describe('manual shift monthly import parser', () => {
     // });
   });
 
+  // ── PR G2: Date format parsing ─────────────────────────────────────────────
+
+  describe('normalizeWorkbookDate', () => {
+    const cases: [string, string | null][] = [
+      // Date object
+      ['Date', '2026-06-03'],
+      // YYYY-MM-DD
+      ['2026-06-03', '2026-06-03'],
+      // YYYY/MM/DD
+      ['2026/06/03', '2026-06-03'],
+      // DD/MM/YYYY
+      ['03/06/2026', '2026-06-03'],
+      ['3/6/2026', '2026-06-03'],
+      // DD.MM.YYYY
+      ['03.06.2026', '2026-06-03'],
+      ['3.6.2026', '2026-06-03'],
+      // DD/MM/YY (two-digit year)
+      ['03/06/26', '2026-06-03'],
+      ['3/6/26', '2026-06-03'],
+      // DD.MM.YY (two-digit year)
+      ['03.06.26', '2026-06-03'],
+      ['3.6.26', '2026-06-03'],
+      // Two-digit year boundary: 00-69 → 2000-2069, 70-99 → 1970-1999
+      ['1.1.00', '2000-01-01'],
+      ['1.1.69', '2069-01-01'],
+      ['1.1.70', '1970-01-01'],
+      ['1.1.99', '1999-01-01'],
+      ['1/1/00', '2000-01-01'],
+      ['1/1/99', '1999-01-01'],
+      // Invalid dates
+      ['32.6.26', null],
+      ['3.13.26', null],
+      ['not-a-date', null],
+      ['', null],
+      ['   ', null],
+    ];
+
+    it.each(cases)('parses "%s" → %s', (input, expected) => {
+      const value = input === 'Date' ? new Date(Date.UTC(2026, 5, 3)) : input;
+      expect(normalizeWorkbookDate(value)).toBe(expected);
+    });
+  });
+
+  // ── PR G2: Preview date filtering across mixed formats ──────────────────────
+
+  describe('preview filtering with mixed date formats', () => {
+    it('includes rows with different date formats but same logical date', () => {
+      const result = parseManualShiftMonthlyPreview(buildInput([
+        {
+          rowIndex: 2,
+          distributionDateRaw: '3.6.26',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח א',
+          orderNumber: 'SO-1',
+          sku: '1001',
+          quantity: 2
+        },
+        {
+          rowIndex: 3,
+          distributionDateRaw: '03/06/2026',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח ב',
+          orderNumber: 'SO-2',
+          sku: '1002',
+          quantity: 3
+        },
+        {
+          rowIndex: 4,
+          distributionDateRaw: '2026-06-03',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח ג',
+          orderNumber: 'SO-3',
+          sku: '1003',
+          quantity: 1
+        }
+      ], '2026-06-03'));
+
+      expect(result.preview.dateSummary.matchingRows).toBe(3);
+      expect(result.preview.dateSummary.skippedOtherDateRows).toBe(0);
+      expect(result.preview.selectedDate).toEqual({
+        raw: '03/06/2026',
+        normalized: '2026-06-03'
+      });
+    });
+
+    it('skips rows from other dates', () => {
+      const result = parseManualShiftMonthlyPreview(buildInput([
+        {
+          rowIndex: 2,
+          distributionDateRaw: '3.6.26',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח א',
+          orderNumber: 'SO-1',
+          sku: '1001',
+          quantity: 2
+        },
+        {
+          rowIndex: 3,
+          distributionDateRaw: '4.6.26',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח ב',
+          orderNumber: 'SO-2',
+          sku: '1002',
+          quantity: 3
+        }
+      ], '2026-06-03'));
+
+      expect(result.preview.dateSummary.matchingRows).toBe(1);
+      expect(result.preview.dateSummary.skippedOtherDateRows).toBe(1);
+      expect(result.preview.totals.aggregatedSkuGroups).toBe(1);
+    });
+  });
+
+  // ── PR G2: Invalid date diagnostics ─────────────────────────────────────────
+
+  describe('invalid date diagnostics', () => {
+    it('preserves structured diagnostics for invalid distribution dates', () => {
+      const result = parseManualShiftMonthlyPreview(buildInput([
+        {
+          rowIndex: 2,
+          distributionDateRaw: '32.6.26',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח א',
+          orderNumber: 'SO-1',
+          sku: '1001',
+          quantity: 2
+        },
+        {
+          rowIndex: 3,
+          distributionDateRaw: 'not-a-date',
+          rawDistributionValue: 'עמקים/נקודה ב',
+          customerName: 'לקוח ב',
+          orderNumber: 'SO-2',
+          sku: '1002',
+          quantity: 1
+        }
+      ]));
+
+      expect(result.preview.anomalies.invalidDistributionDateRows).toEqual([2, 3]);
+      expect(result.preview.anomalies.invalidDateDetails).toBeDefined();
+      expect(result.preview.anomalies.invalidDateDetails).toHaveLength(2);
+      expect(result.preview.anomalies.invalidDateDetails![0]).toMatchObject({
+        rowIndex: 2,
+        rawValue: '32.6.26',
+        fieldName: 'תאריך הפצה',
+        reason: 'invalid date format'
+      });
+      expect(result.preview.anomalies.invalidDateDetails![1]).toMatchObject({
+        rowIndex: 3,
+        rawValue: 'not-a-date',
+        fieldName: 'תאריך הפצה',
+        reason: 'invalid date format'
+      });
+    });
+
+    it('handles empty date as missing (preserving existing behavior)', () => {
+      const result = parseManualShiftMonthlyPreview(buildInput([
+        {
+          rowIndex: 2,
+          distributionDateRaw: '',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח',
+          orderNumber: 'SO-1',
+          sku: '1001',
+          quantity: 2
+        }
+      ]));
+
+      expect(result.preview.anomalies.invalidDistributionDateRows).toEqual([2]);
+      expect(result.preview.anomalies.invalidDateDetails).toHaveLength(1);
+      expect(result.preview.anomalies.invalidDateDetails![0].rawValue).toBeNull();
+    });
+  });
+
+  // ── PR G2: Two-digit year rule ──────────────────────────────────────────────
+
+  describe('two-digit year policy', () => {
+    it('applies 00-69 → 2000-2069, 70-99 → 1970-1999 rule', () => {
+      // Note: raw dates are pre-normalized by adapter; the domain function
+      // normalizeWorkbookDate handles the resolution.
+      const result = parseManualShiftMonthlyPreview(buildInput([
+        // 00 → 2000
+        {
+          rowIndex: 2,
+          distributionDateRaw: '1.1.00',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח',
+          orderNumber: 'SO-1',
+          sku: '1001',
+          quantity: 1
+        },
+        // 69 → 2069
+        {
+          rowIndex: 3,
+          distributionDateRaw: '1.1.69',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח',
+          orderNumber: 'SO-2',
+          sku: '1002',
+          quantity: 1
+        },
+        // 70 → 1970
+        {
+          rowIndex: 4,
+          distributionDateRaw: '1.1.70',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח',
+          orderNumber: 'SO-3',
+          sku: '1003',
+          quantity: 1
+        },
+        // 99 → 1999
+        {
+          rowIndex: 5,
+          distributionDateRaw: '1.1.99',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח',
+          orderNumber: 'SO-4',
+          sku: '1004',
+          quantity: 1
+        }
+      ], '2000-01-01'));
+
+      expect(result.preview.dateSummary.matchingRows).toBe(1);
+      expect(result.preview.dateSummary.availableDates.map(d => d.normalized)).toContain('2000-01-01');
+      expect(result.preview.dateSummary.availableDates.map(d => d.normalized)).toContain('2069-01-01');
+      expect(result.preview.dateSummary.availableDates.map(d => d.normalized)).toContain('1970-01-01');
+      expect(result.preview.dateSummary.availableDates.map(d => d.normalized)).toContain('1999-01-01');
+    });
+  });
+
   // ── PR C: canonical route/work bucket fields ────────────────────────────────
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1213,6 +1451,256 @@ describe('manual shift monthly import parser', () => {
     expect(bucket2.routeBase).toBe('דרום');
   });
 
+  // ── PR G3: Monthly Import Quantity Transparency ─────────────────────────
+
+  describe('PR G3 — quantity accounting', () => {
+    it('G1: computes correct raw/positive/negative/zero totals from mixed rows', () => {
+      const result = parseManualShiftMonthlyPreview(buildInput([
+        {
+          rowIndex: 2,
+          distributionDateRaw: '14.6.26',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח א',
+          orderNumber: 'SO-1',
+          sku: '1001',
+          quantity: 10
+        },
+        {
+          rowIndex: 3,
+          distributionDateRaw: '14.6.26',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח א',
+          orderNumber: 'SO-2',
+          sku: '1002',
+          quantity: -3
+        },
+        {
+          rowIndex: 4,
+          distributionDateRaw: '14.6.26',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח א',
+          orderNumber: 'SO-3',
+          sku: '1003',
+          quantity: 0
+        },
+        {
+          rowIndex: 5,
+          distributionDateRaw: '14.6.26',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח א',
+          orderNumber: 'SO-4',
+          sku: '1004',
+          quantity: 5
+        }
+      ]));
+
+      expect(result.preview.totals).toMatchObject({
+        rawTotalQuantity: 12,
+        positiveTotalQuantity: 15,
+        negativeTotalQuantity: -3,
+        positiveQuantityRowsCount: 2,
+        negativeQuantityRowsCount: 1,
+        zeroQuantityRowsCount: 1
+      });
+
+      const plan = planManualShiftMonthlyImportApply(result);
+      expect(plan.appliedTotalQuantity).toBe(15);
+      expect(plan.appliedItemLines).toBe(2);
+      expect(plan.skippedGroups).toBe(2);
+      expect(plan.skippedNegativeQuantityRows).toBe(1);
+      expect(plan.skippedZeroQuantityRows).toBe(1);
+
+      const warningCodes = plan.preview.warnings.map((w) => w.code);
+      expect(warningCodes).toContain('NEGATIVE_QUANTITY_ROWS_SKIPPED_ON_APPLY');
+      expect(warningCodes).toContain('ZERO_QUANTITY_ROWS_SKIPPED_ON_APPLY');
+      expect(warningCodes).toContain('APPLIED_TOTAL_DIFFERS_FROM_RAW_TOTAL');
+    });
+
+    it('G2: only negative group — skipped entirely, no item emitted', () => {
+      const result = parseManualShiftMonthlyPreview(buildInput([
+        {
+          rowIndex: 2,
+          distributionDateRaw: '14.6.26',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח א',
+          orderNumber: 'SO-1',
+          sku: '1001',
+          quantity: -5
+        }
+      ]));
+
+      expect(result.preview.totals).toMatchObject({
+        rawTotalQuantity: -5,
+        positiveTotalQuantity: 0,
+        negativeTotalQuantity: -5,
+        positiveQuantityRowsCount: 0,
+        negativeQuantityRowsCount: 1,
+        zeroQuantityRowsCount: 0
+      });
+
+      const plan = planManualShiftMonthlyImportApply(result);
+      expect(plan.appliedTotalQuantity).toBe(0);
+      expect(plan.appliedItemLines).toBe(0);
+      expect(plan.appliedGroups).toBe(0);
+      expect(plan.skippedGroups).toBe(1);
+      expect(plan.lines).toEqual([]);
+    });
+
+    it('G3: mixed positive and negative same SKU — applies only positive rows', () => {
+      const result = parseManualShiftMonthlyPreview(buildInput([
+        {
+          rowIndex: 2,
+          distributionDateRaw: '14.6.26',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח א',
+          orderNumber: 'SO-1',
+          sku: '1001',
+          quantity: 10
+        },
+        {
+          rowIndex: 3,
+          distributionDateRaw: '14.6.26',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח א',
+          orderNumber: 'SO-1',
+          sku: '1001',
+          quantity: -2
+        }
+      ]));
+
+      expect(result.preview.totals).toMatchObject({
+        rawTotalQuantity: 8,
+        positiveTotalQuantity: 10,
+        negativeTotalQuantity: -2,
+        positiveQuantityRowsCount: 1,
+        negativeQuantityRowsCount: 1,
+        zeroQuantityRowsCount: 0
+      });
+
+      const plan = planManualShiftMonthlyImportApply(result);
+      expect(plan.appliedTotalQuantity).toBe(10);
+      expect(plan.appliedItemLines).toBe(1);
+      expect(plan.appliedGroups).toBe(1);
+      expect(plan.skippedGroups).toBe(0);
+      expect(plan.skippedNegativeQuantityRows).toBe(1);
+      expect(plan.lines[0].orders[0].items[0].quantity).toBe(10);
+      expect(plan.lines[0].orders[0].totalQuantity).toBe(10);
+
+      const warningCodes = plan.preview.warnings.map((w) => w.code);
+      expect(warningCodes).toContain('NEGATIVE_QUANTITY_ROWS_SKIPPED_ON_APPLY');
+      expect(warningCodes).toContain('APPLIED_TOTAL_DIFFERS_FROM_RAW_TOTAL');
+    });
+
+    it('G4: duplicate positive SKU rows aggregated into single item line', () => {
+      const result = parseManualShiftMonthlyPreview(buildInput([
+        {
+          rowIndex: 2,
+          distributionDateRaw: '14.6.26',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח א',
+          orderNumber: 'SO-1',
+          sku: '1001',
+          quantity: 4
+        },
+        {
+          rowIndex: 3,
+          distributionDateRaw: '14.6.26',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח א',
+          orderNumber: 'SO-1',
+          sku: '1001',
+          quantity: 6
+        }
+      ]));
+
+      expect(result.preview.totals).toMatchObject({
+        rawTotalQuantity: 10,
+        positiveTotalQuantity: 10,
+        negativeTotalQuantity: 0,
+        positiveQuantityRowsCount: 2,
+        zeroQuantityRowsCount: 0
+      });
+      expect(result.preview.totals.aggregatedSkuGroups).toBe(1);
+
+      const plan = planManualShiftMonthlyImportApply(result);
+      expect(plan.appliedTotalQuantity).toBe(10);
+      expect(plan.appliedItemLines).toBe(1);
+      expect(plan.lines[0].orders[0].items).toHaveLength(1);
+      expect(plan.lines[0].orders[0].items[0].quantity).toBe(10);
+      expect(plan.lines[0].orders[0].items[0].sourceRows).toEqual([2, 3]);
+
+      const warningCodes = plan.preview.warnings.map((w) => w.code);
+      expect(warningCodes).toContain('DUPLICATE_SKU_ROWS_AGGREGATED');
+    });
+
+    it('G5: real-date style smoke — quantity accounting with normal preview/apply path', () => {
+      const result = parseManualShiftMonthlyPreview(buildInput([
+        {
+          rowIndex: 2,
+          distributionDateRaw: '3.6.26',
+          rawDistributionValue: 'צפון/סלולר',
+          customerName: 'לקוח א',
+          orderNumber: 'SO-1',
+          sku: '1001',
+          quantity: 7,
+          zone: 'צפון'
+        },
+        {
+          rowIndex: 3,
+          distributionDateRaw: '3.6.26',
+          rawDistributionValue: 'צפון/סלולר',
+          customerName: 'לקוח א',
+          orderNumber: 'SO-1',
+          sku: '1001',
+          quantity: 3,
+          zone: 'צפון'
+        },
+        {
+          rowIndex: 4,
+          distributionDateRaw: '3.6.26',
+          rawDistributionValue: 'צפון/סלולר',
+          customerName: 'לקוח א',
+          orderNumber: 'SO-2',
+          sku: '1002',
+          quantity: -1,
+          zone: 'צפון'
+        },
+        {
+          rowIndex: 5,
+          distributionDateRaw: '3.6.26',
+          rawDistributionValue: 'צפון/סלולר',
+          customerName: 'לקוח א',
+          orderNumber: 'SO-3',
+          sku: '1003',
+          quantity: 0,
+          zone: 'צפון'
+        }
+      ], '2026-06-03'));
+
+      expect(result.preview.dateSummary.matchingRows).toBe(4);
+      expect(result.preview.totals).toMatchObject({
+        rawTotalQuantity: 9,
+        positiveTotalQuantity: 10,
+        negativeTotalQuantity: -1,
+        positiveQuantityRowsCount: 2,
+        negativeQuantityRowsCount: 1,
+        zeroQuantityRowsCount: 1
+      });
+      expect(result.groups).toHaveLength(3);
+
+      const plan = planManualShiftMonthlyImportApply(result);
+      expect(plan.appliedTotalQuantity).toBe(10);
+      expect(plan.appliedItemLines).toBe(1);
+      expect(plan.skippedGroups).toBe(2);
+
+      const warningCodes = plan.preview.warnings.map((w) => w.code);
+      expect(warningCodes).toContain('NEGATIVE_QUANTITY_ROWS_SKIPPED_ON_APPLY');
+      expect(warningCodes).toContain('ZERO_QUANTITY_ROWS_SKIPPED_ON_APPLY');
+      expect(warningCodes).toContain('APPLIED_TOTAL_DIFFERS_FROM_RAW_TOTAL');
+      expect(warningCodes).toContain('DUPLICATE_SKU_ROWS_AGGREGATED');
+    });
+  });
+
   it('C(e): regression — legacy lineName/pointName fallback still works and all PR A/PR B assertions hold', () => {
     const result = parseManualShiftMonthlyPreview(buildInput([
       {
@@ -1244,7 +1732,17 @@ describe('manual shift monthly import parser', () => {
     ]));
 
     expect(result.preview.selectedDate).toEqual({ raw: '14.06.26', normalized: '2026-06-14' });
-    expect(result.preview.totals).toMatchObject({ lines: 1, rawDistributionValues: 1, derivedPoints: 1 });
+    expect(result.preview.totals).toMatchObject({
+      lines: 1,
+      rawDistributionValues: 1,
+      derivedPoints: 1,
+      rawTotalQuantity: 5,
+      positiveTotalQuantity: 5,
+      negativeTotalQuantity: 0,
+      zeroQuantityRowsCount: 0,
+      negativeQuantityRowsCount: 0,
+      positiveQuantityRowsCount: 2
+    });
     expect(result.groups).toEqual([
       expect.objectContaining({
         lineName: 'עמקים',
