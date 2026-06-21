@@ -1,307 +1,19 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, CheckCircle2, Loader2, Plus, Search, SplitSquareVertical, X } from 'lucide-react';
-import { Badge } from '@/shared/ui/badge';
+import { AlertCircle, CheckCircle2, Plus, Search, SplitSquareVertical } from 'lucide-react';
 import { workHierarchyQueryOptions, orderItemsQueryOptions } from '@/entities/manual-shift/api/queries';
-import type { LineSchemeData, LineSchemeOrder, LineSchemeItemRow, LineSchemeWorkLine } from './line-scheme-types';
+import type { LineSchemeData, LineSchemeOrder, LineSchemeItemRow } from './line-scheme-types';
 import type { OrderWithStatus } from './line-scheme-mock-data';
 import { useLineSchemeState } from './line-scheme-mock-data';
 import { adaptWorkHierarchyToScheme, adaptOrderItemsToSchemeRows } from './line-scheme-adapter';
 import { useLocalOverlayStore } from './line-scheme-local-overlay';
-
-function Modal({
-  isOpen, onClose, title, children, footer
-}: {
-  isOpen: boolean; onClose: () => void; title: string; children: React.ReactNode; footer?: React.ReactNode;
-}) {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] flex flex-col mx-4 z-10">
-        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-          <button onClick={onClose} className="text-gray-500 hover:bg-gray-100 p-1 rounded-full">
-            <X size={18} />
-          </button>
-        </div>
-        <div className="p-6 overflow-y-auto flex-1">{children}</div>
-        {footer && (
-          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-2 rounded-b-lg">
-            {footer}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function statusBadgeConfig(status: string): { tone: 'neutral' | 'success' | 'warning' | 'info' | 'danger'; label: string } {
-  switch (status) {
-    case 'unassigned': return { tone: 'neutral', label: 'לא שובץ' };
-    case 'assigned': return { tone: 'success', label: 'שובץ' };
-    case 'partial': return { tone: 'warning', label: 'שובץ חלקית' };
-    case 'split': return { tone: 'info', label: 'מפוצל' };
-    default: return { tone: 'danger', label: 'דורש בדיקה' };
-  }
-}
-
-function backendStatusBadgeConfig(status: string): { tone: 'neutral' | 'success' | 'warning' | 'info' | 'danger'; label: string } {
-  switch (status) {
-    case 'queued': return { tone: 'neutral', label: 'בהמתנה' };
-    case 'picking': return { tone: 'warning', label: 'באיסוף' };
-    case 'waiting_check': return { tone: 'info', label: 'ממתין לבדיקה' };
-    case 'returned': return { tone: 'danger', label: 'הוחזר' };
-    case 'done': return { tone: 'success', label: 'הושלם' };
-    default: return { tone: 'neutral', label: status };
-  }
-}
-
-function OrderCard({
-  order,
-  onOpenItems,
-  onAssignAll,
-  onUnassign,
-}: {
-  order: LineSchemeOrder;
-  onOpenItems: () => void;
-  onAssignAll: () => void;
-  onUnassign: () => void;
-}) {
-  const badge = statusBadgeConfig(order.assignmentStatus);
-  const backendLabel = backendStatusBadgeConfig(order.backendStatus).label;
-
-  return (
-    <div className="border border-gray-200 rounded-lg p-3 bg-white shadow-sm hover:border-blue-400 transition-colors">
-      <div className="flex justify-between items-start mb-2">
-        <span className="font-mono text-sm text-gray-600 font-bold">{order.orderNumber}</span>
-        <Badge tone={badge.tone}>{badge.label}</Badge>
-      </div>
-      <div className="font-semibold text-gray-900 mb-2 truncate text-sm" title={order.customerName ?? ''}>
-        {order.customerName}
-      </div>
-      <div className="text-xs text-gray-500 flex justify-between mb-1">
-        <span>כמות {order.totalQuantity}</span>
-        <span>סטטוס ביצוע: {backendLabel}</span>
-      </div>
-      <div className="text-xs text-gray-500 mb-3 border-b border-gray-100 pb-3">
-        <span>{order.lineCount} שורות</span>
-        {order.hasAshlama && <span className="mr-2 text-amber-700 font-bold">אשלמה</span>}
-        {order.hasCheckUnits && <span className="mr-2 text-amber-700 font-bold">יחידות בדיקה</span>}
-      </div>
-      {order.assignmentStatus === 'split' && (
-        <div className="text-xs text-blue-700 bg-blue-50 p-2 mb-3 rounded border border-blue-100">
-          שיוכים שונים
-        </div>
-      )}
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onOpenItems}
-          className="flex-1 py-1.5 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
-        >
-          פתח פריטים
-        </button>
-        {order.assignmentStatus === 'unassigned' ? (
-          <button
-            type="button"
-            onClick={onAssignAll}
-            className="flex-1 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-          >
-            שייך
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onUnassign}
-            className="flex-1 py-1.5 text-xs font-medium rounded-md border border-red-300 bg-white text-red-700 hover:bg-red-50 transition-colors"
-          >
-            בטל שיוך
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ItemsDrawer({
-  order,
-  items,
-  onClose,
-}: {
-  order: LineSchemeOrder;
-  items: LineSchemeItemRow[];
-  onClose: () => void;
-}) {
-  return (
-    <Modal isOpen onClose={onClose} title="פריטי הזמנה" footer={
-      <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors">סגור</button>
-    }>
-      <div className="flex flex-col gap-4">
-        <div className="bg-gray-50 border border-gray-200 rounded p-4 text-sm text-gray-700">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-            <div><span className="text-gray-500">הזמנה:</span> <span className="font-semibold text-gray-900">{order.orderNumber}</span></div>
-            <div><span className="text-gray-500">לקוח:</span> <span className="font-semibold text-gray-900">{order.customerName}</span></div>
-            <div><span className="text-gray-500">שורות:</span> {order.lineCount}</div>
-            <div><span className="text-gray-500">כמות:</span> {order.totalQuantity}</div>
-          </div>
-          {order.hasAshlama && (
-            <div className="mt-2 text-amber-700 bg-amber-50 px-3 py-1 rounded text-xs font-bold">
-              יש אשלמה פתוחה
-            </div>
-          )}
-          {order.hasCheckUnits && (
-            <div className="mt-1 text-amber-700 bg-amber-50 px-3 py-1 rounded text-xs font-bold">
-              יש יחידות בדיקה
-            </div>
-          )}
-        </div>
-
-        <div className="border border-gray-200 rounded-md overflow-hidden">
-          <table className="w-full text-sm text-right">
-            <thead className="bg-gray-100 border-b border-gray-200">
-              <tr>
-                <th className="p-2 font-medium text-gray-700">מק"ט</th>
-                <th className="p-2 font-medium text-gray-700">תיאור</th>
-                <th className="p-2 font-medium text-gray-700">קטגוריה</th>
-                <th className="p-2 font-medium text-gray-700 text-center">כמות</th>
-                <th className="p-2 font-medium text-gray-700">הערות</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {items.map(item => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="p-2 font-mono text-xs">{item.sku}</td>
-                  <td className="p-2 max-w-[200px] truncate text-xs" title={item.description ?? ''}>{item.description}</td>
-                  <td className="p-2">
-                    <Badge tone="neutral">{item.category}</Badge>
-                  </td>
-                  <td className="p-2 font-semibold text-center text-xs">{item.quantity}</td>
-                  <td className="p-2 text-xs text-gray-500">
-                    {item.notes && <div>{item.notes}</div>}
-                    {item.sourceRows && item.sourceRows.length > 0 && (
-                      <div className="text-gray-400">שורות: {item.sourceRows.join(', ')}</div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {items.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="p-4 text-center text-gray-500">טוען פריטים...</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function AssignModal({
-  isOpen,
-  onClose,
-  workLines,
-  buckets,
-  onAssign,
-  orderLabel,
-  isReadOnlyMode,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  workLines: { id: string; name: string }[];
-  buckets: { id: string; workLineId: string; name: string }[];
-  onAssign: (workLineId: string, bucketId: string) => void;
-  orderLabel: string;
-  isReadOnlyMode: boolean;
-}) {
-  const [targetLine, setTargetLine] = useState('');
-  const [targetBucket, setTargetBucket] = useState('');
-  const lineBuckets = buckets.filter(b => b.workLineId === targetLine);
-
-  const handleAssign = () => {
-    if (!targetLine || !targetBucket) return;
-    onAssign(targetLine, targetBucket);
-    setTargetLine('');
-    setTargetBucket('');
-    onClose();
-  };
-
-  const handleClose = () => {
-    setTargetLine('');
-    setTargetBucket('');
-    onClose();
-  };
-
-  return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="שייך לקו עבודה ונקודה" footer={
-      <>
-        <button type="button" onClick={handleClose} className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors">ביטול</button>
-        <button type="button" onClick={handleAssign} disabled={!targetLine || !targetBucket} className="px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">שייך</button>
-      </>
-    }>
-      <div className="mb-6">
-        <div className="text-lg font-semibold text-gray-900 mb-1">שיוך מקומי בלבד</div>
-        <div className="text-gray-600 text-sm">{orderLabel}</div>
-        {isReadOnlyMode && (
-          <div className="mt-2 text-amber-700 bg-amber-50 px-3 py-1 rounded text-xs font-bold">
-            שמירה תגיע בשלב הבא
-          </div>
-        )}
-      </div>
-
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">בחר קו עבודה</label>
-          <div className="grid grid-cols-2 gap-2">
-            {workLines.map(line => (
-              <div
-                key={line.id}
-                onClick={() => { setTargetLine(line.id); setTargetBucket(''); }}
-                className={`border rounded p-3 cursor-pointer transition-colors text-sm ${
-                  targetLine === line.id
-                    ? 'bg-blue-50 border-blue-500 text-blue-900 font-bold shadow-sm'
-                    : 'hover:border-blue-300'
-                }`}
-              >
-                {line.name}
-              </div>
-            ))}
-            {workLines.length === 0 && (
-              <span className="text-gray-500 text-sm col-span-2">אין קווי עבודה</span>
-            )}
-          </div>
-        </div>
-
-        {targetLine && (
-          <div className="pt-4 border-t border-gray-100">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              בחר נקודה / קבוצה בקו {workLines.find(l => l.id === targetLine)?.name}
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {lineBuckets.map(bucket => (
-                <span
-                  key={bucket.id}
-                  onClick={() => setTargetBucket(bucket.id)}
-                  className={`inline-flex items-center rounded-full px-3 py-1.5 text-sm cursor-pointer transition-colors ${
-                    targetBucket === bucket.id
-                      ? 'bg-blue-100 text-blue-800 ring-2 ring-blue-500'
-                      : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                  }`}
-                >
-                  {bucket.name}
-                </span>
-              ))}
-              {lineBuckets.length === 0 && (
-                <span className="text-sm text-gray-500">אין נקודות בקו זה</span>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </Modal>
-  );
-}
+import { OrderCard } from './line-scheme-order-card';
+import { WorkLineCard } from './line-scheme-work-line-card';
+import { OrdersPanel } from './line-scheme-orders-panel';
+import { ItemsDrawer } from './line-scheme-items-drawer';
+import { AssignModal } from './line-scheme-assign-modal';
+import { LoadingState, ErrorState, EmptyOrdersState, EmptyWorkLinesState } from './line-scheme-states';
+import { Modal } from './line-scheme-modal';
 
 function LineSchemeBuilderInner({
   scheme,
@@ -312,7 +24,7 @@ function LineSchemeBuilderInner({
 }: {
   scheme: LineSchemeData;
   allLines: { id: string; name: string }[];
-  allBuckets: { id: string; workLineId: string; name: string }[];
+  allBuckets: { id: string; workLineId: string; name: string; bucketName: string | null }[];
   allOrders: LineSchemeOrder[];
   isReadOnlyMode: boolean;
 }) {
@@ -324,7 +36,7 @@ function LineSchemeBuilderInner({
   const [assignOrderId, setAssignOrderId] = useState<string | null>(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
 
-  const { data: rawItems } = useQuery({
+  const { data: rawItems, isLoading: itemsLoading, isError: itemsError } = useQuery({
     ...orderItemsQueryOptions(drawerOrderId ?? ''),
     enabled: !!drawerOrderId
   });
@@ -356,13 +68,12 @@ function LineSchemeBuilderInner({
 
   const executeAssign = useCallback((workLineId: string, bucketId: string) => {
     if (!assignOrderId) return;
-    const line = allLines.find(l => l.id === workLineId);
     const bucket = allBuckets.find(b => b.id === bucketId);
-    if (!line || !bucket) return;
-    overlayStore.assignOrder(assignOrderId, workLineId, bucket.name);
+    if (!bucket) return;
+    overlayStore.assignOrder(assignOrderId, bucket.workLineId, bucket.bucketName);
     setShowAssignModal(false);
     setAssignOrderId(null);
-  }, [assignOrderId, allLines, allBuckets, overlayStore]);
+  }, [assignOrderId, allBuckets, overlayStore]);
 
   const executeUnassign = useCallback((orderId: string) => {
     overlayStore.unassignOrder(orderId);
@@ -373,17 +84,8 @@ function LineSchemeBuilderInner({
     [allOrders]
   );
 
-  const flatBuckets = useMemo(() =>
-    allBuckets.map(b => ({ ...b })),
-    [allBuckets]
-  );
-
   if (allOrders.length === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-[40vh] text-gray-500 text-sm" dir="rtl">
-        אין הזמנות להצגה
-      </div>
-    );
+    return <EmptyOrdersState />;
   }
 
   return (
@@ -393,7 +95,7 @@ function LineSchemeBuilderInner({
           <h1 className="text-xl font-bold text-gray-900">תכנון קווי עבודה</h1>
           {isReadOnlyMode && (
             <span className="text-xs text-amber-700 bg-amber-50 px-3 py-1 rounded font-medium border border-amber-200">
-              שמירה תגיע בשלב הבא
+              שיוך מקומי בלבד — שמירה תגיע בשלב הבא
             </span>
           )}
         </div>
@@ -413,48 +115,21 @@ function LineSchemeBuilderInner({
 
       <main className="flex-1 p-6 flex flex-col lg:flex-row gap-6">
         <div className="w-full lg:w-96 shrink-0 flex flex-col gap-4">
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex-1 flex flex-col h-[calc(100vh-200px)] sticky top-36">
-            <div className="p-4 border-b border-gray-200 bg-gray-50/50 rounded-t-lg">
-              <h2 className="text-lg font-bold text-gray-900 mb-1">הזמנות</h2>
-              <p className="text-sm text-gray-500 mb-4">{filteredOrders.length} הזמנות</p>
-              <div className="relative">
-                <Search size={16} className="absolute right-3 top-2.5 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="חיפוש לקוח / הזמנה..."
-                  className="w-full text-sm border border-gray-300 rounded pl-3 pr-9 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {filteredOrders.map(order => (
-                <OrderCard
-                  key={order.orderId}
-                  order={order}
-                  onOpenItems={() => openItemsDrawer(order.orderId)}
-                  onAssignAll={() => openAssign(order.orderId)}
-                  onUnassign={() => executeUnassign(order.orderId)}
-                />
-              ))}
-            </div>
-          </div>
+          <OrdersPanel
+            orders={filteredOrders}
+            onOpenItems={openItemsDrawer}
+            onAssignAll={openAssign}
+            onUnassign={executeUnassign}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+          />
         </div>
 
         <div className="flex-1 flex flex-col min-h-0">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">קווי עבודה ונקודות</h2>
 
           {allLines.length === 0 ? (
-            <div className="bg-white rounded-lg border border-gray-300 border-dashed p-12 text-center">
-              <SplitSquareVertical size={64} className="text-gray-300 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-gray-800 mb-2">אין קווי עבודה</h3>
-              <p className="text-gray-500 mb-6 max-w-md mx-auto text-sm">
-                המערכת מצאה {allOrders.length} הזמנות.
-                יש להגדיר קווי עבודה דרך הייבוא החודשי.
-              </p>
-            </div>
+            <EmptyWorkLinesState orderCount={allOrders.length} />
           ) : (
             <div className="space-y-6">
               {scheme.areas.map(area => (
@@ -462,7 +137,7 @@ function LineSchemeBuilderInner({
                   <h3 className="text-lg font-bold text-gray-800 mb-3 px-1">{area.displayName}</h3>
                   <div className="space-y-4">
                     {area.lines.map(line => (
-                      <LineSection
+                      <WorkLineCard
                         key={line.lineId}
                         line={line}
                         allOrders={allOrders}
@@ -480,6 +155,8 @@ function LineSchemeBuilderInner({
         <ItemsDrawer
           order={drawerOrder}
           items={drawerItems}
+          isLoading={itemsLoading}
+          isError={itemsError}
           onClose={() => { setDrawerOrderId(null); }}
         />
       )}
@@ -489,90 +166,12 @@ function LineSchemeBuilderInner({
           isOpen={showAssignModal}
           onClose={() => { setShowAssignModal(false); setAssignOrderId(null); }}
           workLines={allLines}
-          buckets={flatBuckets}
+          buckets={allBuckets}
           onAssign={executeAssign}
           orderLabel={`הזמנה: ${assignOrder.orderNumber} | ${assignOrder.customerName}`}
           isReadOnlyMode={isReadOnlyMode}
         />
       )}
-    </div>
-  );
-}
-
-function LineSection({
-  line,
-  allOrders,
-}: {
-  line: LineSchemeWorkLine;
-  allOrders: LineSchemeOrder[];
-}) {
-  return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-      <div className="bg-gray-100 p-4 border-b border-gray-200 flex justify-between items-center">
-        <div>
-          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-blue-500 block shrink-0" />
-            {line.lineGroupName}
-          </h3>
-          <p className="text-sm text-gray-600 mt-1">
-            {line.totalOrders} הזמנות &middot; כמות {line.totalQuantity}
-          </p>
-          {line.distributionArea && (
-            <p className="text-xs text-gray-500 mt-0.5">איזור הפצה: {line.distributionArea}</p>
-          )}
-        </div>
-      </div>
-
-      <div className="p-4 bg-white flex flex-wrap gap-3 items-start">
-        {line.buckets.map(bucket => {
-          const bucketOrders = allOrders.filter(o => o.localAssignment?.assignedBucketKey === bucket.bucketKey);
-          const bucketQty = bucketOrders.reduce((s, o) => s + o.totalQuantity, 0);
-          return (
-            <div
-              key={bucket.bucketKey}
-              className="border border-gray-200 rounded-lg p-3 w-56 shadow-sm hover:border-blue-300 transition-colors"
-            >
-              <div className="font-semibold text-gray-900 text-sm">{bucket.displayName}</div>
-              <div className="text-xs text-gray-500 mt-1">
-                {bucket.totalOrders} הזמנות &middot; כמות {bucket.totalQuantity}
-              </div>
-              <div className="text-xs text-blue-600 mt-1">
-                {bucketOrders.length} משויכות &middot; כמות {bucketQty}
-              </div>
-              <div className="mt-2 flex flex-wrap gap-1">
-                {bucketOrders.slice(0, 4).map(o => (
-                  <span key={o.orderId} className="text-xs bg-blue-50 text-blue-700 rounded px-1.5 py-0.5 truncate max-w-[120px]">
-                    {o.orderNumber}
-                  </span>
-                ))}
-                {bucketOrders.length > 4 && (
-                  <span className="text-xs text-gray-500">+{bucketOrders.length - 4}</span>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function LoadingState() {
-  return (
-    <div className="flex items-center justify-center min-h-[40vh]" dir="rtl">
-      <Loader2 size={32} className="animate-spin text-gray-400" />
-    </div>
-  );
-}
-
-function ErrorState({ message }: { message: string }) {
-  return (
-    <div className="flex items-center justify-center min-h-[40vh]" dir="rtl">
-      <div className="text-center">
-        <AlertCircle size={48} className="text-red-400 mx-auto mb-4" />
-        <p className="text-red-600 font-medium">שגיאה בטעינת נתונים</p>
-        <p className="text-gray-500 text-sm mt-1">{message}</p>
-      </div>
     </div>
   );
 }
@@ -610,11 +209,11 @@ function RealDataLineSchemeBuilder({ shiftId }: { shiftId: string }) {
 
   const allBuckets = useMemo(() => {
     if (!scheme) return [];
-    const result: { id: string; workLineId: string; name: string }[] = [];
+    const result: { id: string; workLineId: string; name: string; bucketName: string | null }[] = [];
     for (const area of scheme.areas) {
       for (const line of area.lines) {
         for (const bucket of line.buckets) {
-          result.push({ id: bucket.bucketKey, workLineId: line.lineId, name: bucket.displayName });
+          result.push({ id: bucket.bucketKey, workLineId: line.lineId, name: bucket.displayName, bucketName: bucket.bucketName });
         }
       }
     }
@@ -708,12 +307,12 @@ function MockLineSchemeBuilder() {
   };
 
   if (state.ordersWithStatus.length === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-[40vh] text-gray-500 text-sm" dir="rtl">
-        אין הזמנות להצגה
-      </div>
-    );
+    return <EmptyOrdersState />;
   }
+
+  const mockBucketsMap = state.buckets.map(b => ({
+    id: b.id, workLineId: b.workLineId, name: b.name, bucketName: b.name
+  }));
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50" dir="rtl">
@@ -956,6 +555,8 @@ function MockLineSchemeBuilder() {
             sourceRows: null,
             sourceFile: null,
           }))}
+          isLoading={false}
+          isError={false}
           onClose={() => { setDrawerOrder(null); }}
         />
       )}
@@ -965,7 +566,7 @@ function MockLineSchemeBuilder() {
           isOpen={showAssignModal}
           onClose={() => { setShowAssignModal(false); setAssignOrder(null); setAssignItemIds([]); }}
           workLines={state.workLines}
-          buckets={state.buckets.map(b => ({ id: b.id, workLineId: b.workLineId, name: b.name }))}
+          buckets={mockBucketsMap}
           onAssign={executeAssign}
           orderLabel={`הזמנה: ${assignOrder.orderNumber} | ${assignOrder.customerName}`}
           isReadOnlyMode={false}
