@@ -1513,6 +1513,8 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         skippedGroups: Number(row.skipped_groups ?? input.plan.skippedGroups),
         skippedNegativeQuantityRows: Number(row.skipped_negative_quantity_rows ?? input.plan.skippedNegativeQuantityRows),
         skippedZeroQuantityRows: Number(row.skipped_zero_quantity_rows ?? input.plan.skippedZeroQuantityRows),
+        appliedTotalQuantity: input.plan.appliedTotalQuantity,
+        appliedItemLines: input.plan.appliedItemLines,
         warningSummary: input.plan.warningSummary,
         warnings: input.plan.preview.warnings,
         previewTotals: input.plan.preview.totals,
