@@ -161,23 +161,6 @@ export function ManualOperatorWorkSection({
     [hasRouteGroups, selectedAreaKey, selectedAreaLineKey, workHierarchy]
   );
 
-  const selectedWorkBucketRawName: string = useMemo(() => {
-    if (!selectedHierarchyLine) return '';
-
-    if (hasRouteGroups && selectedRouteGroupKey) {
-      const wb = selectedRouteGroupWorkBucket;
-      if (!wb || wb.orders.length === 0) return '';
-      const uniquePointNames = [...new Set(wb.orders.map((o) => o.pointName).filter(Boolean))];
-      if (uniquePointNames.length === 1) return uniquePointNames[0]!;
-      return '';
-    }
-
-    if (!selectedWorkBucketName) return '';
-
-    const bucket = selectedHierarchyLine.buckets.find((entry) => entry.displayName === selectedWorkBucketName);
-    return bucket?.bucketName ?? '';
-  }, [selectedHierarchyLine, selectedWorkBucketName, hasRouteGroups, selectedRouteGroupKey, selectedRouteGroupWorkBucket]);
-
   const selectedSourceZone: string | undefined = useMemo(() => {
     if (!selectedHierarchyLine) return undefined;
     if (selectedHierarchyLine.lineKind === 'delivery_channel' && selectedWorkBucketName) {
@@ -191,11 +174,51 @@ export function ManualOperatorWorkSection({
     return selectedHierarchyLine.sourceZone ?? '';
   }, [selectedHierarchyLine, selectedWorkBucketName]);
 
-  const showProductRollupDeferred = !!(hasRouteGroups && selectedRouteGroupKey && !selectedWorkBucketRawName);
+  const selectedProductRollupScope = useMemo(() => {
+    if (!selectedHierarchyLine) return null;
+
+    if (hasRouteGroups && selectedRouteGroupKey && selectedRouteGroupWorkBucket) {
+      return {
+        bucketName: selectedRouteGroupWorkBucket.workBucketDisplayName,
+        distributionArea: selectedHierarchyLine.distributionArea ?? undefined,
+        workBucketName: selectedRouteGroupWorkBucket.workBucketName ?? undefined,
+        sourceLineName: selectedHierarchyLine.lineGroupName,
+        sourceZone: selectedSourceZone
+      };
+    }
+
+    if (!selectedWorkBucketName) return null;
+
+    const bucket = selectedHierarchyLine.buckets.find((entry) => entry.displayName === selectedWorkBucketName);
+    return {
+      bucketName: bucket?.displayName ?? selectedWorkBucketName,
+      distributionArea: selectedHierarchyLine.distributionArea ?? undefined,
+      workBucketName: bucket?.bucketName ?? undefined,
+      sourceLineName: selectedHierarchyLine.lineGroupName,
+      sourceZone: selectedSourceZone
+    };
+  }, [
+    hasRouteGroups,
+    selectedHierarchyLine,
+    selectedRouteGroupKey,
+    selectedRouteGroupWorkBucket,
+    selectedSourceZone,
+    selectedWorkBucketName
+  ]);
+
+  const showProductRollupDeferred = false;
 
   const { data: productRollup, isLoading: isProductRollupLoading } = useQuery({
-    ...bucketProductRollupQueryOptions(shift?.id ?? '', selectedLineId ?? '', selectedWorkBucketRawName, selectedSourceZone),
-    enabled: !!shift?.id && !!selectedLineId && selectedWorkBucketRawName !== '' && workBucketView === 'products'
+    ...bucketProductRollupQueryOptions(
+      shift?.id ?? '',
+      selectedLineId ?? '',
+      selectedProductRollupScope?.bucketName ?? '',
+      selectedProductRollupScope?.distributionArea,
+      selectedProductRollupScope?.sourceZone,
+      selectedProductRollupScope?.workBucketName,
+      selectedProductRollupScope?.sourceLineName
+    ),
+    enabled: !!shift?.id && !!selectedLineId && !!selectedProductRollupScope && workBucketView === 'products'
   });
 
   const canFetchReplaceSafety = canMonthlyImport && hasExistingWork && !!shift?.id;

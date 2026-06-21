@@ -27,6 +27,7 @@ import { registerRackInspectorRoutes } from './features/rack-inspector/routes.js
 import { registerOperationsCellsRoutes } from './features/operations-cells/routes.js';
 import { registerFloorRoutingRoutes } from './features/floor-routing/routes.js';
 import { registerManualShiftsRoutes } from './features/manual-shifts/routes.js';
+import { registerBondedRoutes } from './features/bonded/routes.js';
 import { registerPickerRoutes } from './features/picker/routes.js';
 import { registerWarehouseLabelRoutes } from './features/warehouse-labels/routes.js';
 
@@ -65,6 +66,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     getProductsService,
     getProductLocationRolesService,
     getManualShiftsService,
+    getBondedService,
     getWarehouseLabelsService,
     getPickingPlanningPreviewService,
     getFloorRoutingService
@@ -177,6 +179,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerFloorRoutingRoutes(app, { getAuthContext, getFloorRoutingService });
   registerWavesRoutes(app, { getAuthContext, getUserSupabase, getWavesService });
   registerManualShiftsRoutes(app, { getAuthContext, getManualShiftsService, getUserSupabase });
+  registerBondedRoutes(app, { getAuthContext, getBondedService, getUserSupabase });
   registerPickerRoutes(app, { getAuthContext, getUserSupabase });
 
   app.setErrorHandler((error, request, reply) => {

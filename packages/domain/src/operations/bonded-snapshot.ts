@@ -210,6 +210,80 @@ export function aggregateBondedAvailabilityBySku(
   return result;
 }
 
+// ── API Response schemas ─────────────────────────────────────────────────
+
+export const bondedSnapshotRowResponseSchema = z.object({
+  id: z.string(),
+  rowNumber: z.number().int().min(1),
+  sourceLabel: z.string().nullable(),
+  block: z.string().nullable(),
+  sku: z.string().nullable(),
+  description: z.string().nullable(),
+  releasedQty: finiteNumber,
+  packFactor: z.number().nullable(),
+  cartonsPerPallet: z.number().nullable(),
+  unitsPerPallet: z.number().nullable(),
+  pullColumns: z.array(z.number().nullable()).nullable(),
+  totalPulledQty: finiteNumber,
+  releasedBalanceQty: finiteNumber,
+  availableQty: nonNegativeNumber,
+  notes: z.string().nullable(),
+  remainingBondedRaw: z.string().nullable(),
+  diagnostics: z.array(z.string()).nullable()
+});
+export type BondedSnapshotRowResponse = z.infer<typeof bondedSnapshotRowResponseSchema>;
+
+export const bondedSnapshotResponseSchema = z.object({
+  id: z.string(),
+  shiftId: z.string().nullable(),
+  planningDate: z.string().nullable(),
+  fileName: z.string(),
+  fileHash: z.string().nullable(),
+  sourceSheetName: z.string(),
+  importedAt: z.string(),
+  importedBy: z.string().nullable(),
+  rowCount: z.number().int().min(0),
+  diagnostics: bondedSnapshotDiagnosticsSchema.nullable(),
+  status: z.string(),
+  createdAt: z.string(),
+  rows: z.array(bondedSnapshotRowResponseSchema)
+});
+export type BondedSnapshotResponse = z.infer<typeof bondedSnapshotResponseSchema>;
+
+export const bondedSnapshotListItemSchema = z.object({
+  id: z.string(),
+  shiftId: z.string().nullable(),
+  planningDate: z.string().nullable(),
+  fileName: z.string(),
+  fileHash: z.string().nullable(),
+  sourceSheetName: z.string(),
+  importedAt: z.string(),
+  rowCount: z.number().int().min(0),
+  status: z.string(),
+  createdAt: z.string()
+});
+export type BondedSnapshotListItem = z.infer<typeof bondedSnapshotListItemSchema>;
+
+export const bondedSnapshotListResponseSchema = z.object({
+  snapshots: z.array(bondedSnapshotListItemSchema)
+});
+export type BondedSnapshotListResponse = z.infer<typeof bondedSnapshotListResponseSchema>;
+
+export const bondedUploadPreviewResponseSchema = z.object({
+  fileName: z.string(),
+  sourceSheetName: z.string(),
+  rowCount: z.number().int().min(0),
+  pivotSheetFound: z.boolean(),
+  rows: z.array(bondedSnapshotDraftRowSchema),
+  diagnostics: bondedSnapshotDiagnosticsSchema
+});
+export type BondedUploadPreviewResponse = z.infer<typeof bondedUploadPreviewResponseSchema>;
+
+export const bondedCreateSnapshotResponseSchema = z.object({
+  id: z.string()
+});
+export type BondedCreateSnapshotResponse = z.infer<typeof bondedCreateSnapshotResponseSchema>;
+
 export function buildSnapshotDiagnostics(
   rows: readonly BondedSnapshotDraftRow[]
 ): BondedSnapshotDiagnostics {

@@ -276,7 +276,10 @@ export type ManualShiftsService = {
     shiftId: string;
     lineId: string;
     bucketName: string;
+    distributionArea?: string;
     sourceZone?: string;
+    workBucketName?: string;
+    sourceLineName?: string;
   }): Promise<BucketProductRollupResponse>;
   getProductControl(input: { tenantId: string; shiftId: string }): Promise<ProductControlResponse>;
 };
@@ -1842,14 +1845,20 @@ export function createManualShiftsServiceFromRepo(
         shiftId: input.shiftId,
         lineId: input.lineId,
         bucketName: input.bucketName,
-        sourceZone: input.sourceZone
+        distributionArea: input.distributionArea,
+        sourceZone: input.sourceZone,
+        workBucketName: input.workBucketName,
+        sourceLineName: input.sourceLineName
       });
 
       return {
         shiftId: input.shiftId,
         lineId: input.lineId,
         bucketName: input.bucketName,
+        distributionArea: input.distributionArea ?? null,
         sourceZone: input.sourceZone ?? null,
+        workBucketName: input.workBucketName ?? null,
+        sourceLineName: input.sourceLineName ?? null,
         products
       };
     },

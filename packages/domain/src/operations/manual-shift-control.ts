@@ -228,7 +228,10 @@ export const bucketProductRollupResponseSchema = z.object({
   shiftId: z.string().uuid(),
   lineId: z.string().uuid(),
   bucketName: z.string(),
+  distributionArea: z.string().nullable().optional(),
   sourceZone: z.string().nullable().optional(),
+  workBucketName: z.string().nullable().optional(),
+  sourceLineName: z.string().nullable().optional(),
   products: z.array(bucketProductRollupRowSchema)
 });
 export type BucketProductRollupResponse = z.infer<typeof bucketProductRollupResponseSchema>;

@@ -1198,19 +1198,32 @@ export function registerManualShiftsRoutes(
     const shiftId = parseOrThrow(idResponseSchema, {
       id: (request.params as { shiftId: string }).shiftId
     }).id;
-    const query = request.query as { lineId?: string; bucketName?: string; sourceZone?: string };
+    const query = request.query as {
+      lineId?: string;
+      bucketName?: string;
+      distributionArea?: string;
+      sourceZone?: string;
+      workBucketName?: string;
+      sourceLineName?: string;
+    };
     const lineId = parseOrThrow(idResponseSchema, {
       id: query.lineId ?? ''
     }).id;
     const bucketName = query.bucketName ?? '';
+    const distributionArea = query.distributionArea;
     const sourceZone = query.sourceZone;
+    const workBucketName = query.workBucketName;
+    const sourceLineName = query.sourceLineName;
 
     const rollup = await getManualShiftsService(auth).getBucketProductRollup({
       tenantId,
       shiftId,
       lineId,
       bucketName,
-      sourceZone
+      distributionArea,
+      sourceZone,
+      workBucketName,
+      sourceLineName
     });
     return parseOrThrow(bucketProductRollupResponseSchema, rollup);
   });

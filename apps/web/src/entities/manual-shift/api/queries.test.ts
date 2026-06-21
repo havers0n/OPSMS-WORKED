@@ -228,21 +228,68 @@ describe('bucketProductRollupQueryOptions', () => {
   it('uses the bucket product rollup query key', () => {
     const opts = bucketProductRollupQueryOptions(SHIFT_A, LINE_A, 'סלולר');
     expect(opts.queryKey).toEqual([
-      'manual-shift', 'bucket-product-rollup', SHIFT_A, LINE_A, 'סלולר', '__no_source_zone__'
+      'manual-shift',
+      'bucket-product-rollup',
+      SHIFT_A,
+      LINE_A,
+      'סלולר',
+      '__no_distribution_area__',
+      '__no_source_zone__',
+      '__no_work_bucket__',
+      '__no_source_line__'
     ]);
   });
 
   it('includes sourceZone in query key when provided', () => {
-    const opts = bucketProductRollupQueryOptions(SHIFT_A, LINE_A, 'סלולר', 'שפלה אמצעי');
+    const opts = bucketProductRollupQueryOptions(SHIFT_A, LINE_A, 'סלולר', undefined, 'שפלה אמצעי');
     expect(opts.queryKey).toEqual([
-      'manual-shift', 'bucket-product-rollup', SHIFT_A, LINE_A, 'סלולר', 'שפלה אמצעי'
+      'manual-shift',
+      'bucket-product-rollup',
+      SHIFT_A,
+      LINE_A,
+      'סלולר',
+      '__no_distribution_area__',
+      'שפלה אמצעי',
+      '__no_work_bucket__',
+      '__no_source_line__'
     ]);
   });
 
   it('includes empty sourceZone sentinel in query key for unknown zone', () => {
-    const opts = bucketProductRollupQueryOptions(SHIFT_A, LINE_A, 'כללי', '');
+    const opts = bucketProductRollupQueryOptions(SHIFT_A, LINE_A, 'כללי', undefined, '');
     expect(opts.queryKey).toEqual([
-      'manual-shift', 'bucket-product-rollup', SHIFT_A, LINE_A, 'כללי', ''
+      'manual-shift',
+      'bucket-product-rollup',
+      SHIFT_A,
+      LINE_A,
+      'כללי',
+      '__no_distribution_area__',
+      '',
+      '__no_work_bucket__',
+      '__no_source_line__'
+    ]);
+  });
+
+  it('includes workBucketName and sourceLineName in query key when provided', () => {
+    const opts = bucketProductRollupQueryOptions(
+      SHIFT_A,
+      LINE_A,
+      'סיגריות-מנטה עין המפרץ',
+      'גליל',
+      'גליל',
+      'סיגריות-מנטה עין המפרץ',
+      'גליל'
+    );
+    expect(opts.queryKey).toEqual([
+      'manual-shift',
+      'bucket-product-rollup',
+      SHIFT_A,
+      LINE_A,
+      'סיגריות-מנטה עין המפרץ',
+      'גליל',
+      'גליל',
+      'סיגריות-מנטה עין המפרץ',
+      'גליל'
     ]);
   });
 
@@ -256,7 +303,7 @@ describe('bucketProductRollupQueryOptions', () => {
   });
 
   it('includes sourceZone in fetch URL when provided', async () => {
-    const queryFn = bucketProductRollupQueryOptions(SHIFT_A, LINE_A, 'סלולר', 'שפלה אמצעי').queryFn;
+    const queryFn = bucketProductRollupQueryOptions(SHIFT_A, LINE_A, 'סלולר', undefined, 'שפלה אמצעי').queryFn;
     expect(queryFn).toBeTypeOf('function');
     await queryFn?.({} as never);
     expect(bffRequest).toHaveBeenCalledWith(
@@ -264,8 +311,25 @@ describe('bucketProductRollupQueryOptions', () => {
     );
   });
 
+  it('includes workBucketName and sourceLineName in fetch URL when provided', async () => {
+    const queryFn = bucketProductRollupQueryOptions(
+      SHIFT_A,
+      LINE_A,
+      'סיגריות-מנטה עין המפרץ',
+      'גליל',
+      'גליל',
+      'סיגריות-מנטה עין המפרץ',
+      'גליל'
+    ).queryFn;
+    expect(queryFn).toBeTypeOf('function');
+    await queryFn?.({} as never);
+    expect(bffRequest).toHaveBeenCalledWith(
+      `/api/manual-shifts/${SHIFT_A}/buckets/product-rollup?lineId=${LINE_A}&bucketName=%D7%A1%D7%99%D7%92%D7%A8%D7%99%D7%95%D7%AA-%D7%9E%D7%A0%D7%98%D7%94+%D7%A2%D7%99%D7%9F+%D7%94%D7%9E%D7%A4%D7%A8%D7%A5&distributionArea=%D7%92%D7%9C%D7%99%D7%9C&sourceZone=%D7%92%D7%9C%D7%99%D7%9C&workBucketName=%D7%A1%D7%99%D7%92%D7%A8%D7%99%D7%95%D7%AA-%D7%9E%D7%A0%D7%98%D7%94+%D7%A2%D7%99%D7%9F+%D7%94%D7%9E%D7%A4%D7%A8%D7%A5&sourceLineName=%D7%92%D7%9C%D7%99%D7%9C`
+    );
+  });
+
   it('includes empty sourceZone in fetch URL when unknown', async () => {
-    const queryFn = bucketProductRollupQueryOptions(SHIFT_A, LINE_A, 'כללי', '').queryFn;
+    const queryFn = bucketProductRollupQueryOptions(SHIFT_A, LINE_A, 'כללי', undefined, '').queryFn;
     expect(queryFn).toBeTypeOf('function');
     await queryFn?.({} as never);
     expect(bffRequest).toHaveBeenCalledWith(
