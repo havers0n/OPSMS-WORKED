@@ -2073,6 +2073,10 @@ function normalizeOptionalString(value: string | null | undefined): string | nul
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function normalizeHebrewName(value: string | null | undefined): string {
+  return (value ?? '').trim().replace(/\s+/g, ' ');
+}
+
 export function inferManualShiftOrderSourceZone(
   itemZones: Array<Pick<ManualShiftOrderItem, 'zone'>>
 ): string | null {
@@ -2316,7 +2320,7 @@ function buildRouteGroupsForLine(
   rollups: Map<string, { lineCount: number; totalQuantity: number }>,
   checkUnitsByOrderId: Map<string, ManualShiftOrderCheckUnit[]>,
   ashlamotByOrderId: Map<string, ManualShiftOrderAshlama[]>,
-  sourceZone: string | null
+  sourceZoneByOrderId: Map<string, string | null>
 ): ManualShiftWorkHierarchyRouteGroup[] {
   const fragments: RouteFragmentInput[] = lineOrders.map((o) => ({
     orderNumber: o.orderNumber ?? '',
@@ -2420,7 +2424,7 @@ function buildRouteGroupsForLine(
           orderNumber: o.orderNumber,
           customerName: o.customerName,
           pointName: o.pointName,
-          sourceZone,
+          sourceZone: sourceZoneByOrderId.get(o.id) ?? null,
           status: o.status,
           lineCount: ru ? ru.lineCount : 0,
           totalQuantity,
@@ -2474,6 +2478,10 @@ function getManualShiftLineKind(lineName: string): 'route' | 'delivery_channel' 
   return 'route';
 }
 
+function isChitaLine(lineKind: 'route' | 'delivery_channel', lineName: string | null | undefined) {
+  return lineKind === 'delivery_channel' && normalizeHebrewName(lineName) === "צ'יטה";
+}
+
 export function buildShiftWorkHierarchy(
   shiftId: string,
   lineRows: ManualShiftLineRow[],
@@ -2520,119 +2528,122 @@ export function buildShiftWorkHierarchy(
 
   for (const row of lineRows) {
     const lineOrders = ordersByLineId.get(row.id) ?? [];
-    const ordersBySourceZone = new Map<string, ManualShiftOrder[]>();
+    const lineKind = getManualShiftLineKind(row.name);
+    const chitaLine = isChitaLine(lineKind, row.name);
+    const bucketsMap = new Map<string | null, ManualShiftOrder[]>();
+    const lineSourceZones = new Set<string>();
 
     for (const order of lineOrders) {
       const sourceZone = effectiveSourceZoneByOrderId.get(order.id) ?? null;
-      const key = sourceZoneKey(sourceZone);
-      const list = ordersBySourceZone.get(key) ?? [];
+      if (sourceZone) {
+        lineSourceZones.add(sourceZone);
+      }
+
+      const bucketKey = chitaLine ? sourceZoneKey(sourceZone) : (order.pointName ?? null);
+      const list = bucketsMap.get(bucketKey) ?? [];
       list.push(order);
-      ordersBySourceZone.set(key, list);
+      bucketsMap.set(bucketKey, list);
     }
 
-    if (ordersBySourceZone.size === 0) {
-      ordersBySourceZone.set(UNKNOWN_SOURCE_ZONE_KEY, []);
+    if (bucketsMap.size === 0) {
+      bucketsMap.set(chitaLine ? UNKNOWN_SOURCE_ZONE_KEY : null, []);
     }
 
-    const sourceZoneEntries = Array.from(ordersBySourceZone.entries()).sort(([a], [b]) => {
+    const bucketEntries = Array.from(bucketsMap.entries()).sort(([a], [b]) => {
       if (a === UNKNOWN_SOURCE_ZONE_KEY) return -1;
       if (b === UNKNOWN_SOURCE_ZONE_KEY) return 1;
-      return sourceZoneDisplayName(a === UNKNOWN_SOURCE_ZONE_KEY ? null : a).localeCompare(
-        sourceZoneDisplayName(b === UNKNOWN_SOURCE_ZONE_KEY ? null : b),
-        'he'
-      );
+      if (a === null) return -1;
+      if (b === null) return 1;
+      return sourceZoneDisplayName(a).localeCompare(sourceZoneDisplayName(b), 'he');
     });
 
-    for (const [sourceZoneKeyValue, scopedOrders] of sourceZoneEntries) {
-      const sourceZone = sourceZoneKeyValue === UNKNOWN_SOURCE_ZONE_KEY ? null : sourceZoneKeyValue;
+    const buckets: ManualShiftWorkHierarchyBucket[] = [];
+    for (const [bucketName, bucketOrders] of bucketEntries) {
+      const hierarchyOrders: ManualShiftWorkHierarchyOrder[] = bucketOrders.map((o) => {
+        const rollup = rollups.get(o.id);
+        const totalQuantity = rollup ? rollup.totalQuantity : 0;
+        const orderCheckUnits = checkUnitsByOrderId.get(o.id) ?? [];
+        const orderAshlamot = ashlamotByOrderId.get(o.id) ?? [];
+        return {
+          orderId: o.id,
+          orderNumber: o.orderNumber,
+          customerName: o.customerName,
+          pointName: o.pointName,
+          sourceZone: effectiveSourceZoneByOrderId.get(o.id) ?? null,
+          status: o.status,
+          lineCount: rollup ? rollup.lineCount : 0,
+          totalQuantity,
+          hasAshlama: orderAshlamot.some((a) => a.status === 'open'),
+          hasCheckUnits: orderCheckUnits.length > 0
+        };
+      });
 
-      const bucketsMap = new Map<string | null, ManualShiftOrder[]>();
-      for (const order of scopedOrders) {
-        const bucketName = order.pointName;
-        const list = bucketsMap.get(bucketName) ?? [];
-        list.push(order);
-        bucketsMap.set(bucketName, list);
-      }
+      buckets.push({
+        bucketName: bucketName === UNKNOWN_SOURCE_ZONE_KEY ? null : bucketName,
+        displayName: chitaLine
+          ? sourceZoneDisplayName(bucketName === UNKNOWN_SOURCE_ZONE_KEY ? null : bucketName)
+          : (bucketName ?? 'קו ראשי'),
+        totalOrders: bucketOrders.length,
+        totalQuantity: hierarchyOrders.reduce((s, o) => s + o.totalQuantity, 0),
+        statusBreakdown: computeStatusBreakdown(bucketOrders),
+        orders: hierarchyOrders
+      });
+    }
 
-      const buckets: ManualShiftWorkHierarchyBucket[] = [];
-      for (const [bucketName, bucketOrders] of bucketsMap) {
-        const hierarchyOrders: ManualShiftWorkHierarchyOrder[] = bucketOrders.map((o) => {
-          const rollup = rollups.get(o.id);
-          const totalQuantity = rollup ? rollup.totalQuantity : 0;
-          const orderCheckUnits = checkUnitsByOrderId.get(o.id) ?? [];
-          const orderAshlamot = ashlamotByOrderId.get(o.id) ?? [];
-          return {
-            orderId: o.id,
-            orderNumber: o.orderNumber,
-            customerName: o.customerName,
-            pointName: o.pointName,
-            sourceZone,
-            status: o.status,
-            lineCount: rollup ? rollup.lineCount : 0,
-            totalQuantity,
-            hasAshlama: orderAshlamot.some((a) => a.status === 'open'),
-            hasCheckUnits: orderCheckUnits.length > 0
-          };
-        });
-
-        buckets.push({
-          bucketName,
-          displayName: bucketName ?? 'קו ראשי',
-          totalOrders: bucketOrders.length,
-          totalQuantity: hierarchyOrders.reduce((s, o) => s + o.totalQuantity, 0),
-          statusBreakdown: computeStatusBreakdown(bucketOrders),
-          orders: hierarchyOrders
-        });
-      }
-
+    if (!chitaLine) {
       buckets.sort((a, b) => {
         if (a.bucketName === null) return -1;
         if (b.bucketName === null) return 1;
         return a.bucketName.localeCompare(b.bucketName, 'he');
       });
-
-      const routeGroups = buildRouteGroupsForLine(
-        scopedOrders,
-        rollups,
-        checkUnitsByOrderId,
-        ashlamotByOrderId,
-        sourceZone
-      );
-
-      const itemLinesCount = scopedOrders.reduce((s, order) => {
-        const rollup = rollups.get(order.id);
-        return s + (rollup ? rollup.lineCount : 0);
-      }, 0);
-
-      const line: ManualShiftWorkHierarchyLine = {
-        lineId: row.id,
-        areaLineKey: `${sourceZoneKeyValue}\u0001${row.id}`,
-        lineGroupName: row.name,
-        distributionArea: row.distribution_area,
-        sourceZone,
-        lineKind: getManualShiftLineKind(row.name),
-        status: deriveManualShiftLineStatus(scopedOrders),
-        totalBuckets: buckets.length,
-        totalOrders: scopedOrders.length,
-        totalQuantity: buckets.reduce((s, b) => s + b.totalQuantity, 0),
-        itemLinesCount,
-        statusBreakdown: computeStatusBreakdown(scopedOrders),
-        buckets,
-        routeGroups
-      };
-
-      const areaEntry = areasMap.get(sourceZoneKeyValue) ?? {
-        areaName: sourceZone,
-        displayName: sourceZoneDisplayName(sourceZone),
-        lines: []
-      };
-      areaEntry.lines.push({
-        sortOrder: row.sort_order,
-        createdAt: row.created_at,
-        line
-      });
-      areasMap.set(sourceZoneKeyValue, areaEntry);
     }
+
+    const routeGroups = chitaLine
+      ? []
+      : buildRouteGroupsForLine(
+          lineOrders,
+          rollups,
+          checkUnitsByOrderId,
+          ashlamotByOrderId,
+          effectiveSourceZoneByOrderId
+        );
+
+    const itemLinesCount = lineOrders.reduce((s, order) => {
+      const rollup = rollups.get(order.id);
+      return s + (rollup ? rollup.lineCount : 0);
+    }, 0);
+    const uniqueSourceZones = Array.from(lineSourceZones);
+
+    const line: ManualShiftWorkHierarchyLine = {
+      lineId: row.id,
+      areaLineKey: row.id,
+      lineGroupName: row.name,
+      distributionArea: row.distribution_area,
+      sourceZone: uniqueSourceZones.length === 1 ? uniqueSourceZones[0] : null,
+      lineKind,
+      status: deriveManualShiftLineStatus(lineOrders),
+      totalBuckets: buckets.length,
+      totalOrders: lineOrders.length,
+      totalQuantity: buckets.reduce((s, b) => s + b.totalQuantity, 0),
+      itemLinesCount,
+      statusBreakdown: computeStatusBreakdown(lineOrders),
+      buckets,
+      routeGroups
+    };
+
+    const areaKey = chitaLine ? "צ'יטה" : row.distribution_area;
+    const areaMapKey = areaKey ?? '__null_area__';
+    const areaEntry = areasMap.get(areaMapKey) ?? {
+      areaName: areaKey,
+      displayName: chitaLine ? "צ'יטה" : sourceZoneDisplayName(areaKey),
+      lines: []
+    };
+    areaEntry.lines.push({
+      sortOrder: row.sort_order,
+      createdAt: row.created_at,
+      line
+    });
+    areasMap.set(areaMapKey, areaEntry);
   }
 
   const areas: ManualShiftWorkHierarchyArea[] = [];

@@ -482,185 +482,183 @@ describe('buildShiftWorkHierarchy', () => {
 
     const result = buildShiftWorkHierarchy(SHIFT_ID, lineRows, orders, rollups, [], []);
     const areasByName = new Map(result.areas.map((area) => [area.areaName, area] as const));
-    const shfela2 = areasByName.get('שפלה 2')!;
     const shfelaMid = areasByName.get('שפלה אמצעי')!;
 
-    expect(result.areas.map((area) => area.areaName).sort()).toEqual(['שפלה 2', 'שפלה אמצעי']);
-    expect(shfela2.totalOrders).toBe(6);
-    expect(shfelaMid.totalOrders).toBe(5);
-    expect(shfela2.totalQuantity).toBe(27);
-    expect(shfelaMid.totalQuantity).toBe(50);
-    expect(shfela2.lines).toHaveLength(1);
+    expect(result.areas.map((area) => area.areaName)).toEqual(['שפלה אמצעי']);
+    expect(shfelaMid.totalOrders).toBe(11);
+    expect(shfelaMid.totalQuantity).toBe(77);
     expect(shfelaMid.lines).toHaveLength(1);
-    expect(shfela2.lines[0].lineId).toBe(LINE_A);
     expect(shfelaMid.lines[0].lineId).toBe(LINE_A);
-    expect(shfela2.lines[0].areaLineKey).not.toBe(shfelaMid.lines[0].areaLineKey);
-    expect(shfela2.lines[0].sourceZone).toBe('שפלה 2');
-    expect(shfelaMid.lines[0].sourceZone).toBe('שפלה אמצעי');
-
-    for (const area of [shfela2, shfelaMid]) {
-      for (const line of area.lines) {
-        for (const bucket of line.buckets) {
-          for (const order of bucket.orders) {
-            expect(order.sourceZone).toBe(area.areaName);
-          }
-        }
-        for (const routeGroup of line.routeGroups ?? []) {
-          for (const workBucket of routeGroup.workBuckets) {
-            for (const order of workBucket.orders) {
-              expect(order.sourceZone).toBe(area.areaName);
-            }
-          }
-        }
-      }
-    }
-
-    expect(
-      shfelaMid.lines[0].buckets.some((bucket) =>
-        bucket.orders.some((order) => ['כוורת חצור משפחות', 'מנטה מסמיה', 'פז ברורים', 'תפוז עד הלום'].includes(order.pointName ?? ''))
-      )
-    ).toBe(false);
+    expect(shfelaMid.lines[0].areaLineKey).toBe(LINE_A);
+    expect(shfelaMid.lines[0].sourceZone).toBeNull();
+    expect(shfelaMid.lines[0].routeGroups).toBeDefined();
+    expect(shfelaMid.lines[0].buckets.every((bucket) => bucket.orders.every((order) => order.sourceZone !== null))).toBe(true);
   });
 });
 
-describe('source-zone-aware hierarchy', () => {
-  it('splits ??????? into separate source-zone areas for the same physical line', () => {
+describe('work-hierarchy reprojection', () => {
+  function makeProjectedHierarchyFixture() {
+    const chitaZones = ['דרום', 'חיפה', 'שפלה 1', 'שפלה 2', 'שפלה אמצעי', 'עמקים אמצעי'] as const;
+    const normalSpecs = [
+      { id: 'line-n1', name: 'קו דרום', area: 'דרום', orderCount: 19, totalLineCount: 100 },
+      { id: 'line-n2', name: 'קו חיפה', area: 'חיפה', orderCount: 19, totalLineCount: 100 },
+      { id: 'line-n3', name: 'קו שפלה 1', area: 'שפלה 1', orderCount: 19, totalLineCount: 100 },
+      { id: 'line-n4', name: 'קו שפלה 2', area: 'שפלה 2', orderCount: 19, totalLineCount: 100 },
+      { id: 'line-n5', name: 'קו שפלה אמצעי', area: 'שפלה אמצעי', orderCount: 19, totalLineCount: 100 },
+      { id: 'line-n6', name: 'קו עמקים אמצעי', area: 'עמקים אמצעי', orderCount: 19, totalLineCount: 100 },
+      { id: 'line-n7', name: 'קו צפון', area: 'צפון', orderCount: 19, totalLineCount: 100 },
+      { id: 'line-n8', name: 'קו מרכז', area: 'מרכז', orderCount: 15, totalLineCount: 100 }
+    ] as const;
+
     const lineRows = [
-      makeLineRow({
-        id: LINE_A,
-        name: '???????',
-        distribution_area: '??????? ?????'
-      })
+      makeLineRow({ id: 'line-chita', name: "צ'יטה", distribution_area: 'שפלה 1', sort_order: 1 }),
+      ...normalSpecs.map((spec, index) => makeLineRow({
+        id: spec.id,
+        name: spec.name,
+        distribution_area: spec.area,
+        sort_order: index + 2
+      }))
     ];
-    const orders = [
-      makeOrder({
-        id: 'o-jer-1',
-        lineId: LINE_A,
-        orderNumber: 'SO-J-1',
-        pointName: '??????? 1',
-        rawRouteLine: '???????/??????? 1',
-        routeBase: '???????',
-        workBucketName: '??????? 1',
-        sourceZone: '??????? 1'
-      }),
-      makeOrder({
-        id: 'o-jer-2',
-        lineId: LINE_A,
-        orderNumber: 'SO-J-2',
-        pointName: '??????? 2',
-        rawRouteLine: '???????/??????? 2',
-        routeBase: '???????',
-        workBucketName: '??????? 2',
-        sourceZone: '??????? 2'
-      }),
-      makeOrder({
-        id: 'o-jer-3',
-        lineId: LINE_A,
-        orderNumber: 'SO-J-3',
-        pointName: '??????? ?????',
-        rawRouteLine: '???????/??????? ?????',
-        routeBase: '???????',
-        workBucketName: '??????? ?????',
-        sourceZone: '??????? ?????'
-      })
-    ];
-    const rollups = new Map<string, { lineCount: number; totalQuantity: number }>([
-      ['o-jer-1', { lineCount: 2, totalQuantity: 10 }],
-      ['o-jer-2', { lineCount: 3, totalQuantity: 20 }],
-      ['o-jer-3', { lineCount: 4, totalQuantity: 30 }]
-    ]);
 
-    const result = buildShiftWorkHierarchy(SHIFT_ID, lineRows, orders, rollups, [], []);
-    expect(result.areas.map((area) => area.areaName).sort()).toEqual([
-      '??????? 1',
-      '??????? 2',
-      '??????? ?????'
-    ]);
+    const orders: ManualShiftOrder[] = [];
+    const rollups = new Map<string, { lineCount: number; totalQuantity: number }>();
+    let orderIndex = 1;
 
-    for (const area of result.areas) {
-      expect(area.lines).toHaveLength(1);
-      expect(area.lines[0].lineId).toBe(LINE_A);
-      expect(area.lines[0].lineGroupName).toBe('???????');
-      expect(area.lines[0].sourceZone).toBe(area.areaName);
+    const addOrders = (input: {
+      lineId: string;
+      pointName: string;
+      routeBase: string;
+      sourceZone: string | null;
+      orderCount: number;
+      totalLineCount: number;
+      chita?: boolean;
+    }) => {
+      const base = Math.floor(input.totalLineCount / input.orderCount);
+      const remainder = input.totalLineCount % input.orderCount;
+
+      for (let i = 0; i < input.orderCount; i += 1) {
+        const orderId = `order-${orderIndex}`;
+        const sourceZone = input.chita ? chitaZones[i % chitaZones.length] : input.sourceZone;
+        const bucketName = input.chita ? sourceZone : null;
+        const lineCount = base + (i < remainder ? 1 : 0);
+        orders.push(makeOrder({
+          id: orderId,
+          lineId: input.lineId,
+          orderNumber: `SO-${String(orderIndex).padStart(4, '0')}`,
+          pointName: input.chita ? sourceZone : input.pointName,
+          rawRouteLine: input.chita ? `צ'יטה/${sourceZone}` : input.routeBase,
+          routeBase: input.routeBase,
+          workBucketName: bucketName,
+          sourceZone
+        }));
+        rollups.set(orderId, {
+          lineCount,
+          totalQuantity: lineCount * 2
+        });
+        orderIndex += 1;
+      }
+    };
+
+    addOrders({
+      lineId: 'line-chita',
+      pointName: "צ'יטה",
+      routeBase: "צ'יטה",
+      sourceZone: null,
+      orderCount: 6,
+      totalLineCount: 162,
+      chita: true
+    });
+
+    for (const spec of normalSpecs) {
+      addOrders({
+        lineId: spec.id,
+        pointName: spec.name,
+        routeBase: spec.name,
+        sourceZone: spec.area,
+        orderCount: spec.orderCount,
+        totalLineCount: spec.totalLineCount
+      });
     }
-  });
 
-  it(`routes "?'???" under a different source zone`, () => {
+    return { lineRows, orders, rollups };
+  }
+
+  it('projects a Chita delivery channel once under area צ\'יטה with source-zone buckets', () => {
     const lineRows = [
-      makeLineRow({
-        id: LINE_A,
-        name: `?'???`,
-        distribution_area: `?'???`
-      })
+      makeLineRow({ id: LINE_A, name: "צ'יטה", distribution_area: 'שפלה 1' })
     ];
     const orders = [
-      makeOrder({
-        id: 'o-chita-1',
-        lineId: LINE_A,
-        orderNumber: 'SO-C-1',
-        pointName: '???? ??? ?????',
-        rawRouteLine: `?'???/???? ??? ?????`,
-        routeBase: `?'???`,
-        workBucketName: '???? ??? ?????',
-        sourceZone: '???? 1'
-      })
+      makeOrder({ id: 'o-chita-1', lineId: LINE_A, orderNumber: 'SO-CH-1', pointName: 'דרום', rawRouteLine: "צ'יטה/דרום", routeBase: "צ'יטה", workBucketName: 'דרום', sourceZone: 'דרום' }),
+      makeOrder({ id: 'o-chita-2', lineId: LINE_A, orderNumber: 'SO-CH-2', pointName: 'חיפה', rawRouteLine: "צ'יטה/חיפה", routeBase: "צ'יטה", workBucketName: 'חיפה', sourceZone: 'חיפה' }),
+      makeOrder({ id: 'o-chita-3', lineId: LINE_A, orderNumber: 'SO-CH-3', pointName: 'שפלה 1', rawRouteLine: "צ'יטה/שפלה 1", routeBase: "צ'יטה", workBucketName: 'שפלה 1', sourceZone: 'שפלה 1' }),
+      makeOrder({ id: 'o-chita-4', lineId: LINE_A, orderNumber: 'SO-CH-4', pointName: 'שפלה 2', rawRouteLine: "צ'יטה/שפלה 2", routeBase: "צ'יטה", workBucketName: 'שפלה 2', sourceZone: 'שפלה 2' }),
+      makeOrder({ id: 'o-chita-5', lineId: LINE_A, orderNumber: 'SO-CH-5', pointName: 'שפלה אמצעי', rawRouteLine: "צ'יטה/שפלה אמצעי", routeBase: "צ'יטה", workBucketName: 'שפלה אמצעי', sourceZone: 'שפלה אמצעי' }),
+      makeOrder({ id: 'o-chita-6', lineId: LINE_A, orderNumber: 'SO-CH-6', pointName: 'עמקים אמצעי', rawRouteLine: "צ'יטה/עמקים אמצעי", routeBase: "צ'יטה", workBucketName: 'עמקים אמצעי', sourceZone: 'עמקים אמצעי' })
     ];
     const rollups = new Map<string, { lineCount: number; totalQuantity: number }>([
-      ['o-chita-1', { lineCount: 2, totalQuantity: 13 }]
+      ['o-chita-1', { lineCount: 27, totalQuantity: 54 }],
+      ['o-chita-2', { lineCount: 27, totalQuantity: 54 }],
+      ['o-chita-3', { lineCount: 27, totalQuantity: 54 }],
+      ['o-chita-4', { lineCount: 27, totalQuantity: 54 }],
+      ['o-chita-5', { lineCount: 27, totalQuantity: 54 }],
+      ['o-chita-6', { lineCount: 27, totalQuantity: 54 }]
     ]);
 
     const result = buildShiftWorkHierarchy(SHIFT_ID, lineRows, orders, rollups, [], []);
-    expect(result.areas.map((area) => area.areaName)).toEqual(['???? 1']);
-    expect(result.areas[0].lines[0].lineGroupName).toBe(`?'???`);
-    expect(result.areas[0].lines[0].sourceZone).toBe('???? 1');
+    const chitaArea = result.areas.find((area) => area.areaName === "צ'יטה");
+
+    expect(chitaArea).toBeDefined();
+    expect(chitaArea?.lines).toHaveLength(1);
+
+    const chitaLine = chitaArea!.lines[0];
+    expect(chitaLine.lineGroupName).toBe("צ'יטה");
+    expect(chitaLine.routeGroups).toEqual([]);
+    expect(chitaLine.buckets).toHaveLength(6);
+    expect(new Set(chitaLine.buckets.map((bucket) => bucket.bucketName)).size).toBe(6);
+    expect(chitaLine.buckets.map((bucket) => bucket.bucketName)).toEqual(expect.arrayContaining([
+      'דרום',
+      'חיפה',
+      'שפלה 1',
+      'שפלה 2',
+      'שפלה אמצעי',
+      'עמקים אמצעי'
+    ]));
+    expect(chitaLine.buckets.every((bucket) => bucket.orders.every((order) => order.sourceZone !== null))).toBe(true);
+    expect(chitaLine.buckets.some((bucket) => bucket.bucketName === 'דרום')).toBe(true);
+    expect(chitaLine.buckets.some((bucket) => bucket.bucketName === 'חיפה')).toBe(true);
   });
 
-  it('falls back to a single item zone when order.sourceZone is missing', () => {
-    const lineRows = [makeLineRow()];
-    const orders = [
-      makeOrder({
-        id: 'o-legacy-1',
-        lineId: LINE_A,
-        orderNumber: 'SO-L-1',
-        pointName: '?????',
-        rawRouteLine: '???? 2/?????',
-        routeBase: '???? 2',
-        workBucketName: '?????',
-        sourceZone: null
-      }),
-      makeOrder({
-        id: 'o-legacy-2',
-        lineId: LINE_A,
-        orderNumber: 'SO-L-2',
-        pointName: '???? 2',
-        rawRouteLine: '???? 2',
-        routeBase: '???? 2',
-        workBucketName: null,
-        sourceZone: null
-      })
-    ];
-    const items = [
-      makeItem({
-        id: 'i-legacy-1',
-        lineId: LINE_A,
-        orderId: 'o-legacy-1',
-        zone: '???? 2'
-      }),
-      makeItem({
-        id: 'i-legacy-2',
-        lineId: LINE_A,
-        orderId: 'o-legacy-2',
-        zone: '???? 2'
-      })
-    ];
-    const rollups = new Map<string, { lineCount: number; totalQuantity: number }>([
-      ['o-legacy-1', { lineCount: 1, totalQuantity: 4 }],
-      ['o-legacy-2', { lineCount: 1, totalQuantity: 6 }]
-    ]);
+  it('keeps every physical line and order unique while preserving totals for the imported shift fixture', () => {
+    const { lineRows, orders, rollups } = makeProjectedHierarchyFixture();
+    const result = buildShiftWorkHierarchy(SHIFT_ID, lineRows, orders, rollups, [], []);
 
-    const result = buildShiftWorkHierarchy(SHIFT_ID, lineRows, orders, rollups, [], [], items);
-    expect(result.areas.map((area) => area.areaName)).toEqual(['???? 2']);
-    expect(result.areas[0].lines[0].sourceZone).toBe('???? 2');
+    const lineIds = result.areas.flatMap((area) => area.lines.map((line) => line.lineId));
+    const orderIds = result.areas.flatMap((area) =>
+      area.lines.flatMap((line) =>
+        line.buckets.flatMap((bucket) => bucket.orders.map((order) => order.orderId))
+      )
+    );
+
+    expect(lineIds).toHaveLength(new Set(lineIds).size);
+    expect(lineIds).toHaveLength(9);
+    expect(orderIds).toHaveLength(new Set(orderIds).size);
+    expect(result.areas.reduce((sum, area) => sum + area.totalOrders, 0)).toBe(154);
+    expect(result.areas.reduce((sum, area) => sum + area.itemLinesCount!, 0)).toBe(962);
+
+    const chitaArea = result.areas.find((area) => area.areaName === "צ'יטה");
+    expect(chitaArea).toBeDefined();
+    expect(chitaArea!.lines).toHaveLength(1);
+    expect(chitaArea!.lines[0].lineGroupName).toBe("צ'יטה");
+    expect(chitaArea!.lines[0].routeGroups).toEqual([]);
+    expect(chitaArea!.lines[0].buckets.map((bucket) => bucket.bucketName)).toEqual(expect.arrayContaining([
+      'דרום',
+      'חיפה',
+      'שפלה 1',
+      'שפלה 2',
+      'שפלה אמצעי',
+      'עמקים אמצעי'
+    ]));
+    expect(chitaArea!.lines[0].buckets.every((bucket) => bucket.orders.every((order) => order.sourceZone !== null))).toBe(true);
   });
 });
 
@@ -844,7 +842,7 @@ describe('buildManualShiftSourceZoneDiagnostics', () => {
   });
 });
 
-it('sets lineKind delivery_channel for route named צ\'יטה under geographic source zone', () => {
+  it('projects exact Chita under a single area and line', () => {
     const lineRows = [makeLineRow({ name: "צ'יטה", distribution_area: 'שפלה 1' })];
     const orders = [makeOrder({ sourceZone: 'שפלה 1' })];
     const rollups = new Map<string, { lineCount: number; totalQuantity: number }>();
@@ -853,9 +851,13 @@ it('sets lineKind delivery_channel for route named צ\'יטה under geographic s
     const result = buildShiftWorkHierarchy(SHIFT_ID, lineRows, orders, rollups, [], []);
 
     expect(result.areas).toHaveLength(1);
-    expect(result.areas[0].areaName).toBe('שפלה 1');
+    expect(result.areas[0].areaName).toBe("צ'יטה");
+    expect(result.areas[0].lines).toHaveLength(1);
     expect(result.areas[0].lines[0].lineGroupName).toBe("צ'יטה");
     expect(result.areas[0].lines[0].lineKind).toBe('delivery_channel');
+    expect(result.areas[0].lines[0].routeGroups).toEqual([]);
+    expect(result.areas[0].lines[0].buckets[0].bucketName).toBe('שפלה 1');
+    expect(result.areas[0].lines[0].buckets[0].orders[0].sourceZone).toBe('שפלה 1');
   });
 
   it('sets lineKind delivery_channel for Chita variant names', () => {
