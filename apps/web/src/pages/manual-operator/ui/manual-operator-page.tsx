@@ -80,7 +80,7 @@ function ManualOperatorSectionContent({
   }
 
   if (section === 'lines') {
-    return shift ? <LineSchemeBuilder /> : null;
+    return shift ? <LineSchemeBuilder shiftId={shift.id} /> : null;
   }
 
   return (
