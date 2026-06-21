@@ -159,6 +159,44 @@ describe('manual shift monthly import adapter', () => {
 
   // ── PR G1: Sheet selection ────────────────────────────────────────────────
 
+  // ── PR G2: Excel serial date parsing ─────────────────────────────────────
+
+  describe('excel serial date parsing', () => {
+    it('parses Excel serial number as date without timezone shift', () => {
+      const buffer = workbookFromAoA([
+        ['תאריך הפצה', 'קו הפצה', 'שם לקוח', 'הזמנה', "מק''ט", 'כמות'],
+        [46176, 'קו/נקודה', 'לקוח', 'SO-1', '1001', 2],
+      ]);
+      const parsed = parseBuffer(buffer, { selectedDate: '2026-06-03' });
+      expect(parsed.rows).toHaveLength(1);
+      expect(parsed.rows[0].distributionDateNormalized).toBe('2026-06-03');
+    });
+
+    it('parses another Excel serial date correctly', () => {
+      const buffer = workbookFromAoA([
+        ['תאריך הפצה', 'קו הפצה', 'שם לקוח', 'הזמנה', "מק''ט", 'כמות'],
+        [46173, 'קו/נקודה', 'לקוח', 'SO-1', '1001', 2],
+      ]);
+      const parsed = parseBuffer(buffer, { selectedDate: '2026-05-31' });
+      expect(parsed.rows).toHaveLength(1);
+      expect(parsed.rows[0].distributionDateNormalized).toBe('2026-05-31');
+    });
+
+    it('parses serial date and matches to preview', () => {
+      const buffer = workbookFromAoA([
+        ['תאריך הפצה', 'קו הפצה', 'שם לקוח', 'הזמנה', "מק''ט", 'כמות'],
+        [46176, 'קו/נקודה', 'לקוח', 'SO-1', '1001', 2],
+        [46177, 'קו/נקודה', 'לקוח', 'SO-2', '1002', 3],
+      ]);
+      const parsed = parseBuffer(buffer, { selectedDate: '2026-06-03' });
+      expect(parsed.rows).toHaveLength(2);
+      expect(parsed.rows[0].distributionDateNormalized).toBe('2026-06-03');
+      expect(parsed.rows[1].distributionDateNormalized).toBe('2026-06-04');
+    });
+  });
+
+  // ── PR G2: Full Hebrew month sheet selection ──────────────────────────────
+
   describe('sheet selection', () => {
     it('prefers sheet matching selectedDate month/year', () => {
       const wb = XLSX.utils.book_new();
@@ -253,6 +291,107 @@ describe('manual shift monthly import adapter', () => {
         expect(err.code).toBe('MISSING_SHEET');
         expect(err.details.expectedSheet).toBe('יוני 26');
         expect(err.details.selectedDate).toBe('2026-06-14');
+      }
+    });
+
+    // ── PR G2: Full Hebrew month sheet selection ───────────────────────────
+
+    it('selects November sheet when selectedDate is in November', () => {
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+        ['תאריך הפצה', 'קו הפצה', 'שם לקוח', 'הזמנה', "מק''ט", 'כמות'],
+        ['19.11.26', 'נובמבר/נקודה', 'לקוח', 'SO-1', '1001', 2],
+      ]), 'נובמבר 26');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+        ['תאריך הפצה', 'קו הפצה', 'שם לקוח', 'הזמנה', "מק''ט", 'כמות'],
+        ['14.6.26', 'יוני/נקודה', 'לקוח', 'SO-2', '1002', 3],
+      ]), 'יוני 26');
+      const buf = Buffer.isBuffer(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }))
+        ? XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+        : Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+
+      const parsed = parseBuffer(buf, { selectedDate: '2026-11-19' });
+      expect(parsed.source.sheetName).toBe('נובמבר 26');
+      expect(parsed.rows).toHaveLength(1);
+      expect(parsed.rows[0].orderNumber).toBe('SO-1');
+    });
+
+    it('selects January sheet for January date', () => {
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+        ['תאריך הפצה', 'קו הפצה', 'שם לקוח', 'הזמנה', "מק''ט", 'כמות'],
+        ['15.1.26', 'ינואר/נקודה', 'לקוח', 'SO-1', '1001', 2],
+      ]), 'ינואר 26');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+        ['תאריך הפצה', 'קו הפצה', 'שם לקוח', 'הזמנה', "מק''ט", 'כמות'],
+        ['14.6.26', 'יוני/נקודה', 'לקוח', 'SO-2', '1002', 3],
+      ]), 'יוני 26');
+      const buf = Buffer.isBuffer(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }))
+        ? XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+        : Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+
+      const parsed = parseBuffer(buf, { selectedDate: '2026-01-15' });
+      expect(parsed.source.sheetName).toBe('ינואר 26');
+    });
+
+    it('selects correct sheet for each month across multiple Hebrew month sheets', () => {
+      function multiMonthBuffer() {
+        const wb = XLSX.utils.book_new();
+        const sheets: [string, string, string][] = [
+          ['מאי 26', '14.5.26', 'SO-1'],
+          ['יוני 26', '14.6.26', 'SO-2'],
+          ['יולי 26', '14.7.26', 'SO-3'],
+          ['נובמבר 26', '19.11.26', 'SO-4'],
+        ];
+        for (const [sheetName, date, order] of sheets) {
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+            ['תאריך הפצה', 'קו הפצה', 'שם לקוח', 'הזמנה', "מק''ט", 'כמות'],
+            [date, 'קו/נקודה', 'לקוח', order, '1001', 2],
+          ]), sheetName);
+        }
+        const buf = Buffer.isBuffer(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }))
+          ? XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+          : Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+        return buf;
+      }
+
+      const buf = multiMonthBuffer();
+
+      const may = parseBuffer(buf, { selectedDate: '2026-05-31' });
+      expect(may.source.sheetName).toBe('מאי 26');
+      expect(may.rows[0].orderNumber).toBe('SO-1');
+
+      const jun = parseBuffer(buf, { selectedDate: '2026-06-03' });
+      expect(jun.source.sheetName).toBe('יוני 26');
+      expect(jun.rows[0].orderNumber).toBe('SO-2');
+
+      const jul = parseBuffer(buf, { selectedDate: '2026-07-01' });
+      expect(jul.source.sheetName).toBe('יולי 26');
+      expect(jul.rows[0].orderNumber).toBe('SO-3');
+
+      const nov = parseBuffer(buf, { selectedDate: '2026-11-19' });
+      expect(nov.source.sheetName).toBe('נובמבר 26');
+      expect(nov.rows[0].orderNumber).toBe('SO-4');
+    });
+
+    it('returns structured missing-sheet error when no matching month sheet exists across multiple sheets', () => {
+      const wb = XLSX.utils.book_new();
+      const headers = ['תאריך הפצה', 'קו הפצה', 'שם לקוח', 'הזמנה', "מק''ט", 'כמות'];
+      // Use non-Hebrew-month sheet names so no fallback matches
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([headers, ['14.5.26', 'קו/א', 'ל', 'SO-1', '1001', 2]]), 'Sheet 1');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([headers, ['14.6.26', 'קו/ב', 'ל', 'SO-2', '1002', 3]]), 'Sheet 2');
+      const buf = Buffer.isBuffer(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }))
+        ? XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+        : Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+
+      try {
+        parseBuffer(buf, { selectedDate: '2026-11-19' });
+        expect.fail('should have thrown');
+      } catch (err: any) {
+        expect(err.code).toBe('MISSING_SHEET');
+        expect(err.details.expectedSheet).toBe('נובמבר 26');
+        expect(err.details.availableSheets).toEqual(['Sheet 1', 'Sheet 2']);
+        expect(err.details.selectedDate).toBe('2026-11-19');
       }
     });
   });

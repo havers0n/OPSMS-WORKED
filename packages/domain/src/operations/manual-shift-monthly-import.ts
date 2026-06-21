@@ -28,6 +28,14 @@ export const manualShiftMonthlyMissingFieldSchema = z.object({
 });
 export type ManualShiftMonthlyMissingField = z.infer<typeof manualShiftMonthlyMissingFieldSchema>;
 
+export const manualShiftMonthlyInvalidDateDetailSchema = z.object({
+  rowIndex: z.number().int().min(1),
+  rawValue: z.string().nullable(),
+  fieldName: z.string(),
+  reason: z.string()
+});
+export type ManualShiftMonthlyInvalidDateDetail = z.infer<typeof manualShiftMonthlyInvalidDateDetailSchema>;
+
 export const manualShiftMonthlyAvailableDateSchema = z.object({
   raw: z.string().min(1),
   normalized: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -76,7 +84,13 @@ export const manualShiftMonthlyPreviewSchema = z.object({
     skuRows: z.number().int().min(0),
     aggregatedSkuGroups: z.number().int().min(0),
     uniqueSkus: z.number().int().min(0),
-    totalQuantity: z.number()
+    totalQuantity: z.number(),
+    rawTotalQuantity: z.number(),
+    positiveTotalQuantity: z.number(),
+    negativeTotalQuantity: z.number(),
+    zeroQuantityRowsCount: z.number().int().min(0),
+    negativeQuantityRowsCount: z.number().int().min(0),
+    positiveQuantityRowsCount: z.number().int().min(0)
   }),
   anomalies: z.object({
     negativeQuantityRows: z.number().int().min(0),
@@ -86,6 +100,7 @@ export const manualShiftMonthlyPreviewSchema = z.object({
     pickupNoteRows: z.number().int().min(0),
     ashlamaNoteRows: z.number().int().min(0),
     invalidDistributionDateRows: z.array(z.number().int().min(1)),
+    invalidDateDetails: z.array(manualShiftMonthlyInvalidDateDetailSchema).optional(),
     missingRequiredFields: z.array(manualShiftMonthlyMissingFieldSchema)
   }),
   lines: z.array(manualShiftMonthlyPreviewLineSchema),
@@ -204,6 +219,8 @@ export const manualShiftMonthlyApplyPlanSchema = z.object({
   skippedGroups: z.number().int().min(0),
   skippedNegativeQuantityRows: z.number().int().min(0),
   skippedZeroQuantityRows: z.number().int().min(0),
+  appliedTotalQuantity: z.number(),
+  appliedItemLines: z.number().int().min(0),
   warningSummary: z.object({
     info: z.number().int().min(0),
     warning: z.number().int().min(0),
@@ -226,6 +243,8 @@ export const manualShiftMonthlyApplyResponseSchema = z.object({
   skippedGroups: z.number().int().min(0),
   skippedNegativeQuantityRows: z.number().int().min(0),
   skippedZeroQuantityRows: z.number().int().min(0),
+  appliedTotalQuantity: z.number(),
+  appliedItemLines: z.number().int().min(0),
   warningSummary: z.object({
     info: z.number().int().min(0),
     warning: z.number().int().min(0),
@@ -273,6 +292,13 @@ function normalizeDateParts(day: number, month: number, year: number): string | 
   return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
 }
 
+/**
+ * Two-digit year policy: 00-69 → 2000-2069, 70-99 → 1970-1999.
+ */
+function resolveTwoDigitYear(yy: number): number {
+  return yy >= 70 ? 1900 + yy : 2000 + yy;
+}
+
 function normalizeWorkbookDate(value: string | Date | null | undefined): string | null {
   if (value === null || value === undefined) {
     return null;
@@ -287,22 +313,42 @@ function normalizeWorkbookDate(value: string | Date | null | undefined): string 
   }
 
   const trimmed = value.trim();
-  const normalizedIsoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
-  if (normalizedIsoMatch) {
-    return normalizeDateParts(
-      Number(normalizedIsoMatch[3]),
-      Number(normalizedIsoMatch[2]),
-      Number(normalizedIsoMatch[1])
-    );
+  if (!trimmed) return null;
+
+  // YYYY-MM-DD
+  let match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (match) {
+    return normalizeDateParts(Number(match[3]), Number(match[2]), Number(match[1]));
   }
 
-  const shortDateMatch = /^(\d{1,2})\.(\d{1,2})\.(\d{2})$/.exec(trimmed);
-  if (shortDateMatch) {
-    return normalizeDateParts(
-      Number(shortDateMatch[1]),
-      Number(shortDateMatch[2]),
-      2000 + Number(shortDateMatch[3])
-    );
+  // YYYY/MM/DD
+  match = /^(\d{4})\/(\d{2})\/(\d{2})$/.exec(trimmed);
+  if (match) {
+    return normalizeDateParts(Number(match[3]), Number(match[2]), Number(match[1]));
+  }
+
+  // DD/MM/YYYY
+  match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(trimmed);
+  if (match) {
+    return normalizeDateParts(Number(match[1]), Number(match[2]), Number(match[3]));
+  }
+
+  // DD.MM.YYYY
+  match = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(trimmed);
+  if (match) {
+    return normalizeDateParts(Number(match[1]), Number(match[2]), Number(match[3]));
+  }
+
+  // DD/MM/YY (two-digit year)
+  match = /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/.exec(trimmed);
+  if (match) {
+    return normalizeDateParts(Number(match[1]), Number(match[2]), resolveTwoDigitYear(Number(match[3])));
+  }
+
+  // DD.MM.YY (two-digit year)
+  match = /^(\d{1,2})\.(\d{1,2})\.(\d{2})$/.exec(trimmed);
+  if (match) {
+    return normalizeDateParts(Number(match[1]), Number(match[2]), resolveTwoDigitYear(Number(match[3])));
   }
 
   return null;
@@ -456,6 +502,8 @@ function buildWorkingRow(row: ManualShiftMonthlyParsedRow): WorkingRow {
   };
 }
 
+export { normalizeWorkbookDate, resolveTwoDigitYear };
+
 export function parseManualShiftMonthlyPreview(
   rawInput: ParseManualShiftMonthlyPreviewInput
 ): ManualShiftMonthlyParseResult {
@@ -464,6 +512,7 @@ export function parseManualShiftMonthlyPreview(
 
   const availableDates = new Map<string, { raws: Set<string>; rows: number }>();
   const invalidDistributionDateRows: number[] = [];
+  const invalidDateDetails: ManualShiftMonthlyInvalidDateDetail[] = [];
   const missingRequiredFields: ManualShiftMonthlyMissingField[] = [];
   const groups = new Map<string, ManualShiftMonthlyAggregatedGroup>();
   const topWarnings: ManualShiftMonthlyWarning[] = [];
@@ -489,6 +538,11 @@ export function parseManualShiftMonthlyPreview(
   let pointFallbackRows = 0;
   let pickupNoteRows = 0;
   let ashlamaNoteRows = 0;
+  let rawTotalQuantity = 0;
+  let positiveTotalQuantity = 0;
+  let negativeTotalQuantity = 0;
+  let zeroQuantityRowsCount = 0;
+  let positiveQuantityRowsCount = 0;
   const rawDistributionValues = new Set<string>();
   const derivedPoints = new Set<string>();
   const uniqueOrderNumbers = new Set<string>();
@@ -512,6 +566,12 @@ export function parseManualShiftMonthlyPreview(
 
     if (!row.normalizedDate) {
       invalidDistributionDateRows.push(row.rowIndex);
+      invalidDateDetails.push({
+        rowIndex: row.rowIndex,
+        rawValue: row.rawDate,
+        fieldName: 'תאריך הפצה',
+        reason: 'invalid date format'
+      });
     }
 
     if (row.normalizedDate !== input.selectedDate) {
@@ -556,8 +616,17 @@ export function parseManualShiftMonthlyPreview(
     if (row.notes?.includes('השלמה')) {
       ashlamaNoteRows += 1;
     }
-    if (row.quantity !== null && row.quantity < 0) {
-      negativeQuantityRows += 1;
+    if (row.quantity !== null) {
+      rawTotalQuantity += row.quantity;
+      if (row.quantity > 0) {
+        positiveTotalQuantity += row.quantity;
+        positiveQuantityRowsCount += 1;
+      } else if (row.quantity < 0) {
+        negativeQuantityRows += 1;
+        negativeTotalQuantity += row.quantity;
+      } else {
+        zeroQuantityRowsCount += 1;
+      }
     }
 
     if (!row.lineName || !row.pointName || !row.orderNumber || !row.sku || row.quantity === null) {
@@ -786,7 +855,13 @@ export function parseManualShiftMonthlyPreview(
         skuRows: matchingRows,
         aggregatedSkuGroups: groupList.length,
         uniqueSkus: uniqueSkus.size,
-        totalQuantity
+        totalQuantity,
+        rawTotalQuantity,
+        positiveTotalQuantity,
+        negativeTotalQuantity,
+        zeroQuantityRowsCount,
+        negativeQuantityRowsCount: negativeQuantityRows,
+        positiveQuantityRowsCount
       },
       anomalies: {
         negativeQuantityRows,
@@ -796,6 +871,7 @@ export function parseManualShiftMonthlyPreview(
         pickupNoteRows,
         ashlamaNoteRows,
         invalidDistributionDateRows: invalidDistributionDateRows.sort((a, b) => a - b),
+        invalidDateDetails,
         missingRequiredFields
       },
       lines: lineSummaries,
@@ -828,6 +904,9 @@ export function planManualShiftMonthlyImportApply(
   let skippedGroups = 0;
   let skippedNegativeQuantityRows = 0;
   let skippedZeroQuantityRows = 0;
+  let appliedTotalQuantity = 0;
+  let appliedItemLines = 0;
+  let skusWithDuplicateRows = 0;
   let customerNameConflicts = 0;
 
   for (const group of parsed.groups) {
@@ -841,6 +920,10 @@ export function planManualShiftMonthlyImportApply(
     if (positiveRows.length === 0) {
       skippedGroups += 1;
       continue;
+    }
+
+    if (positiveRows.length > 1) {
+      skusWithDuplicateRows += 1;
     }
 
     appliedGroups += 1;
@@ -868,6 +951,8 @@ export function planManualShiftMonthlyImportApply(
       new Set(positiveRows.flatMap((row) => (row.notes ? [row.notes] : [])))
     );
     const itemQuantity = positiveRows.reduce((sum, row) => sum + row.quantity, 0);
+    appliedTotalQuantity += itemQuantity;
+    appliedItemLines += 1;
     const item = {
       sku: group.sku,
       description: group.description,
@@ -951,6 +1036,47 @@ export function planManualShiftMonthlyImportApply(
     warningSummary.warning += 1;
   }
 
+  if (skippedNegativeQuantityRows > 0) {
+    parsed.preview.warnings.push({
+      severity: 'info',
+      code: 'NEGATIVE_QUANTITY_ROWS_SKIPPED_ON_APPLY',
+      message: `${skippedNegativeQuantityRows} negative quantity row(s) will be skipped and not applied to the work hierarchy.`,
+      count: skippedNegativeQuantityRows
+    });
+    warningSummary.info += 1;
+  }
+
+  if (skippedZeroQuantityRows > 0) {
+    parsed.preview.warnings.push({
+      severity: 'info',
+      code: 'ZERO_QUANTITY_ROWS_SKIPPED_ON_APPLY',
+      message: `${skippedZeroQuantityRows} zero quantity row(s) will be skipped and not applied to the work hierarchy.`,
+      count: skippedZeroQuantityRows
+    });
+    warningSummary.info += 1;
+  }
+
+  if (skusWithDuplicateRows > 0) {
+    parsed.preview.warnings.push({
+      severity: 'info',
+      code: 'DUPLICATE_SKU_ROWS_AGGREGATED',
+      message: `${skusWithDuplicateRows} SKU(s) had duplicate rows that were aggregated into single item lines.`,
+      count: skusWithDuplicateRows
+    });
+    warningSummary.info += 1;
+  }
+
+  const rawTotalQty = parsed.preview.totals.rawTotalQuantity;
+  if (appliedTotalQuantity !== rawTotalQty) {
+    parsed.preview.warnings.push({
+      severity: 'info',
+      code: 'APPLIED_TOTAL_DIFFERS_FROM_RAW_TOTAL',
+      message: `Applied total quantity (${appliedTotalQuantity}) differs from raw Excel total (${rawTotalQty}). This is expected when negative or zero quantity rows are excluded.`,
+      count: 0
+    });
+    warningSummary.info += 1;
+  }
+
   return manualShiftMonthlyApplyPlanSchema.parse({
     preview: parsed.preview,
     lines,
@@ -958,6 +1084,8 @@ export function planManualShiftMonthlyImportApply(
     skippedGroups,
     skippedNegativeQuantityRows,
     skippedZeroQuantityRows,
+    appliedTotalQuantity,
+    appliedItemLines,
     warningSummary,
     blockingWarnings
   });

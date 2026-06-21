@@ -1,14 +1,22 @@
 ﻿import * as XLSX from 'xlsx';
-import type { ManualShiftMonthlyParsedRow, ParseManualShiftMonthlyPreviewInput } from '@wos/domain';
+import { normalizeWorkbookDate, type ManualShiftMonthlyParsedRow, type ParseManualShiftMonthlyPreviewInput } from '@wos/domain';
 import { ApiError } from '../../errors.js';
 
 // ── Hebrew month names ──────────────────────────────────────────────────────────
 
 const HEBREW_MONTH_NAMES: Record<number, string> = {
+  1: 'ינואר',
+  2: 'פברואר',
+  3: 'מרץ',
+  4: 'אפריל',
   5: 'מאי',
   6: 'יוני',
   7: 'יולי',
   8: 'אוגוסט',
+  9: 'ספטמבר',
+  10: 'אוקטובר',
+  11: 'נובמבר',
+  12: 'דצמבר',
 };
 
 const MONTHLY_MANUAL_SHIFT_SHEET_NAME = 'יוני 26';
@@ -193,10 +201,11 @@ function normalizeDistributionDate(
     }
   }
 
-  const normalizedRaw = normalizeStringCell(formattedValue) ?? normalizeStringCell(rawValue);
+  const stringValue = normalizeStringCell(formattedValue) ?? normalizeStringCell(rawValue);
+  const normalized = normalizeWorkbookDate(stringValue);
   return {
-    distributionDateRaw: normalizedRaw,
-    distributionDateNormalized: null
+    distributionDateRaw: stringValue,
+    distributionDateNormalized: normalized
   };
 }
 
