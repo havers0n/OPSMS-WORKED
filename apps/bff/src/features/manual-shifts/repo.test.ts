@@ -1295,6 +1295,7 @@ function fakeSupabase(orders: Array<Record<string, unknown>>, items: Array<Recor
 describe('listBucketProductRollup sourceZone isolation', () => {
   const SHIFT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const LINE = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const CHITA_LINE = 'dd825383-e1f1-48e9-bf6e-aa5065ccbd7e';
 
   const sharedOrders = [
     { id: 'o-1', shift_id: SHIFT, line_id: LINE, point_name: 'סלולר', source_zone: 'שפלה 2', deleted_at: null },
@@ -1332,7 +1333,7 @@ describe('listBucketProductRollup sourceZone isolation', () => {
     expect(result[0].totalQuantity).toBe(5);
   });
 
-  it('filters source_zone IS NULL for empty sourceZone sentinel', async () => {
+  it.skip('filters source_zone IS NULL for empty sourceZone sentinel', async () => {
     const orders = [
       { id: 'o-3', shift_id: SHIFT, line_id: LINE, point_name: 'כללי', source_zone: 'שפלה 2', deleted_at: null },
       { id: 'o-4', shift_id: SHIFT, line_id: LINE, point_name: 'כללי', source_zone: null, deleted_at: null },
@@ -1364,5 +1365,59 @@ describe('listBucketProductRollup sourceZone isolation', () => {
     expect(result).toHaveLength(2);
     const skus = result.map((r: BucketProductRollupRow) => r.sku).sort();
     expect(skus).toEqual(['111', '222']);
+  });
+
+  it('returns Chita products when sourceZone is provided even though point_name stays on the delivery channel', async () => {
+    const orders = [
+      {
+        id: 'chita-order-1',
+        shift_id: SHIFT,
+        line_id: CHITA_LINE,
+        point_name: "צ'יטה",
+        source_zone: 'דרום',
+        deleted_at: null
+      }
+    ];
+    const items = [
+      { sku: 'CH-1', description: null, category: null, quantity: 12, order_id: 'chita-order-1' },
+      { sku: 'CH-2', description: null, category: null, quantity: 8, order_id: 'chita-order-1' }
+    ];
+    const supabase = fakeSupabase(orders, items);
+    const repo = createManualShiftsRepo(supabase as never);
+
+    const result = await repo.listBucketProductRollup({
+      shiftId: SHIFT,
+      lineId: CHITA_LINE,
+      bucketName: 'דרום',
+      sourceZone: 'דרום'
+    });
+
+    expect(result).toHaveLength(2);
+    expect(result.map((r: BucketProductRollupRow) => r.sku).sort()).toEqual(['CH-1', 'CH-2']);
+    expect(result.reduce((sum: number, row: BucketProductRollupRow) => sum + row.totalQuantity, 0)).toBe(20);
+  });
+
+  it.each(['', '   '])('falls back to legacy bucketName filtering when sourceZone is %p', async (sourceZone) => {
+    const orders = [
+      { id: 'o-3', shift_id: SHIFT, line_id: LINE, point_name: 'כללי', source_zone: 'שפלה 2', deleted_at: null },
+      { id: 'o-4', shift_id: SHIFT, line_id: LINE, point_name: 'כללי', source_zone: null, deleted_at: null }
+    ];
+    const items = [
+      { sku: '333', description: null, category: null, quantity: 7, order_id: 'o-3' },
+      { sku: '444', description: null, category: null, quantity: 3, order_id: 'o-4' }
+    ];
+    const supabase = fakeSupabase(orders, items);
+    const repo = createManualShiftsRepo(supabase as never);
+
+    const result = await repo.listBucketProductRollup({
+      shiftId: SHIFT,
+      lineId: LINE,
+      bucketName: 'כללי',
+      sourceZone
+    });
+
+    expect(result).toHaveLength(2);
+    expect(result.map((r: BucketProductRollupRow) => r.sku).sort()).toEqual(['333', '444']);
+    expect(result.reduce((sum: number, row: BucketProductRollupRow) => sum + row.totalQuantity, 0)).toBe(10);
   });
 });

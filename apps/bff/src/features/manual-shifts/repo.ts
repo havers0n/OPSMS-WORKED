@@ -1693,6 +1693,9 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
     },
 
     async listBucketProductRollup({ shiftId, lineId, bucketName, sourceZone }) {
+      const normalizedSourceZone = normalizeOptionalString(sourceZone);
+      const sourceZoneMode = normalizedSourceZone !== null;
+
       let ordersQuery = supabase
         .from('manual_shift_orders')
         .select('id')
@@ -1700,18 +1703,12 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         .eq('line_id', lineId)
         .is('deleted_at', null);
 
-      if (bucketName === '') {
+      if (sourceZoneMode) {
+        ordersQuery = ordersQuery.eq('source_zone', normalizedSourceZone);
+      } else if (bucketName === '') {
         ordersQuery = ordersQuery.is('point_name', null);
       } else {
         ordersQuery = ordersQuery.eq('point_name', bucketName);
-      }
-
-      if (sourceZone !== undefined) {
-        if (sourceZone === '' || sourceZone === null) {
-          ordersQuery = ordersQuery.is('source_zone', null);
-        } else {
-          ordersQuery = ordersQuery.eq('source_zone', sourceZone);
-        }
       }
 
       const { data: bucketOrders, error: ordersError } = await ordersQuery;
