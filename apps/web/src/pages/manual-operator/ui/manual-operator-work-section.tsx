@@ -163,8 +163,16 @@ export function ManualOperatorWorkSection({
 
   const selectedSourceZone: string | undefined = useMemo(() => {
     if (!selectedHierarchyLine) return undefined;
+    if (selectedHierarchyLine.lineKind === 'delivery_channel' && selectedWorkBucketName) {
+      const selectedBucket = selectedHierarchyLine.buckets.find(
+        (bucket) => bucket.displayName === selectedWorkBucketName || bucket.bucketName === selectedWorkBucketName
+      );
+      const bucketSourceZone = selectedBucket?.orders[0]?.sourceZone ?? selectedBucket?.bucketName ?? null;
+      return bucketSourceZone ?? '';
+    }
+
     return selectedHierarchyLine.sourceZone ?? '';
-  }, [selectedHierarchyLine]);
+  }, [selectedHierarchyLine, selectedWorkBucketName]);
 
   const showProductRollupDeferred = !!(hasRouteGroups && selectedRouteGroupKey && !selectedWorkBucketRawName);
 

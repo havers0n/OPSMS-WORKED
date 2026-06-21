@@ -412,6 +412,69 @@ function getProductRollupSourceZones() {
     .map((url) => new URL(url, 'http://localhost').searchParams.get('sourceZone'));
 }
 
+function makeChitaHierarchy() {
+  const bucketSpecs = [
+    { name: 'דרום', lineCount: 2, totalQuantity: 21 },
+    { name: 'חיפה', lineCount: 3, totalQuantity: 18 },
+    { name: 'עמקים אמצעי', lineCount: 2, totalQuantity: 16 },
+    { name: "צ'יטה", lineCount: 2, totalQuantity: 17 },
+    { name: 'שפלה 1', lineCount: 2, totalQuantity: 14 },
+    { name: 'שפלה 2', lineCount: 3, totalQuantity: 20 },
+    { name: 'שפלה אמצעי', lineCount: 2, totalQuantity: 16 }
+  ] as const;
+
+  return {
+    shiftId: shift.id,
+    areas: [
+      {
+        areaName: "צ'יטה",
+        displayName: "צ'יטה",
+        totalLines: 1,
+        totalBuckets: bucketSpecs.length,
+        totalOrders: bucketSpecs.length,
+        totalQuantity: 122,
+        statusBreakdown: { queued: 7, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+        lines: [
+          {
+            lineId: 'line-chita-1',
+            areaLineKey: `צ'יטה\u0001line-chita-1`,
+            lineGroupName: "צ'יטה",
+            lineKind: 'delivery_channel',
+            distributionArea: "צ'יטה",
+            status: 'open',
+            totalBuckets: bucketSpecs.length,
+            totalOrders: bucketSpecs.length,
+            totalQuantity: 122,
+            statusBreakdown: { queued: 7, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            buckets: bucketSpecs.map((bucketSpec, index) => ({
+              bucketName: bucketSpec.name,
+              displayName: bucketSpec.name,
+              totalOrders: 1,
+              totalQuantity: bucketSpec.totalQuantity,
+              statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              orders: [
+                {
+                  orderId: `chita-order-${index + 1}`,
+                  orderNumber: `CH-${index + 1}`,
+                  customerName: `Chita customer ${index + 1}`,
+                  pointName: bucketSpec.name,
+                  sourceZone: bucketSpec.name,
+                  status: 'queued',
+                  lineCount: bucketSpec.lineCount,
+                  totalQuantity: bucketSpec.totalQuantity,
+                  hasAshlama: false,
+                  hasCheckUnits: false
+                }
+              ]
+            })),
+            routeGroups: []
+          }
+        ]
+      }
+    ]
+  };
+}
+
 describe('ManualOperatorPage URL sections', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -580,6 +643,38 @@ describe('ManualOperatorPage URL sections', () => {
     await waitFor(() => {
       expect(getProductRollupSourceZones()).toContain('שפלה אמצעי');
     });
+  });
+
+  it('scopes Chita bucket products by sourceZone instead of the empty line scope', async () => {
+    isDesktop = true;
+    mockWorkspaceData({
+      workHierarchyData: makeChitaHierarchy(),
+      productRollupResolver: (url) => ({
+        shiftId: shift.id,
+        generatedAt: new Date().toISOString(),
+        products: url.searchParams.get('sourceZone')
+          ? [{ sku: `sku-${url.searchParams.get('sourceZone')}`, description: 'Chita scoped product' }]
+          : []
+      })
+    });
+    renderAt(routes.operatorManualWork);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("area-card-צ'יטה")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId("area-card-צ'יטה"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('work-bucket-card-דרום')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByTestId('work-bucket-card-דרום'));
+
+    await waitFor(() => {
+      expect(getProductRollupSourceZones()).toContain('דרום');
+      expect(screen.getByTestId('product-row-sku-דרום')).toBeTruthy();
+    });
+    expect(screen.queryByText('ЧђЧ™Чџ ЧћЧ•Ч¦ЧЁЧ™Чќ Ч‘Ч§Ч‘Ч•Ч¦ЧЄ ЧўЧ‘Ч•Ч“Ч” Ч–Ч•')).toBeNull();
   });
 
   it('keeps single-line area auto-skip area-scoped when two areas share the same physical lineId', async () => {
