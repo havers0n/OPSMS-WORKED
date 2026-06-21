@@ -216,14 +216,17 @@ async function handleApply() {
                   <div>שורות SKU: {preview.totals.skuRows}</div>
                   <div>קבוצות SKU מאוגדות: {preview.totals.aggregatedSkuGroups}</div>
                   <div>SKU ייחודיים: {preview.totals.uniqueSkus}</div>
-                  <div>כמות כוללת: {preview.totals.totalQuantity}</div>
+                  <div>כמות כוללת באקסל: {preview.totals.rawTotalQuantity}</div>
+                  <div>כמות חיובית (תיכנס לעבודה): {preview.totals.positiveTotalQuantity}</div>
+                  <div>שורות חיוביות: {preview.totals.positiveQuantityRowsCount}</div>
+                  <div>שורות שליליות שנדחו: {preview.totals.negativeQuantityRowsCount}</div>
+                  <div>שורות אפס שנדחו: {preview.totals.zeroQuantityRowsCount}</div>
                 </div>
               </div>
 
               <div className="rounded-xl border border-gray-200 p-4">
-                <p className="mb-2 text-sm font-medium text-gray-900">אזהרות וחריגות</p>
+                <p className="mb-2 text-sm font-medium text-gray-900">חריגות</p>
                 <div className="grid grid-cols-2 gap-2 text-sm text-gray-700">
-                  <div>שורות עם כמות שלילית: {preview.anomalies.negativeQuantityRows}</div>
                   <div>שורות שאינן SO: {preview.anomalies.nonSoOrderRows}</div>
                   <div>שורות ללא / בערך הפצה: {preview.anomalies.rowsWithoutDistributionSlash}</div>
                   <div>שורות fallback: {preview.anomalies.pointFallbackRows}</div>

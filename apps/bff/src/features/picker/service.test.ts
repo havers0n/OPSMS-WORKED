@@ -150,6 +150,8 @@ function createManualRepoMock(): ManualShiftsRepo {
       skippedGroups: 0,
       skippedNegativeQuantityRows: 0,
       skippedZeroQuantityRows: 0,
+      appliedTotalQuantity: 0,
+      appliedItemLines: 0,
       warningSummary: {
         info: 0,
         warning: 0,
@@ -165,7 +167,13 @@ function createManualRepoMock(): ManualShiftsRepo {
         skuRows: 0,
         aggregatedSkuGroups: 0,
         uniqueSkus: 0,
-        totalQuantity: 0
+        totalQuantity: 0,
+        rawTotalQuantity: 0,
+        positiveTotalQuantity: 0,
+        negativeTotalQuantity: 0,
+        zeroQuantityRowsCount: 0,
+        negativeQuantityRowsCount: 0,
+        positiveQuantityRowsCount: 0
       },
       previewAnomalies: {
         negativeQuantityRows: 0,

@@ -609,6 +609,8 @@ function createRepo() {
       skippedGroups: input.plan.skippedGroups,
       skippedNegativeQuantityRows: input.plan.skippedNegativeQuantityRows,
       skippedZeroQuantityRows: input.plan.skippedZeroQuantityRows,
+      appliedTotalQuantity: input.plan.appliedTotalQuantity,
+      appliedItemLines: input.plan.appliedItemLines,
       warningSummary: input.plan.warningSummary,
       warnings: input.plan.preview.warnings,
       previewTotals: input.plan.preview.totals,
