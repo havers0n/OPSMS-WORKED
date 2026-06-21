@@ -19,8 +19,6 @@ const HEBREW_MONTH_NAMES: Record<number, string> = {
   12: 'דצמבר',
 };
 
-const MONTHLY_MANUAL_SHIFT_SHEET_NAME = 'יוני 26';
-
 // ── Header aliases ──────────────────────────────────────────────────────────────
 // Canonical header → list of accepted raw variants in workbooks
 
@@ -103,10 +101,19 @@ function deriveExpectedSheetName(selectedDate: string): string | null {
   return `${hebrewName} ${year}`;
 }
 
+function deriveExpectedMonthYear(selectedDate: string): { month: number; year: number } | null {
+  const date = new Date(selectedDate + 'T00:00:00Z');
+  if (isNaN(date.getTime())) return null;
+  return {
+    month: date.getUTCMonth() + 1,
+    year: date.getUTCFullYear()
+  };
+}
+
 function selectMonthlySheet(
   sheetNames: string[],
   selectedDate: string | undefined,
-): { sheetName: string; matchStrategy: 'date-derived' | 'exact-canonical' | 'single-sheet' | 'month-fuzzy' } | null {
+): { sheetName: string; matchStrategy: 'date-derived' | 'single-sheet' } | null {
   if (sheetNames.length === 0) return null;
 
   if (selectedDate) {
@@ -115,19 +122,11 @@ function selectMonthlySheet(
       const match = sheetNames.find(name => name.trim() === expected);
       if (match) return { sheetName: match, matchStrategy: 'date-derived' };
     }
+
+    return null;
   }
 
-  const exactMatch = sheetNames.find(name => name.trim() === MONTHLY_MANUAL_SHIFT_SHEET_NAME);
-  if (exactMatch) return { sheetName: exactMatch, matchStrategy: 'exact-canonical' };
-
   if (sheetNames.length === 1) return { sheetName: sheetNames[0], matchStrategy: 'single-sheet' };
-
-  const hebrewMonths = Object.values(HEBREW_MONTH_NAMES);
-  const monthMatch = sheetNames.find(name => {
-    const trimmed = name.trim();
-    return hebrewMonths.some(month => trimmed.startsWith(month) && /\s+\d{1,2}$/.test(trimmed));
-  });
-  if (monthMatch) return { sheetName: monthMatch, matchStrategy: 'month-fuzzy' };
 
   return null;
 }
@@ -144,14 +143,12 @@ function failMissingSheet(
   input: { fileName: string; selectedDate?: string; logger?: ImportLogger },
   sheetNames: string[],
 ): never {
-  let expectedSheet: string | null = null;
-  if (input.selectedDate) {
-    expectedSheet = deriveExpectedSheetName(input.selectedDate);
-  }
-  expectedSheet ??= MONTHLY_MANUAL_SHIFT_SHEET_NAME;
+  const expectedSheet = input.selectedDate ? deriveExpectedSheetName(input.selectedDate) : null;
+  const expectedMonthYear = input.selectedDate ? deriveExpectedMonthYear(input.selectedDate) : null;
 
   const details = {
     expectedSheet,
+    expectedMonthYear,
     availableSheets: sheetNames,
     importKind: 'monthly' as const,
     selectedDate: input.selectedDate ?? null,
@@ -165,7 +162,9 @@ function failMissingSheet(
   throw new ApiError(
     422,
     'MISSING_SHEET',
-    `Workbook is missing required monthly sheet. Expected "${expectedSheet}". Available: ${sheetNames.join(', ') || '(none)'}.`,
+    `Workbook is missing required monthly sheet for selectedDate "${input.selectedDate ?? '(none)'}". ` +
+    `Expected: ${expectedSheet ? `"${expectedSheet}"` : 'no derived month sheet'}. ` +
+    `Available: ${sheetNames.join(', ') || '(none)'}.`,
     details
   );
 }
@@ -243,7 +242,6 @@ export function parseManualShiftMonthlyImportWorkbook(input: {
   }
 
   const { sheetName, matchStrategy } = sheetSelection;
-  const isExactSheetMatch = matchStrategy === 'date-derived' || matchStrategy === 'exact-canonical';
 
   const sheet = workbook.Sheets[sheetName];
   if (!sheet?.['!ref']) {
@@ -251,7 +249,7 @@ export function parseManualShiftMonthlyImportWorkbook(input: {
   }
 
   const range = XLSX.utils.decode_range(sheet['!ref']);
-  if (!isExactSheetMatch && range.e.c - range.s.c + 1 < 2) {
+  if (matchStrategy !== 'date-derived' && range.e.c - range.s.c + 1 < 2) {
     failMissingSheet(input, workbook.SheetNames);
   }
 

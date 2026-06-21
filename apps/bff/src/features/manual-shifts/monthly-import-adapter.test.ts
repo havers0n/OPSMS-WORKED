@@ -176,7 +176,7 @@ describe('manual shift monthly import adapter', () => {
       const buffer = workbookFromAoA([
         ['תאריך הפצה', 'קו הפצה', 'שם לקוח', 'הזמנה', "מק''ט", 'כמות'],
         [46173, 'קו/נקודה', 'לקוח', 'SO-1', '1001', 2],
-      ]);
+      ], 'מאי 26');
       const parsed = parseBuffer(buffer, { selectedDate: '2026-05-31' });
       expect(parsed.rows).toHaveLength(1);
       expect(parsed.rows[0].distributionDateNormalized).toBe('2026-05-31');
@@ -198,6 +198,55 @@ describe('manual shift monthly import adapter', () => {
   // ── PR G2: Full Hebrew month sheet selection ──────────────────────────────
 
   describe('sheet selection', () => {
+    it('parseManualShiftMonthlyImportWorkbook_does_not_fallback_to_yuni_26_for_other_selected_month', () => {
+      const buffer = workbookFromAoA([
+        ['תאריך הפצה', 'קו הפצה', 'שם לקוח', 'הזמנה', "מק''ט", 'כמות'],
+        ['14.6.26', 'יוני/נקודה', 'לקוח', 'SO-1', '1001', 2],
+      ], 'יוני 26');
+
+      expect(() => parseBuffer(buffer, { selectedDate: '2026-07-14' })).toThrowError(
+        expect.objectContaining({
+          code: 'MISSING_SHEET',
+          details: expect.objectContaining({
+            selectedDate: '2026-07-14',
+            expectedSheet: 'יולי 26',
+            availableSheets: ['יוני 26']
+          })
+        })
+      );
+    });
+
+    it('parseManualShiftMonthlyImportWorkbook_selects_yuni_26_when_selectedDate_is_june_2026', () => {
+      const buffer = workbookFromAoA([
+        ['תאריך הפצה', 'קו הפצה', 'שם לקוח', 'הזמנה', "מק''ט", 'כמות'],
+        ['14.6.26', 'יוני/נקודה', 'לקוח', 'SO-1', '1001', 2],
+      ], 'יוני 26');
+
+      const parsed = parseBuffer(buffer, { selectedDate: '2026-06-14' });
+      expect(parsed.source.sheetName).toBe('יוני 26');
+      expect(parsed.rows).toHaveLength(1);
+      expect(parsed.rows[0].orderNumber).toBe('SO-1');
+    });
+
+    it('parseManualShiftMonthlyImportWorkbook_selects_matching_hebrew_month_sheet_only', () => {
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+        ['תאריך הפצה', 'קו הפצה', 'שם לקוח', 'הזמנה', "מק''ט", 'כמות'],
+        ['14.6.26', 'יוני/נקודה', 'לקוח', 'SO-1', '1001', 2],
+      ]), 'יוני 26');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+        ['תאריך הפצה', 'קו הפצה', 'שם לקוח', 'הזמנה', "מק''ט", 'כמות'],
+        ['14.7.26', 'יולי/נקודה', 'לקוח', 'SO-2', '1002', 3],
+      ]), 'יולי 26');
+      const output = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+      const buffer = Buffer.isBuffer(output) ? output : Buffer.from(output);
+
+      const parsed = parseBuffer(buffer, { selectedDate: '2026-07-14' });
+      expect(parsed.source.sheetName).toBe('יולי 26');
+      expect(parsed.rows).toHaveLength(1);
+      expect(parsed.rows[0].orderNumber).toBe('SO-2');
+    });
+
     it('prefers sheet matching selectedDate month/year', () => {
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
