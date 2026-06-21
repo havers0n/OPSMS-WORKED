@@ -2,20 +2,32 @@ import type { AreaHierarchySummary } from '@/entities/manual-shift/model/shift-s
 
 interface DesktopAreaCardProps {
   area: AreaHierarchySummary;
+  isSpecialChannel?: boolean;
   onClick?: (areaName: string | null) => void;
 }
 
-export function DesktopAreaCard({ area, onClick }: DesktopAreaCardProps) {
+export function DesktopAreaCard({ area, isSpecialChannel = false, onClick }: DesktopAreaCardProps) {
   const sb = area.statusBreakdown;
 
   return (
     <button
       type="button"
-      className="bg-white border border-gray-200 rounded-lg p-4 text-right w-full hover:bg-gray-50 hover:border-gray-300 transition-colors"
+      className={`rounded-lg p-4 text-right w-full transition-colors border ${
+        isSpecialChannel
+          ? 'bg-amber-50 border-amber-300 hover:bg-amber-100 hover:border-amber-400'
+          : 'bg-white border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+      }`}
       onClick={() => onClick?.(area.areaKey)}
       data-testid={`area-card-${area.areaKey}`}
       aria-label={`אזור הפצה ${area.displayName}`}
     >
+      {isSpecialChannel && (
+        <div className="mb-2 flex justify-end">
+          <span className="inline-flex items-center rounded-full bg-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+            ערוץ מיוחד
+          </span>
+        </div>
+      )}
       <p className="text-sm font-semibold text-gray-900 truncate mb-2">{area.displayName}</p>
       <div className="flex items-baseline gap-3 mb-2 text-xs text-gray-600">
         <span>{area.totalLines} קווים</span>

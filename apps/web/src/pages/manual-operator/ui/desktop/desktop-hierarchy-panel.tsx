@@ -22,6 +22,7 @@ interface DesktopHierarchyPanelProps {
   selectedRouteGroupWorkBucket: RouteGroupWorkBucketSummary | undefined;
   selectedWorkBucketName: string | null;
   areaSummaries: AreaHierarchySummary[];
+  specialAreaSummaries: AreaHierarchySummary[];
   lineHierarchySummaries: LineHierarchySummary[];
   areaLineSummaries: LineHierarchySummary[];
   workBucketSummaries: WorkBucketSummary[];
@@ -70,6 +71,7 @@ export function DesktopHierarchyPanel({
   selectedRouteGroupWorkBucket,
   selectedWorkBucketName,
   areaSummaries,
+  specialAreaSummaries,
   lineHierarchySummaries,
   areaLineSummaries,
   workBucketSummaries,
@@ -92,6 +94,8 @@ export function DesktopHierarchyPanel({
   onSetWorkBucketView
 }: DesktopHierarchyPanelProps) {
   const effectiveSelectedAreaLineKey = selectedAreaLineKey ?? selectedLineId ?? null;
+  const specialAreaKeySet = new Set(specialAreaSummaries.map((area) => area.areaKey));
+  const normalAreaSummaries = areaSummaries.filter((area) => !specialAreaKeySet.has(area.areaKey));
 
   // ── State 1: No area selected → area cards ──────────────────────────────
   if (!selectedAreaKey) {
@@ -106,12 +110,26 @@ export function DesktopHierarchyPanel({
 
     return (
       <div className="p-4">
-        <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">אזורי הפצה</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {areaSummaries.map((area) => (
-            <DesktopAreaCard key={area.areaKey} area={area} onClick={onSelectArea} />
-          ))}
-        </div>
+        {specialAreaSummaries.length > 0 && (
+          <section className="mb-6" data-testid="special-areas-section">
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">ערוצי משלוח מיוחדים</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {specialAreaSummaries.map((area) => (
+                <DesktopAreaCard key={area.areaKey} area={area} isSpecialChannel onClick={onSelectArea} />
+              ))}
+            </div>
+          </section>
+        )}
+        <section data-testid="normal-areas-section">
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">אזורי הפצה</h2>
+          {normalAreaSummaries.length === 0 ? null : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {normalAreaSummaries.map((area) => (
+                <DesktopAreaCard key={area.areaKey} area={area} onClick={onSelectArea} />
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     );
   }

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -475,6 +475,107 @@ function makeChitaHierarchy() {
   };
 }
 
+function makeChitaAndNormalHierarchy() {
+  return {
+    shiftId: shift.id,
+    areas: [
+      {
+        areaName: "צ'יטה",
+        displayName: "צ'יטה",
+        totalLines: 1,
+        totalBuckets: 1,
+        totalOrders: 1,
+        totalQuantity: 21,
+        statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+        lines: [
+          {
+            lineId: 'line-chita-1',
+            areaLineKey: "צ'יטה\u0001line-chita-1",
+            lineGroupName: "צ'יטה",
+            lineKind: 'delivery_channel',
+            distributionArea: "צ'יטה",
+            status: 'open',
+            totalBuckets: 1,
+            totalOrders: 1,
+            totalQuantity: 21,
+            statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            buckets: [
+              {
+                bucketName: 'Point A',
+                displayName: 'Point A',
+                totalOrders: 1,
+                totalQuantity: 21,
+                statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                orders: [
+                  {
+                    orderId: 'chita-order-1',
+                    orderNumber: 'CH-1',
+                    customerName: 'Chita customer 1',
+                    pointName: 'Point A',
+                    sourceZone: 'Point A',
+                    status: 'queued',
+                    lineCount: 2,
+                    totalQuantity: 21,
+                    hasAshlama: false,
+                    hasCheckUnits: false
+                  }
+                ]
+              }
+            ],
+            routeGroups: []
+          }
+        ]
+      },
+      {
+        areaName: 'south',
+        displayName: 'South',
+        totalLines: 1,
+        totalBuckets: 1,
+        totalOrders: 1,
+        totalQuantity: 5,
+        statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+        lines: [
+          {
+            lineId: 'line-south-1',
+            areaLineKey: 'south\u0001line-south-1',
+            lineGroupName: 'South',
+            distributionArea: 'South',
+            status: 'open',
+            totalBuckets: 1,
+            totalOrders: 1,
+            totalQuantity: 5,
+            statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            buckets: [
+              {
+                bucketName: 'Point South',
+                displayName: 'Point South',
+                totalOrders: 1,
+                totalQuantity: 5,
+                statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                orders: [
+                  {
+                    orderId: 'south-order-1',
+                    orderNumber: 'SO-1',
+                    customerName: 'South customer',
+                    pointName: 'Point South',
+                    sourceZone: 'Point South',
+                    status: 'queued',
+                    lineCount: 1,
+                    totalQuantity: 5,
+                    hasAshlama: false,
+                    hasCheckUnits: false
+                  }
+                ]
+              }
+            ],
+            routeGroups: []
+          }
+        ]
+      }
+    ]
+  };
+}
+
 describe('ManualOperatorPage URL sections', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -675,6 +776,34 @@ describe('ManualOperatorPage URL sections', () => {
       expect(screen.getByTestId('product-row-sku-דרום')).toBeTruthy();
     });
     expect(screen.queryByText('ЧђЧ™Чџ ЧћЧ•Ч¦ЧЁЧ™Чќ Ч‘Ч§Ч‘Ч•Ч¦ЧЄ ЧўЧ‘Ч•Ч“Ч” Ч–Ч•')).toBeNull();
+  });
+
+  it('separates Chita into a special delivery-channel section on the root areas screen', async () => {
+    isDesktop = true;
+    mockWorkspaceData({ workHierarchyData: makeChitaAndNormalHierarchy() });
+    renderAt(routes.operatorManualWork);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('special-areas-section')).toBeTruthy();
+      expect(screen.getByTestId('normal-areas-section')).toBeTruthy();
+    });
+
+    expect(screen.getByText('ערוצי משלוח מיוחדים')).toBeTruthy();
+    expect(screen.getByText('אזורי הפצה')).toBeTruthy();
+    expect(screen.getByTestId("area-card-צ'יטה")).toBeTruthy();
+    expect(screen.getByText('ערוץ מיוחד')).toBeTruthy();
+    expect(screen.getByTestId('area-card-south')).toBeTruthy();
+    expect(within(screen.getByTestId('special-areas-section')).getByTestId("area-card-צ'יטה")).toBeTruthy();
+    expect(within(screen.getByTestId('normal-areas-section')).queryByTestId("area-card-צ'יטה")).toBeNull();
+
+    const headings = screen.getAllByRole('heading', { level: 2 });
+    expect(headings[0].textContent).toBe('ערוצי משלוח מיוחדים');
+    expect(headings[1].textContent).toBe('אזורי הפצה');
+
+    fireEvent.click(screen.getByTestId("area-card-צ'יטה"));
+    await waitFor(() => {
+      expect(screen.getByTestId('work-bucket-card-Point A')).toBeTruthy();
+    });
   });
 
   it('keeps single-line area auto-skip area-scoped when two areas share the same physical lineId', async () => {

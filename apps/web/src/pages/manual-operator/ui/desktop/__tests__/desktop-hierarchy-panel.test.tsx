@@ -149,6 +149,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedRouteGroupWorkBucket={undefined}
         selectedWorkBucketName={null}
         areaSummaries={mockAreaSummaries}
+        specialAreaSummaries={[]}
         lineHierarchySummaries={[]}
         areaLineSummaries={mockLineHierarchySummaries}
         workBucketSummaries={[]}

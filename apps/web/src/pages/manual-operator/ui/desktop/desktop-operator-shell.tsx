@@ -28,6 +28,7 @@ export interface DesktopOperatorShellProps {
   selectedRouteGroupWorkBucket: RouteGroupWorkBucketSummary | undefined;
   selectedWorkBucketName: string | null;
   areaSummaries: AreaHierarchySummary[];
+  specialAreaSummaries: AreaHierarchySummary[];
   lineHierarchySummaries: LineHierarchySummary[];
   areaLineSummaries: LineHierarchySummary[];
   workBucketSummaries: WorkBucketSummary[];
@@ -114,6 +115,7 @@ export function DesktopOperatorShell({
   selectedRouteGroupWorkBucket,
   selectedWorkBucketName,
   areaSummaries,
+  specialAreaSummaries,
   lineHierarchySummaries,
   areaLineSummaries,
   workBucketSummaries,
@@ -233,6 +235,7 @@ export function DesktopOperatorShell({
               selectedRouteGroupWorkBucket={selectedRouteGroupWorkBucket}
               selectedWorkBucketName={selectedWorkBucketName}
               areaSummaries={areaSummaries}
+              specialAreaSummaries={specialAreaSummaries}
               lineHierarchySummaries={lineHierarchySummaries}
               areaLineSummaries={areaLineSummaries}
               workBucketSummaries={workBucketSummaries}

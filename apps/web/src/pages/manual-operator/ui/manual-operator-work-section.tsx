@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
-import type { ManualShiftLineSummary, ManualShiftSession } from '@wos/domain';
+import type { ManualShiftLineSummary, ManualShiftSession, ManualShiftWorkHierarchyResponse } from '@wos/domain';
 import {
   bucketProductRollupQueryOptions,
   daySummaryQueryOptions,
@@ -31,6 +31,23 @@ import { LineDetail } from './line-detail';
 import { AddLineSheet } from './add-line-sheet';
 import { ImportExcelSheet } from './import-excel-sheet';
 import { MonthlyImportPreviewSheet } from './monthly-import-preview-sheet';
+
+const CHITA_LABEL = "צ'יטה";
+
+function normalizeUiLabel(value: string | null | undefined): string {
+  return value?.replace(/\s+/g, ' ').trim() ?? '';
+}
+
+function isChitaSpecialArea(area: ManualShiftWorkHierarchyResponse['areas'][number]): boolean {
+  if (normalizeUiLabel(area.areaName) === CHITA_LABEL || normalizeUiLabel(area.displayName) === CHITA_LABEL) {
+    return true;
+  }
+
+  return area.lines.some((line) => {
+    if (line.lineKind !== 'delivery_channel') return false;
+    return normalizeUiLabel(line.lineGroupName) === CHITA_LABEL;
+  });
+}
 
 interface ManualOperatorWorkSectionProps {
   shift: ManualShiftSession | null;
@@ -208,6 +225,27 @@ export function ManualOperatorWorkSection({
     () => selectWorkHierarchyAreaSummaries(workHierarchy),
     [workHierarchy]
   );
+  const specialAreaSummaryKeys = useMemo(() => {
+    const keys = new Set<string>();
+
+    for (const area of workHierarchy?.areas ?? []) {
+      if (isChitaSpecialArea(area)) {
+        keys.add(area.areaName === null ? NO_DISTRIBUTION_AREA_KEY : area.areaName);
+      }
+    }
+
+    for (const area of areaSummaries) {
+      if (normalizeUiLabel(area.areaName) === CHITA_LABEL || normalizeUiLabel(area.displayName) === CHITA_LABEL) {
+        keys.add(area.areaKey);
+      }
+    }
+
+    return keys;
+  }, [areaSummaries, workHierarchy]);
+  const specialAreaSummaries = useMemo(
+    () => areaSummaries.filter((area) => specialAreaSummaryKeys.has(area.areaKey)),
+    [areaSummaries, specialAreaSummaryKeys]
+  );
   const areaLineSummaries = useMemo(
     () => selectWorkHierarchyLineSummariesByArea(workHierarchy, selectedAreaKey),
     [workHierarchy, selectedAreaKey]
@@ -308,6 +346,7 @@ export function ManualOperatorWorkSection({
         selectedRouteGroupWorkBucket={selectedRouteGroupWorkBucket}
         selectedWorkBucketName={selectedWorkBucketName}
         areaSummaries={areaSummaries}
+        specialAreaSummaries={specialAreaSummaries}
         lineHierarchySummaries={lineHierarchySummaries}
         areaLineSummaries={areaLineSummaries}
         workBucketSummaries={workBucketSummaries}
