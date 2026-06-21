@@ -583,25 +583,17 @@ describe('work-hierarchy reprojection', () => {
     return { lineRows, orders, rollups };
   }
 
-  it('projects a Chita delivery channel once under area צ\'יטה with source-zone buckets', () => {
+  it('buildShiftWorkHierarchy_chita_uses_order_centric_buckets', () => {
     const lineRows = [
       makeLineRow({ id: LINE_A, name: "צ'יטה", distribution_area: 'שפלה 1' })
     ];
     const orders = [
-      makeOrder({ id: 'o-chita-1', lineId: LINE_A, orderNumber: 'SO-CH-1', pointName: 'דרום', rawRouteLine: "צ'יטה/דרום", routeBase: "צ'יטה", workBucketName: 'דרום', sourceZone: 'דרום' }),
-      makeOrder({ id: 'o-chita-2', lineId: LINE_A, orderNumber: 'SO-CH-2', pointName: 'חיפה', rawRouteLine: "צ'יטה/חיפה", routeBase: "צ'יטה", workBucketName: 'חיפה', sourceZone: 'חיפה' }),
-      makeOrder({ id: 'o-chita-3', lineId: LINE_A, orderNumber: 'SO-CH-3', pointName: 'שפלה 1', rawRouteLine: "צ'יטה/שפלה 1", routeBase: "צ'יטה", workBucketName: 'שפלה 1', sourceZone: 'שפלה 1' }),
-      makeOrder({ id: 'o-chita-4', lineId: LINE_A, orderNumber: 'SO-CH-4', pointName: 'שפלה 2', rawRouteLine: "צ'יטה/שפלה 2", routeBase: "צ'יטה", workBucketName: 'שפלה 2', sourceZone: 'שפלה 2' }),
-      makeOrder({ id: 'o-chita-5', lineId: LINE_A, orderNumber: 'SO-CH-5', pointName: 'שפלה אמצעי', rawRouteLine: "צ'יטה/שפלה אמצעי", routeBase: "צ'יטה", workBucketName: 'שפלה אמצעי', sourceZone: 'שפלה אמצעי' }),
-      makeOrder({ id: 'o-chita-6', lineId: LINE_A, orderNumber: 'SO-CH-6', pointName: 'עמקים אמצעי', rawRouteLine: "צ'יטה/עמקים אמצעי", routeBase: "צ'יטה", workBucketName: 'עמקים אמצעי', sourceZone: 'עמקים אמצעי' })
+      makeOrder({ id: 'o-chita-1', lineId: LINE_A, orderNumber: 'SO-CH-1', customerName: 'לקוח א', pointName: "צ'יטה", rawRouteLine: "צ'יטה/דרום", routeBase: "צ'יטה", workBucketName: 'דרום', sourceZone: 'דרום' }),
+      makeOrder({ id: 'o-chita-2', lineId: LINE_A, orderNumber: 'SO-CH-2', customerName: 'לקוח ב', pointName: "צ'יטה", rawRouteLine: "צ'יטה/דרום", routeBase: "צ'יטה", workBucketName: 'דרום', sourceZone: 'דרום' })
     ];
     const rollups = new Map<string, { lineCount: number; totalQuantity: number }>([
-      ['o-chita-1', { lineCount: 27, totalQuantity: 54 }],
-      ['o-chita-2', { lineCount: 27, totalQuantity: 54 }],
-      ['o-chita-3', { lineCount: 27, totalQuantity: 54 }],
-      ['o-chita-4', { lineCount: 27, totalQuantity: 54 }],
-      ['o-chita-5', { lineCount: 27, totalQuantity: 54 }],
-      ['o-chita-6', { lineCount: 27, totalQuantity: 54 }]
+      ['o-chita-1', { lineCount: 3, totalQuantity: 7 }],
+      ['o-chita-2', { lineCount: 5, totalQuantity: 11 }]
     ]);
 
     const result = buildShiftWorkHierarchy(SHIFT_ID, lineRows, orders, rollups, [], []);
@@ -613,19 +605,59 @@ describe('work-hierarchy reprojection', () => {
     const chitaLine = chitaArea!.lines[0];
     expect(chitaLine.lineGroupName).toBe("צ'יטה");
     expect(chitaLine.routeGroups).toEqual([]);
-    expect(chitaLine.buckets).toHaveLength(6);
-    expect(new Set(chitaLine.buckets.map((bucket) => bucket.bucketName)).size).toBe(6);
-    expect(chitaLine.buckets.map((bucket) => bucket.bucketName)).toEqual(expect.arrayContaining([
-      'דרום',
-      'חיפה',
-      'שפלה 1',
-      'שפלה 2',
-      'שפלה אמצעי',
-      'עמקים אמצעי'
-    ]));
+    expect(chitaLine.buckets).toHaveLength(2);
+    expect(new Set(chitaLine.buckets.map((bucket) => bucket.bucketName)).size).toBe(2);
+    expect(chitaLine.buckets.map((bucket) => bucket.bucketName)).toEqual(['o-chita-1', 'o-chita-2']);
+    expect(chitaLine.buckets.map((bucket) => bucket.displayName)).toEqual(['SO-CH-1', 'SO-CH-2']);
+    expect(chitaLine.buckets.every((bucket) => bucket.totalOrders === 1)).toBe(true);
     expect(chitaLine.buckets.every((bucket) => bucket.orders.every((order) => order.sourceZone !== null))).toBe(true);
-    expect(chitaLine.buckets.some((bucket) => bucket.bucketName === 'דרום')).toBe(true);
-    expect(chitaLine.buckets.some((bucket) => bucket.bucketName === 'חיפה')).toBe(true);
+    expect(chitaLine.buckets[0].orders.map((order) => order.orderId)).toEqual(['o-chita-1']);
+    expect(chitaLine.buckets[1].orders.map((order) => order.orderId)).toEqual(['o-chita-2']);
+  });
+
+  it('buildShiftWorkHierarchy_chita_keeps_sourceZone_as_metadata_not_bucket_key', () => {
+    const lineRows = [
+      makeLineRow({ id: LINE_A, name: "צ'יטה", distribution_area: 'שפלה 1' })
+    ];
+    const orders = [
+      makeOrder({ id: 'o-chita-1', lineId: LINE_A, orderNumber: 'SO-CH-1', pointName: "צ'יטה", rawRouteLine: "צ'יטה/דרום", routeBase: "צ'יטה", workBucketName: 'דרום', sourceZone: 'דרום' }),
+      makeOrder({ id: 'o-chita-2', lineId: LINE_A, orderNumber: 'SO-CH-2', pointName: "צ'יטה", rawRouteLine: "צ'יטה/דרום", routeBase: "צ'יטה", workBucketName: 'דרום', sourceZone: 'דרום' })
+    ];
+    const rollups = new Map<string, { lineCount: number; totalQuantity: number }>([
+      ['o-chita-1', { lineCount: 1, totalQuantity: 4 }],
+      ['o-chita-2', { lineCount: 1, totalQuantity: 6 }]
+    ]);
+
+    const result = buildShiftWorkHierarchy(SHIFT_ID, lineRows, orders, rollups, [], []);
+    const buckets = result.areas.find((area) => area.areaName === "צ'יטה")!.lines[0].buckets;
+
+    expect(buckets.map((bucket) => bucket.bucketName)).toEqual(['o-chita-1', 'o-chita-2']);
+    expect(buckets.every((bucket) => bucket.bucketName !== 'דרום')).toBe(true);
+    expect(buckets.every((bucket) => bucket.orders[0]?.sourceZone === 'דרום')).toBe(true);
+  });
+
+  it('buildShiftWorkHierarchy_chita_does_not_leak_into_regular_distribution_areas', () => {
+    const lineRows = [
+      makeLineRow({ id: LINE_A, name: "צ'יטה", distribution_area: 'שפלה 1', sort_order: 1 }),
+      makeLineRow({ id: 'line-normal', name: 'קו דרום', distribution_area: 'דרום', sort_order: 2 })
+    ];
+    const orders = [
+      makeOrder({ id: 'o-chita-1', lineId: LINE_A, orderNumber: 'SO-CH-1', pointName: "צ'יטה", rawRouteLine: "צ'יטה/דרום", routeBase: "צ'יטה", workBucketName: 'דרום', sourceZone: 'דרום' }),
+      makeOrder({ id: 'o-normal-1', lineId: 'line-normal', orderNumber: 'SO-N-1', pointName: 'סלולר', rawRouteLine: 'קו דרום/סלולר', routeBase: 'קו דרום', workBucketName: 'סלולר', sourceZone: 'דרום' })
+    ];
+    const rollups = new Map<string, { lineCount: number; totalQuantity: number }>([
+      ['o-chita-1', { lineCount: 2, totalQuantity: 5 }],
+      ['o-normal-1', { lineCount: 3, totalQuantity: 9 }]
+    ]);
+
+    const result = buildShiftWorkHierarchy(SHIFT_ID, lineRows, orders, rollups, [], []);
+    const chitaArea = result.areas.find((area) => area.areaName === "צ'יטה");
+    const normalArea = result.areas.find((area) => area.areaName === 'דרום');
+
+    expect(chitaArea).toBeDefined();
+    expect(normalArea).toBeDefined();
+    expect(chitaArea!.lines.flatMap((line) => line.buckets.flatMap((bucket) => bucket.orders.map((order) => order.orderId)))).toEqual(['o-chita-1']);
+    expect(normalArea!.lines.flatMap((line) => line.buckets.flatMap((bucket) => bucket.orders.map((order) => order.orderId)))).toEqual(['o-normal-1']);
   });
 
   it('keeps every physical line and order unique while preserving totals for the imported shift fixture', () => {
@@ -650,14 +682,9 @@ describe('work-hierarchy reprojection', () => {
     expect(chitaArea!.lines).toHaveLength(1);
     expect(chitaArea!.lines[0].lineGroupName).toBe("צ'יטה");
     expect(chitaArea!.lines[0].routeGroups).toEqual([]);
-    expect(chitaArea!.lines[0].buckets.map((bucket) => bucket.bucketName)).toEqual(expect.arrayContaining([
-      'דרום',
-      'חיפה',
-      'שפלה 1',
-      'שפלה 2',
-      'שפלה אמצעי',
-      'עמקים אמצעי'
-    ]));
+    expect(chitaArea!.lines[0].buckets).toHaveLength(6);
+    expect(chitaArea!.lines[0].buckets.every((bucket) => bucket.totalOrders === 1)).toBe(true);
+    expect(new Set(chitaArea!.lines[0].buckets.map((bucket) => bucket.bucketName)).size).toBe(6);
     expect(chitaArea!.lines[0].buckets.every((bucket) => bucket.orders.every((order) => order.sourceZone !== null))).toBe(true);
   });
 });
@@ -844,7 +871,7 @@ describe('buildManualShiftSourceZoneDiagnostics', () => {
 
   it('projects exact Chita under a single area and line', () => {
     const lineRows = [makeLineRow({ name: "צ'יטה", distribution_area: 'שפלה 1' })];
-    const orders = [makeOrder({ sourceZone: 'שפלה 1' })];
+    const orders = [makeOrder({ orderNumber: 'SO-CHITA-1', pointName: "צ'יטה", sourceZone: 'שפלה 1' })];
     const rollups = new Map<string, { lineCount: number; totalQuantity: number }>();
     rollups.set(ORDER_1, { lineCount: 0, totalQuantity: 5 });
 
@@ -856,7 +883,8 @@ describe('buildManualShiftSourceZoneDiagnostics', () => {
     expect(result.areas[0].lines[0].lineGroupName).toBe("צ'יטה");
     expect(result.areas[0].lines[0].lineKind).toBe('delivery_channel');
     expect(result.areas[0].lines[0].routeGroups).toEqual([]);
-    expect(result.areas[0].lines[0].buckets[0].bucketName).toBe('שפלה 1');
+    expect(result.areas[0].lines[0].buckets[0].bucketName).toBe(ORDER_1);
+    expect(result.areas[0].lines[0].buckets[0].displayName).toBe('SO-CHITA-1');
     expect(result.areas[0].lines[0].buckets[0].orders[0].sourceZone).toBe('שפלה 1');
   });
 
@@ -1417,6 +1445,107 @@ describe('listBucketProductRollup sourceZone isolation', () => {
     expect(result).toHaveLength(2);
     expect(result.map((r: BucketProductRollupRow) => r.sku).sort()).toEqual(['CH-1', 'CH-2']);
     expect(result.reduce((sum: number, row: BucketProductRollupRow) => sum + row.totalQuantity, 0)).toBe(20);
+  });
+
+  it('listBucketProductRollup_chita_scopes_products_to_selected_order_bucket', async () => {
+    const orders = [
+      {
+        id: 'chita-order-1',
+        shift_id: SHIFT,
+        line_id: CHITA_LINE,
+        point_name: "צ'יטה",
+        route_base: "צ'יטה",
+        work_bucket_name: 'דרום',
+        source_zone: 'דרום',
+        deleted_at: null
+      },
+      {
+        id: 'chita-order-2',
+        shift_id: SHIFT,
+        line_id: CHITA_LINE,
+        point_name: "צ'יטה",
+        route_base: "צ'יטה",
+        work_bucket_name: 'דרום',
+        source_zone: 'דרום',
+        deleted_at: null
+      }
+    ];
+    const items = [
+      { sku: 'CH-SHARED', description: null, category: null, quantity: 3, order_id: 'chita-order-1' },
+      { sku: 'CH-SHARED', description: null, category: null, quantity: 9, order_id: 'chita-order-2' }
+    ];
+    const lines = [
+      { id: CHITA_LINE, shift_id: SHIFT, name: "צ'יטה", distribution_area: 'דרום' }
+    ];
+    const supabase = fakeSupabase(orders, items, lines);
+    const repo = createManualShiftsRepo(supabase as never);
+
+    const result = await repo.listBucketProductRollup({
+      shiftId: SHIFT,
+      lineId: CHITA_LINE,
+      bucketName: 'SO-CH-1',
+      sourceZone: 'דרום',
+      sourceLineName: "צ'יטה",
+      workBucketName: 'chita-order-1'
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      sku: 'CH-SHARED',
+      totalQuantity: 3,
+      orderCount: 1
+    });
+  });
+
+  it('listBucketProductRollup_chita_same_order_multiple_rows_aggregates_by_sku', async () => {
+    const orders = [
+      {
+        id: 'chita-order-1',
+        shift_id: SHIFT,
+        line_id: CHITA_LINE,
+        point_name: "צ'יטה",
+        route_base: "צ'יטה",
+        work_bucket_name: 'דרום',
+        source_zone: 'דרום',
+        deleted_at: null
+      },
+      {
+        id: 'chita-order-2',
+        shift_id: SHIFT,
+        line_id: CHITA_LINE,
+        point_name: "צ'יטה",
+        route_base: "צ'יטה",
+        work_bucket_name: 'דרום',
+        source_zone: 'דרום',
+        deleted_at: null
+      }
+    ];
+    const items = [
+      { sku: 'CH-ONE', description: null, category: null, quantity: 2, order_id: 'chita-order-1' },
+      { sku: 'CH-ONE', description: null, category: null, quantity: 5, order_id: 'chita-order-1' },
+      { sku: 'CH-ONE', description: null, category: null, quantity: 11, order_id: 'chita-order-2' }
+    ];
+    const lines = [
+      { id: CHITA_LINE, shift_id: SHIFT, name: "צ'יטה", distribution_area: 'דרום' }
+    ];
+    const supabase = fakeSupabase(orders, items, lines);
+    const repo = createManualShiftsRepo(supabase as never);
+
+    const result = await repo.listBucketProductRollup({
+      shiftId: SHIFT,
+      lineId: CHITA_LINE,
+      bucketName: 'SO-CH-1',
+      sourceZone: 'דרום',
+      sourceLineName: "צ'יטה",
+      workBucketName: 'chita-order-1'
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      sku: 'CH-ONE',
+      totalQuantity: 7,
+      orderCount: 1
+    });
   });
 
   it.each(['', '   '])('treats whitespace-only sourceZone %p as explicit unknown-zone scope', async (sourceZone) => {

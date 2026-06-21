@@ -1711,20 +1711,26 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       const normalizedDistributionArea = normalizeOptionalString(distributionArea);
       const normalizedWorkBucketName = normalizeOptionalString(workBucketName);
       const normalizedSourceLineName = normalizeOptionalString(sourceLineName);
+      const { data: lineRow, error: lineError } = await supabase
+        .from('manual_shift_lines')
+        .select('name,distribution_area')
+        .eq('shift_id', shiftId)
+        .eq('id', lineId)
+        .maybeSingle();
+
+      if (lineError) throw lineError;
 
       if (normalizedDistributionArea !== null) {
-        const { data: lineRow, error: lineError } = await supabase
-          .from('manual_shift_lines')
-          .select('distribution_area')
-          .eq('shift_id', shiftId)
-          .eq('id', lineId)
-          .maybeSingle();
-
-        if (lineError) throw lineError;
         if (normalizeOptionalString(lineRow?.distribution_area ?? null) !== normalizedDistributionArea) {
           return [];
         }
       }
+
+      const chitaLine = isChitaLine(
+        getManualShiftLineKind(lineRow?.name ?? normalizedSourceLineName ?? ''),
+        lineRow?.name ?? normalizedSourceLineName
+      );
+      const shouldScopeChitaByOrder = chitaLine && normalizedWorkBucketName !== null;
 
       let ordersQuery = supabase
         .from('manual_shift_orders')
@@ -1737,14 +1743,16 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         ordersQuery = ordersQuery.eq('route_base', normalizedSourceLineName);
       }
 
-      if (hasSourceZoneFilter) {
+      if (hasSourceZoneFilter && !shouldScopeChitaByOrder) {
         ordersQuery =
           normalizedSourceZone === null
             ? ordersQuery.is('source_zone', null)
             : ordersQuery.eq('source_zone', normalizedSourceZone);
       }
 
-      if (normalizedWorkBucketName !== null && normalizedWorkBucketName !== 'כללי') {
+      if (shouldScopeChitaByOrder) {
+        ordersQuery = ordersQuery.eq('id', normalizedWorkBucketName);
+      } else if (normalizedWorkBucketName !== null && normalizedWorkBucketName !== 'כללי') {
         ordersQuery = ordersQuery.eq('work_bucket_name', normalizedWorkBucketName);
       }
 
@@ -2532,6 +2540,23 @@ function isChitaLine(lineKind: 'route' | 'delivery_channel', lineName: string | 
   return lineKind === 'delivery_channel' && normalizeHebrewName(lineName) === "צ'יטה";
 }
 
+function getChitaBucketKey(order: Pick<ManualShiftOrder, 'id'>): string {
+  return order.id;
+}
+
+function getChitaBucketDisplayName(
+  order: Pick<ManualShiftOrder, 'id' | 'orderNumber' | 'customerName' | 'pointName'>,
+  sourceZone: string | null
+): string {
+  return (
+    normalizeOptionalString(order.orderNumber) ??
+    normalizeOptionalString(order.customerName) ??
+    normalizeSourceZone(sourceZone) ??
+    normalizeOptionalString(order.pointName) ??
+    order.id
+  );
+}
+
 export function buildShiftWorkHierarchy(
   shiftId: string,
   lineRows: ManualShiftLineRow[],
@@ -2589,23 +2614,25 @@ export function buildShiftWorkHierarchy(
         lineSourceZones.add(sourceZone);
       }
 
-      const bucketKey = chitaLine ? sourceZoneKey(sourceZone) : (order.pointName ?? null);
+      const bucketKey = chitaLine ? getChitaBucketKey(order) : (order.pointName ?? null);
       const list = bucketsMap.get(bucketKey) ?? [];
       list.push(order);
       bucketsMap.set(bucketKey, list);
     }
 
     if (bucketsMap.size === 0) {
-      bucketsMap.set(chitaLine ? UNKNOWN_SOURCE_ZONE_KEY : null, []);
+      bucketsMap.set(null, []);
     }
 
-    const bucketEntries = Array.from(bucketsMap.entries()).sort(([a], [b]) => {
-      if (a === UNKNOWN_SOURCE_ZONE_KEY) return -1;
-      if (b === UNKNOWN_SOURCE_ZONE_KEY) return 1;
-      if (a === null) return -1;
-      if (b === null) return 1;
-      return sourceZoneDisplayName(a).localeCompare(sourceZoneDisplayName(b), 'he');
-    });
+    const bucketEntries = chitaLine
+      ? Array.from(bucketsMap.entries())
+      : Array.from(bucketsMap.entries()).sort(([a], [b]) => {
+          if (a === UNKNOWN_SOURCE_ZONE_KEY) return -1;
+          if (b === UNKNOWN_SOURCE_ZONE_KEY) return 1;
+          if (a === null) return -1;
+          if (b === null) return 1;
+          return sourceZoneDisplayName(a).localeCompare(sourceZoneDisplayName(b), 'he');
+        });
 
     const buckets: ManualShiftWorkHierarchyBucket[] = [];
     for (const [bucketName, bucketOrders] of bucketEntries) {
@@ -2628,10 +2655,17 @@ export function buildShiftWorkHierarchy(
         };
       });
 
+      const firstOrder = bucketOrders[0] ?? null;
+      const bucketSourceZone = firstOrder
+        ? (effectiveSourceZoneByOrderId.get(firstOrder.id) ?? null)
+        : null;
+
       buckets.push({
-        bucketName: bucketName === UNKNOWN_SOURCE_ZONE_KEY ? null : bucketName,
+        bucketName: chitaLine
+          ? bucketName
+          : (bucketName === UNKNOWN_SOURCE_ZONE_KEY ? null : bucketName),
         displayName: chitaLine
-          ? sourceZoneDisplayName(bucketName === UNKNOWN_SOURCE_ZONE_KEY ? null : bucketName)
+          ? (firstOrder ? getChitaBucketDisplayName(firstOrder, bucketSourceZone) : sourceZoneDisplayName(null))
           : (bucketName ?? 'קו ראשי'),
         totalOrders: bucketOrders.length,
         totalQuantity: hierarchyOrders.reduce((s, o) => s + o.totalQuantity, 0),
