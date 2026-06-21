@@ -1317,7 +1317,7 @@ describe('listBucketProductRollup sourceZone isolation', () => {
     { sku: '222', description: null, category: null, quantity: 5, order_id: 'o-2' },
   ];
 
-  it('returns only SKU 111 for sourceZone=שפלה 2', async () => {
+  it('listBucketProductRollup_filters_non_empty_sourceZone_exactly', async () => {
     const supabase = fakeSupabase(sharedOrders, sharedItems);
     const repo = createManualShiftsRepo(supabase as never);
 
@@ -1343,14 +1343,16 @@ describe('listBucketProductRollup sourceZone isolation', () => {
     expect(result[0].totalQuantity).toBe(5);
   });
 
-  it.skip('filters source_zone IS NULL for empty sourceZone sentinel', async () => {
+  it('listBucketProductRollup_filters_source_zone_is_null_for_empty_sourceZone_sentinel', async () => {
     const orders = [
-      { id: 'o-3', shift_id: SHIFT, line_id: LINE, point_name: 'כללי', source_zone: 'שפלה 2', deleted_at: null },
+      { id: 'o-3', shift_id: SHIFT, line_id: LINE, point_name: 'כללי', source_zone: 'רכב-פז ירכא', deleted_at: null },
       { id: 'o-4', shift_id: SHIFT, line_id: LINE, point_name: 'כללי', source_zone: null, deleted_at: null },
+      { id: 'o-5', shift_id: SHIFT, line_id: LINE, point_name: 'כללי', source_zone: 'סיגריות-מנטה עין המפרץ', deleted_at: null },
     ];
     const items = [
       { sku: '333', description: null, category: null, quantity: 7, order_id: 'o-3' },
       { sku: '444', description: null, category: null, quantity: 3, order_id: 'o-4' },
+      { sku: '555', description: null, category: null, quantity: 11, order_id: 'o-5' },
     ];
     const supabase = fakeSupabase(orders, items);
     const repo = createManualShiftsRepo(supabase as never);
@@ -1364,17 +1366,27 @@ describe('listBucketProductRollup sourceZone isolation', () => {
     expect(result[0].totalQuantity).toBe(3);
   });
 
-  it('returns all products when sourceZone is omitted (legacy compat)', async () => {
-    const supabase = fakeSupabase(sharedOrders, sharedItems);
+  it('listBucketProductRollup_omitted_sourceZone_does_not_apply_null_filter', async () => {
+    const orders = [
+      { id: 'o-3', shift_id: SHIFT, line_id: LINE, point_name: 'כללי', source_zone: 'רכב-פז ירכא', deleted_at: null },
+      { id: 'o-4', shift_id: SHIFT, line_id: LINE, point_name: 'כללי', source_zone: null, deleted_at: null },
+      { id: 'o-5', shift_id: SHIFT, line_id: LINE, point_name: 'כללי', source_zone: 'סיגריות-מנטה עין המפרץ', deleted_at: null },
+    ];
+    const items = [
+      { sku: '333', description: null, category: null, quantity: 7, order_id: 'o-3' },
+      { sku: '444', description: null, category: null, quantity: 3, order_id: 'o-4' },
+      { sku: '555', description: null, category: null, quantity: 11, order_id: 'o-5' },
+    ];
+    const supabase = fakeSupabase(orders, items);
     const repo = createManualShiftsRepo(supabase as never);
 
     const result = await repo.listBucketProductRollup({
-      shiftId: SHIFT, lineId: LINE, bucketName: 'סלולר'
+      shiftId: SHIFT, lineId: LINE, bucketName: 'כללי'
     });
 
-    expect(result).toHaveLength(2);
+    expect(result).toHaveLength(3);
     const skus = result.map((r: BucketProductRollupRow) => r.sku).sort();
-    expect(skus).toEqual(['111', '222']);
+    expect(skus).toEqual(['333', '444', '555']);
   });
 
   it('returns Chita products when sourceZone is provided even though point_name stays on the delivery channel', async () => {
@@ -1407,7 +1419,7 @@ describe('listBucketProductRollup sourceZone isolation', () => {
     expect(result.reduce((sum: number, row: BucketProductRollupRow) => sum + row.totalQuantity, 0)).toBe(20);
   });
 
-  it.each(['', '   '])('falls back to legacy bucketName filtering when sourceZone is %p', async (sourceZone) => {
+  it.each(['', '   '])('treats whitespace-only sourceZone %p as explicit unknown-zone scope', async (sourceZone) => {
     const orders = [
       { id: 'o-3', shift_id: SHIFT, line_id: LINE, point_name: 'כללי', source_zone: 'שפלה 2', deleted_at: null },
       { id: 'o-4', shift_id: SHIFT, line_id: LINE, point_name: 'כללי', source_zone: null, deleted_at: null }
@@ -1426,9 +1438,9 @@ describe('listBucketProductRollup sourceZone isolation', () => {
       sourceZone
     });
 
-    expect(result).toHaveLength(2);
-    expect(result.map((r: BucketProductRollupRow) => r.sku).sort()).toEqual(['333', '444']);
-    expect(result.reduce((sum: number, row: BucketProductRollupRow) => sum + row.totalQuantity, 0)).toBe(10);
+    expect(result).toHaveLength(1);
+    expect(result.map((r: BucketProductRollupRow) => r.sku)).toEqual(['444']);
+    expect(result.reduce((sum: number, row: BucketProductRollupRow) => sum + row.totalQuantity, 0)).toBe(3);
   });
 
   it('aggregates same SKU across orders into one product row', async () => {

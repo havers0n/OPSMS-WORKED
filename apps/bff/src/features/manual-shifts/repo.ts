@@ -1706,6 +1706,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       workBucketName,
       sourceLineName
     }) {
+      const hasSourceZoneFilter = sourceZone !== undefined;
       const normalizedSourceZone = normalizeOptionalString(sourceZone);
       const normalizedDistributionArea = normalizeOptionalString(distributionArea);
       const normalizedWorkBucketName = normalizeOptionalString(workBucketName);
@@ -1736,15 +1737,18 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         ordersQuery = ordersQuery.eq('route_base', normalizedSourceLineName);
       }
 
-      if (normalizedSourceZone !== null) {
-        ordersQuery = ordersQuery.eq('source_zone', normalizedSourceZone);
+      if (hasSourceZoneFilter) {
+        ordersQuery =
+          normalizedSourceZone === null
+            ? ordersQuery.is('source_zone', null)
+            : ordersQuery.eq('source_zone', normalizedSourceZone);
       }
 
       if (normalizedWorkBucketName !== null && normalizedWorkBucketName !== 'כללי') {
         ordersQuery = ordersQuery.eq('work_bucket_name', normalizedWorkBucketName);
       }
 
-      if (normalizedSourceZone === null && normalizedWorkBucketName === null) {
+      if (!hasSourceZoneFilter && normalizedWorkBucketName === null) {
         if (bucketName === '') {
           ordersQuery = ordersQuery.is('point_name', null);
         } else {
