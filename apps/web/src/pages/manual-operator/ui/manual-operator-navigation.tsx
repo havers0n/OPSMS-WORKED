@@ -1,4 +1,4 @@
-import { Calendar, CheckSquare, ClipboardList, Package, Printer, Upload, Users, ListTodo } from 'lucide-react';
+import { Calendar, CheckSquare, ClipboardList, Package, Printer, Upload, Users, ListTodo, Route } from 'lucide-react';
 import type { ManualOperatorSection } from '@/shared/config/routes';
 import {
   manualOperatorSectionPath,
@@ -21,7 +21,8 @@ export const manualOperatorSectionItems: ManualOperatorSectionItem[] = [
   { section: 'products', label: 'מוצרים', path: routes.operatorManualProducts, testId: 'manual-section-products', icon: Package },
   { section: 'ashlamot', label: 'אשלמות', path: routes.operatorManualAshlamot, testId: 'manual-section-ashlamot', icon: ClipboardList },
   { section: 'printing', label: 'הדפסה', path: routes.operatorManualPrinting, testId: 'manual-section-printing', icon: Printer },
-  { section: 'import', label: 'ייבוא', path: routes.operatorManualImport, testId: 'manual-section-import', icon: Upload }
+  { section: 'import', label: 'ייבוא', path: routes.operatorManualImport, testId: 'manual-section-import', icon: Upload },
+  { section: 'lines', label: 'תכנון קווים', path: routes.operatorManualLines, testId: 'manual-section-lines', icon: Route }
 ];
 
 export function getManualOperatorSectionLabel(section: ManualOperatorSection) {

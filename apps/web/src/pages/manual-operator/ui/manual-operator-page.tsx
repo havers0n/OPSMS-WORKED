@@ -21,6 +21,7 @@ import { DayTab } from './day-tab';
 import { ProductControlTab } from './product-control-tab';
 import { ManualOperatorPlaceholder } from './manual-operator-placeholder';
 import { ManualOperatorWorkSection } from './manual-operator-work-section';
+import { LineSchemeBuilder } from './line-scheme-builder';
 import { manualOperatorSectionItems } from './manual-operator-navigation';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 
@@ -76,6 +77,10 @@ function ManualOperatorSectionContent({
 
   if (section === 'products') {
     return shift ? <ProductControlTab shiftId={shift.id} /> : null;
+  }
+
+  if (section === 'lines') {
+    return shift ? <LineSchemeBuilder /> : null;
   }
 
   return (

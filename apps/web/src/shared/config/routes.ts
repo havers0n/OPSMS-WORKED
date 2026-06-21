@@ -9,6 +9,7 @@ export const routes = {
   operatorManualAshlamot: '/operator/manual/ashlamot',
   operatorManualPrinting: '/operator/manual/printing',
   operatorManualImport: '/operator/manual/import',
+  operatorManualLines: '/operator/manual/lines',
   warehouse: '/warehouse',
   warehouseView: '/warehouse/view',
   warehouseActions: '/warehouse/actions',
@@ -39,7 +40,8 @@ export const manualOperatorSections = [
   'products',
   'ashlamot',
   'printing',
-  'import'
+  'import',
+  'lines'
 ] as const;
 
 export type ManualOperatorSection = (typeof manualOperatorSections)[number];
