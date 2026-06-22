@@ -33,11 +33,13 @@ vi.mock('@/entities/bonded/api/queries', () => ({
   }
 }));
 
+const mockUseQuery = vi.hoisted(() => vi.fn().mockReturnValue({ data: [], isLoading: false }));
+
 vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-query')>();
   return {
     ...actual,
-    useQuery: vi.fn().mockReturnValue({ data: [], isLoading: false })
+    useQuery: mockUseQuery
   };
 });
 
@@ -105,6 +107,7 @@ function renderWithQuery(ui: ReactElement) {
 describe('BondedImportSheet', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUseQuery.mockReturnValue({ data: [], isLoading: false });
   });
 
   it('renders title and subtitle', () => {
@@ -215,5 +218,100 @@ describe('BondedImportSheet', () => {
   it('snapshot list heading renders', () => {
     renderWithQuery(<BondedImportSheet onClose={() => undefined} />);
     expect(screen.getByText('Snapshots אחרונים')).toBeTruthy();
+  });
+
+  it('shows no duplicate warning when planningDate has no completed snapshot', () => {
+    mockUseQuery.mockReturnValue({
+      data: [{
+        id: 'snap-other',
+        planningDate: '2025-01-01',
+        fileName: 'other.xlsx',
+        importedAt: '2025-01-01T10:00:00.000Z',
+        rowCount: 100,
+        status: 'completed',
+        diagnostics: { totalRows: 100, missingSkuRows: 0, negativeBalanceRows: 0, duplicateSkuGroups: 0, warnings: [] }
+      }],
+      isLoading: false
+    });
+
+    renderWithQuery(<BondedImportSheet onClose={() => undefined} />);
+
+    const dateInput = screen.getByLabelText('תאריך עבודה') as HTMLInputElement;
+    fireEvent.change(dateInput, { target: { value: '2026-06-18' } });
+
+    expect(screen.queryByText(/לתאריך עבודה זה כבר קיים/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'פרסם לתאריך עבודה' })).toBeTruthy();
+  });
+
+  it('shows duplicate warning when planningDate already has a completed snapshot', () => {
+    const existingSnapshot = {
+      id: 'existing-snap-1',
+      planningDate: '2026-06-18',
+      fileName: 'previous-bonded.xlsx',
+      importedAt: '2026-06-18T08:00:00.000Z',
+      rowCount: 450,
+      status: 'completed',
+      diagnostics: { totalRows: 468, missingSkuRows: 14, negativeBalanceRows: 5, duplicateSkuGroups: 0, warnings: [] }
+    };
+
+    mockUseQuery.mockReturnValue({
+      data: [existingSnapshot],
+      isLoading: false
+    });
+
+    renderWithQuery(<BondedImportSheet onClose={() => undefined} />);
+
+    const dateInput = screen.getByLabelText('תאריך עבודה') as HTMLInputElement;
+    fireEvent.change(dateInput, { target: { value: '2026-06-18' } });
+
+    expect(screen.getByText(/לתאריך עבודה זה כבר קיים Snapshot בונדד/)).toBeTruthy();
+    expect(screen.getByText(/פרסום חדש יהפוך לגרסה הפעילה לתאריך זה/)).toBeTruthy();
+    expect(screen.getByText(/הגרסאות הקודמות יישארו בהיסטוריית הייבוא/)).toBeTruthy();
+
+    expect(screen.getAllByText(/previous-bonded.xlsx/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/450/).length).toBeGreaterThanOrEqual(1);
+
+    expect(screen.getByRole('button', { name: 'פרסם כגרסה חדשה' })).toBeTruthy();
+  });
+
+  it('upload and publish still work when existing completed snapshot exists', async () => {
+    const existingSnapshot = {
+      id: 'existing-snap-1',
+      planningDate: '2026-06-18',
+      fileName: 'previous-bonded.xlsx',
+      importedAt: '2026-06-18T08:00:00.000Z',
+      rowCount: 450,
+      status: 'completed',
+      diagnostics: { totalRows: 468, missingSkuRows: 14, negativeBalanceRows: 5, duplicateSkuGroups: 0, warnings: [] }
+    };
+
+    mockUseQuery.mockReturnValue({
+      data: [existingSnapshot],
+      isLoading: false
+    });
+
+    uploadMutateAsync.mockResolvedValueOnce({ draft: draftPayload, fileName: 'new-bonded.xlsx', pivotSheetFound: false });
+    publishMutateAsync.mockResolvedValueOnce({ id: 'snap-new', planningDate: '2026-06-18', status: 'completed', rowCount: 3, importedAt: new Date().toISOString() });
+
+    renderWithQuery(<BondedImportSheet onClose={() => undefined} />);
+
+    const dateInput = screen.getByLabelText('תאריך עבודה') as HTMLInputElement;
+    fireEvent.change(dateInput, { target: { value: '2026-06-18' } });
+
+    expect(screen.getByText(/לתאריך עבודה זה כבר קיים/)).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('בחר קובץ בונדד'), { target: { files: [new File(['x'], 'new-bonded.xlsx')] } });
+    await waitFor(() => expect(screen.getByText('new-bonded.xlsx')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'פרסם כגרסה חדשה' }));
+
+    await waitFor(() => {
+      expect(publishMutateAsync).toHaveBeenCalledWith({
+        draft: draftPayload,
+        planningDate: '2026-06-18',
+        fileName: 'new-bonded.xlsx',
+        shiftId: null
+      });
+    });
   });
 });
