@@ -28,6 +28,8 @@ function DataIssueExplanation({ dataIssues }: { dataIssues: string[] }) {
         return 'מק"ט לא נמצא בקטלוג המוצרים';
       case 'duplicate_canonical_sku':
         return 'נמצאו כמה מוצרים בקטלוג לאותו מק"ט';
+      case 'missing_warehouse_stock_snapshot_sku':
+        return 'המק"ט לא נמצא ב-Snapshot מלאי המחסן';
       default:
         return issue;
     }

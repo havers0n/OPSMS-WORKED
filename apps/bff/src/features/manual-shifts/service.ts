@@ -48,6 +48,7 @@ import {
   type SkuBondedAggregate
 } from '@wos/domain';
 import type { BondedService } from '../bonded/bonded-service.js';
+import type { WarehouseStockService } from '../warehouse-stock/warehouse-stock-service.js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   invalidManualShiftOrderCreateStatus,
@@ -298,6 +299,12 @@ export type ManualShiftsService = {
     planningLineName: string;
     workGroupName: string;
   }): Promise<PickerSheetPrintData>;
+  getPickerSheetLine(input: {
+    tenantId: string;
+    shiftId: string;
+    distributionArea: string;
+    planningLineName: string;
+  }): Promise<PickerSheetPrintData>;
 };
 
 function formatLocalDate(date: Date, timeZone: string) {
@@ -436,6 +443,7 @@ export function createManualShiftsServiceFromRepo(
   options?: {
     getNowIso?: () => string;
     getTodayDate?: () => string;
+    warehouseStockService?: WarehouseStockService;
   },
   bondedService?: BondedService
 ): ManualShiftsService {
@@ -1896,10 +1904,45 @@ export function createManualShiftsServiceFromRepo(
         };
       }
 
-      const skus = demandRows.map((r) => r.sku);
-      const stockBySku = await repo.listWarehouseStockBySku(skus, input.tenantId);
-
       const planningDate = shift.date;
+      const warehouseStockService = options?.warehouseStockService;
+      let warehouseSnapshotInfo: {
+        id: string;
+        planningDate: string;
+        importedAt: string;
+        fileName: string | null;
+        sourceRowCount: number;
+        uniqueSkuCount: number;
+      } | null = null;
+      const warnings: string[] = [];
+
+      // ── Warehouse stock snapshot ────────────────────────────────────
+      let warehouseStockBySku: Map<string, { sku: string; availableQty: number }> | null = null;
+      let useWarehouseSnapshot = false;
+
+      if (warehouseStockService) {
+        const snapshot = await warehouseStockService.getLatestCompletedSnapshot(input.tenantId, planningDate);
+        if (snapshot) {
+          useWarehouseSnapshot = true;
+          warehouseSnapshotInfo = {
+            id: snapshot.id,
+            planningDate: snapshot.planningDate,
+            importedAt: snapshot.importedAt,
+            fileName: snapshot.fileName,
+            sourceRowCount: snapshot.sourceRowCount,
+            uniqueSkuCount: snapshot.uniqueSkuCount
+          };
+          warehouseStockBySku = new Map(
+            snapshot.rows
+              .filter((row) => row.sku)
+              .map((row) => [row.sku, { sku: row.sku, availableQty: row.availableQty }])
+          );
+        } else if (warehouseStockService) {
+          warnings.push('no_warehouse_stock_snapshot_for_planning_date');
+        }
+      }
+
+      // ── Bonded snapshot ────────────────────────────────────────────
       let bondedBySku = new Map<string, SkuBondedAggregate>();
       let bondedSnapshotInfo: {
         id: string;
@@ -1908,7 +1951,6 @@ export function createManualShiftsServiceFromRepo(
         fileName: string | null;
         rowCount: number;
       } | null = null;
-      const warnings: string[] = [];
 
       if (bondedService) {
         const snapshot = await bondedService.getLatestCompletedSnapshot(input.tenantId, planningDate);
@@ -1926,34 +1968,69 @@ export function createManualShiftsServiceFromRepo(
         }
       }
 
-      const rows = demandRows.map((demand) => {
-        const stock = stockBySku.get(demand.sku);
-        const dataIssues: Array<'unknown_sku' | 'duplicate_canonical_sku'> = [];
+      // ── Build rows ─────────────────────────────────────────────────
+      let rows: ProductControlResponse['rows'];
 
-        if (!stock) {
-          dataIssues.push('unknown_sku');
-        } else if (stock.canonicalProductIds.length > 1) {
-          dataIssues.push('duplicate_canonical_sku');
-        }
+      if (useWarehouseSnapshot) {
+        rows = demandRows.map((demand) => {
+          const snapshotRow = warehouseStockBySku!.get(demand.sku);
+          const dataIssues: Array<'missing_warehouse_stock_snapshot_sku'> = [];
 
-        const bondedAgg = bondedBySku.get(demand.sku);
-        const bondedAvailableQty = bondedAgg?.bondedAvailableQty ?? 0;
-        const bondedCandidates = bondedAgg?.candidates ?? [];
+          if (!snapshotRow) {
+            dataIssues.push('missing_warehouse_stock_snapshot_sku');
+          }
 
-        return buildProductControlRow({
-          sku: demand.sku,
-          description: demand.description ?? '',
-          category: demand.category ?? '',
-          demandQty: demand.demandQty,
-          warehouseQty: stock?.warehouseQty ?? 0,
-          bondedAvailableQty,
-          status: dataIssues.length > 0 ? 'data_issue' : undefined,
-          affectedOrdersCount: demand.orderCount,
-          affectedLinesCount: demand.lineCount,
-          dataIssues: dataIssues.length > 0 ? dataIssues : undefined,
-          bondedCandidates
+          const bondedAgg = bondedBySku.get(demand.sku);
+          const bondedAvailableQty = bondedAgg?.bondedAvailableQty ?? 0;
+          const bondedCandidates = bondedAgg?.candidates ?? [];
+
+          return buildProductControlRow({
+            sku: demand.sku,
+            description: demand.description ?? '',
+            category: demand.category ?? '',
+            demandQty: demand.demandQty,
+            warehouseQty: snapshotRow?.availableQty ?? 0,
+            bondedAvailableQty,
+            status: dataIssues.length > 0 ? 'data_issue' : undefined,
+            affectedOrdersCount: demand.orderCount,
+            affectedLinesCount: demand.lineCount,
+            dataIssues: dataIssues.length > 0 ? dataIssues : undefined,
+            bondedCandidates
+          });
         });
-      });
+      } else {
+        const skus = demandRows.map((r) => r.sku);
+        const stockBySku = await repo.listWarehouseStockBySku(skus, input.tenantId);
+
+        rows = demandRows.map((demand) => {
+          const stock = stockBySku.get(demand.sku);
+          const dataIssues: Array<'unknown_sku' | 'duplicate_canonical_sku'> = [];
+
+          if (!stock) {
+            dataIssues.push('unknown_sku');
+          } else if (stock.canonicalProductIds.length > 1) {
+            dataIssues.push('duplicate_canonical_sku');
+          }
+
+          const bondedAgg = bondedBySku.get(demand.sku);
+          const bondedAvailableQty = bondedAgg?.bondedAvailableQty ?? 0;
+          const bondedCandidates = bondedAgg?.candidates ?? [];
+
+          return buildProductControlRow({
+            sku: demand.sku,
+            description: demand.description ?? '',
+            category: demand.category ?? '',
+            demandQty: demand.demandQty,
+            warehouseQty: stock?.warehouseQty ?? 0,
+            bondedAvailableQty,
+            status: dataIssues.length > 0 ? 'data_issue' : undefined,
+            affectedOrdersCount: demand.orderCount,
+            affectedLinesCount: demand.lineCount,
+            dataIssues: dataIssues.length > 0 ? dataIssues : undefined,
+            bondedCandidates
+          });
+        });
+      }
 
       const totals = computeProductControlTotals(rows);
 
@@ -1963,6 +2040,7 @@ export function createManualShiftsServiceFromRepo(
         rows,
         totals,
         bondedSnapshot: bondedSnapshotInfo,
+        warehouseStockSnapshot: warehouseSnapshotInfo,
         warnings: warnings.length > 0 ? warnings : undefined
       };
     },
@@ -2013,9 +2091,98 @@ export function createManualShiftsServiceFromRepo(
 
       return processCollisions(data);
     },
+
+    async getPickerSheetLine(input) {
+      const shift = await requireShift(input.shiftId);
+      if (shift.tenantId !== input.tenantId) {
+        throw manualShiftNotFound(input.shiftId);
+      }
+
+      const lineRow = await repo.findLineByShiftAndName(input.shiftId, input.planningLineName);
+      if (!lineRow) {
+        throw manualShiftLineNotFoundByName(input.planningLineName);
+      }
+
+      const line = mapManualShiftLineRowToDomain(lineRow, 'open');
+
+      if (line.distributionArea !== input.distributionArea) {
+        throw manualShiftLineAreaMismatch(input.planningLineName, input.distributionArea);
+      }
+
+      const { orders, items } = await repo.listPickerSheetLineItems(line.id);
+
+      const itemsByOrderId = new Map<string, typeof items>();
+      for (const item of items) {
+        const list = itemsByOrderId.get(item.orderId) ?? [];
+        list.push(item);
+        itemsByOrderId.set(item.orderId, list);
+      }
+
+      const groups = new Map<string, string[]>();
+
+      function normalizeOptionalString(value: string | null | undefined): string | null {
+        if (value === null || value === undefined) return null;
+        const trimmed = value.trim();
+        return trimmed.length > 0 ? trimmed : null;
+      }
+
+      for (const order of orders) {
+        const bucketName = normalizeOptionalString(order.workBucketName);
+        const groupName = (bucketName === null || bucketName === 'כללי') ? 'כללי' : bucketName;
+        const ids = groups.get(groupName) ?? [];
+        ids.push(order.id);
+        groups.set(groupName, ids);
+      }
+
+      const workGroups: PickerSheetWorkGroup[] = [];
+
+      for (const [name, orderIds] of groups) {
+        const groupItems: ManualShiftOrderItem[] = [];
+        for (const oid of orderIds) {
+          const orderItems = itemsByOrderId.get(oid);
+          if (orderItems) {
+            for (const oi of orderItems) {
+              groupItems.push(oi);
+            }
+          }
+        }
+
+        const aggregated = aggregatePickerItems(groupItems);
+        if (aggregated.length === 0) continue;
+
+        workGroups.push({ name, items: aggregated });
+      }
+
+      const totalItems = workGroups.reduce((s, wg) => s + wg.items.length, 0);
+
+      const data: PickerSheetPrintData = {
+        shift: shift.name,
+        scope: 'line',
+        shiftDate: shift.date,
+        distributionArea: input.distributionArea,
+        generatedAt: new Date().toISOString(),
+        totals: {
+          lines: 1,
+          workGroups: workGroups.length,
+          items: totalItems,
+        },
+        planningLines: [
+          {
+            name: line.name,
+            workGroups,
+          },
+        ],
+      };
+
+      return processCollisions(data);
+    },
   };
 }
 
-export function createManualShiftsService(supabase: SupabaseClient, bondedService?: BondedService) {
-  return createManualShiftsServiceFromRepo(createManualShiftsRepo(supabase), undefined, bondedService);
+export function createManualShiftsService(
+  supabase: SupabaseClient,
+  bondedService?: BondedService,
+  warehouseStockService?: WarehouseStockService
+) {
+  return createManualShiftsServiceFromRepo(createManualShiftsRepo(supabase), { warehouseStockService }, bondedService);
 }

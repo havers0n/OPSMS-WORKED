@@ -13,6 +13,7 @@ import {
   computeProductControlTotals,
   buildProductControlRow,
   productControlBondedSnapshotMetaSchema,
+  productControlWarehouseStockSnapshotMetaSchema,
   type ProductControlRow,
   type ProductControlStatus
 } from './product-control';
@@ -57,6 +58,7 @@ describe('productControlDataIssueSchema', () => {
   it('accepts supported data issues', () => {
     expect(productControlDataIssueSchema.parse('unknown_sku')).toBe('unknown_sku');
     expect(productControlDataIssueSchema.parse('duplicate_canonical_sku')).toBe('duplicate_canonical_sku');
+    expect(productControlDataIssueSchema.parse('missing_warehouse_stock_snapshot_sku')).toBe('missing_warehouse_stock_snapshot_sku');
   });
 
   it('rejects unsupported data issues', () => {
@@ -407,6 +409,35 @@ describe('buildProductControlRow', () => {
     expect(row.bondedAvailableQty).toBe(500);
     expect(row.dataIssues).toEqual(['unknown_sku']);
   });
+
+  it('computes shortage from snapshot warehouseQty correctly', () => {
+    const row = buildProductControlRow({
+      sku: '519526',
+      description: 'Test',
+      category: 'Cat',
+      demandQty: 564,
+      warehouseQty: 300,
+      bondedAvailableQty: 2979
+    });
+    expect(row.shortageQty).toBe(264);
+    expect(row.bondedCoverQty).toBe(264);
+    expect(row.finalMissingQty).toBe(0);
+    expect(row.status).toBe('covered_by_bonded');
+  });
+
+  it('bonded cover does not exceed shortage after warehouseQty', () => {
+    const row = buildProductControlRow({
+      sku: '519526',
+      description: 'Test',
+      category: 'Cat',
+      demandQty: 564,
+      warehouseQty: 300,
+      bondedAvailableQty: 2979
+    });
+    expect(row.bondedCoverQty).toBeLessThanOrEqual(row.shortageQty);
+    expect(row.bondedCoverQty).toBe(264);
+    expect(row.bondedCoverQty).not.toBe(564);
+  });
 });
 
 describe('productControlBondedSnapshotMetaSchema', () => {
@@ -423,8 +454,25 @@ describe('productControlBondedSnapshotMetaSchema', () => {
   });
 });
 
+describe('productControlWarehouseStockSnapshotMetaSchema', () => {
+  it('accepts valid warehouse stock snapshot metadata', () => {
+    const meta = {
+      id: 'wsnap-1',
+      planningDate: '2026-06-22',
+      importedAt: '2026-06-22T10:00:00.000Z',
+      fileName: 'pivot.xlsx',
+      sourceRowCount: 1348,
+      uniqueSkuCount: 300
+    };
+    const parsed = productControlWarehouseStockSnapshotMetaSchema.parse(meta);
+    expect(parsed.fileName).toBe('pivot.xlsx');
+    expect(parsed.sourceRowCount).toBe(1348);
+    expect(parsed.uniqueSkuCount).toBe(300);
+  });
+});
+
 describe('productControlResponseSchema with optional metadata', () => {
-  it('accepts response with bondedSnapshot and warnings', () => {
+  it('accepts response with bondedSnapshot, warehouseStockSnapshot and warnings', () => {
     const response = {
       shiftId: 'shift-1',
       generatedAt: '2026-06-22T10:00:00.000Z',
@@ -440,12 +488,20 @@ describe('productControlResponseSchema with optional metadata', () => {
         fileName: 'bonded.xlsx',
         rowCount: 120
       },
-      warnings: ['no_bonded_snapshot_for_planning_date']
+      warehouseStockSnapshot: {
+        id: 'wsnap-1',
+        planningDate: '2026-06-22',
+        importedAt: '2026-06-22T10:00:00.000Z',
+        fileName: 'pivot.xlsx',
+        sourceRowCount: 1348,
+        uniqueSkuCount: 300
+      },
+      warnings: ['no_bonded_snapshot_for_planning_date', 'no_warehouse_stock_snapshot_for_planning_date']
     };
     expect(() => productControlResponseSchema.parse(response)).not.toThrow();
   });
 
-  it('accepts response without bondedSnapshot or warnings', () => {
+  it('accepts response without bondedSnapshot, warehouseStockSnapshot or warnings', () => {
     const response = {
       shiftId: 'shift-1',
       generatedAt: '2026-06-22T10:00:00.000Z',

@@ -6,6 +6,7 @@ export type {
   ProductControlWorkLine,
   ProductControlBondedCandidate,
   ProductControlBondedSnapshotMeta,
+  ProductControlWarehouseStockSnapshotMeta,
   ProductControlDataIssue
 } from '@wos/domain';
 

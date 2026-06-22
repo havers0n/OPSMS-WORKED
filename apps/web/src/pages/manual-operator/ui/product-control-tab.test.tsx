@@ -612,4 +612,61 @@ describe('ProductControlTab', () => {
       expect(screen.getByText(/קיימת בעיית נתונים אך נמצא כיסוי בונדד/)).toBeTruthy();
     });
   });
+
+  // === NEW: Warehouse stock snapshot banner tests ===
+
+  it('shows active warehouse stock snapshot metadata banner', async () => {
+    const wsnapResponse = {
+      ...mockResponse,
+      warehouseStockSnapshot: {
+        id: 'wsnap-1',
+        planningDate: '2026-06-20',
+        importedAt: '2026-06-20T10:00:00.000Z',
+        fileName: 'פיבוט מילניום 2026.xlsx',
+        sourceRowCount: 1348,
+        uniqueSkuCount: 300,
+      },
+    };
+    mockedBffRequest.mockResolvedValueOnce(wsnapResponse);
+    renderTab();
+    await waitFor(() => {
+      expect(screen.getByText(/Snapshot מלאי מחסן פעיל לתאריך זה/)).toBeTruthy();
+    });
+    const threeHundred = screen.getAllByText(/300/);
+    expect(threeHundred.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/1348/)).toBeTruthy();
+  });
+
+  it('shows warning when no warehouse stock snapshot for planning date', async () => {
+    const noSnapshotResponse = {
+      ...mockResponse,
+      warehouseStockSnapshot: null,
+      warnings: ['no_warehouse_stock_snapshot_for_planning_date'],
+    };
+    mockedBffRequest.mockResolvedValueOnce(noSnapshotResponse);
+    renderTab();
+    await waitFor(() => {
+      expect(
+        screen.getByText(/לא נמצא Snapshot מלאי מחסן לתאריך העבודה הנבחר/)
+      ).toBeTruthy();
+    });
+  });
+
+  it('renders explanation for missing_warehouse_stock_snapshot_sku data issue', async () => {
+    const dataIssueResponse = {
+      ...mockResponse,
+      rows: mockResponse.rows.map((r) =>
+        r.sku === '100005'
+          ? { ...r, dataIssues: ['missing_warehouse_stock_snapshot_sku' as const] }
+          : r
+      ),
+    };
+    mockedBffRequest.mockResolvedValueOnce(dataIssueResponse);
+    renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('100005')).toBeTruthy();
+    });
+    const explanations = screen.getAllByText('המק"ט לא נמצא ב-Snapshot מלאי המחסן');
+    expect(explanations.length).toBeGreaterThanOrEqual(1);
+  });
 });

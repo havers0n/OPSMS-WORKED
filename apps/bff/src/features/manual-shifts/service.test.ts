@@ -4152,6 +4152,440 @@ describe('getProductControl', () => {
       expect(result.rows[0].bondedCandidates).toHaveLength(1);
     });
   });
+
+  describe('getProductControl warehouse stock snapshot integration', () => {
+    function makeWarehouseSnapshot(overrides: Partial<{
+      id: string;
+      planningDate: string;
+      fileName: string | null;
+      importedAt: string;
+      rowCount: number;
+      sourceRowCount: number;
+      uniqueSkuCount: number;
+      rows: Array<{
+        sku: string;
+        description: string | null;
+        category: string | null;
+        warehouseQtyRaw: number;
+        availableQty: number;
+        sourceDemandQty: number | null;
+        sourceRowCount: number;
+        diagnostics: string[];
+      }>;
+    }> = {}) {
+      return {
+        id: 'wsnap-001',
+        planningDate: '2026-05-26',
+        fileName: 'pivot.xlsx',
+        importedAt: '2026-05-26T08:00:00.000Z',
+        rowCount: 10,
+        sourceRowCount: 1348,
+        uniqueSkuCount: 300,
+        status: 'completed',
+        diagnostics: [],
+        sourceSheetName: 'מלאי',
+        rows: [],
+        ...overrides
+      };
+    }
+
+    function makeServiceWithWarehouseStock(
+      repo: ManualShiftsRepo,
+      warehouseStockService: { getLatestCompletedSnapshot: ReturnType<typeof vi.fn> },
+      bondedService?: { getLatestCompletedSnapshot: ReturnType<typeof vi.fn> }
+    ) {
+      const service = createManualShiftsServiceFromRepo(
+        repo,
+        { getNowIso: () => nowIso, warehouseStockService: warehouseStockService as never },
+        bondedService as never
+      );
+      return { service };
+    }
+
+    function makeWarehouseRow(sku: string, availableQty: number): {
+      sku: string; description: string | null; category: string | null;
+      warehouseQtyRaw: number; availableQty: number; sourceDemandQty: number | null;
+      sourceRowCount: number; diagnostics: string[];
+    } {
+      return {
+        sku,
+        description: 'Test Product',
+        category: 'Cat',
+        warehouseQtyRaw: availableQty,
+        availableQty,
+        sourceDemandQty: null,
+        sourceRowCount: 1,
+        diagnostics: []
+      };
+    }
+
+    it('uses exact-date stock snapshot for warehouseQty and does not call legacy stock lookup', async () => {
+      const mockWarehouse = {
+        getLatestCompletedSnapshot: vi.fn(async () => makeWarehouseSnapshot({
+          rows: [
+            makeWarehouseRow('SKU-A', 300),
+            makeWarehouseRow('SKU-B', 50)
+          ]
+        }))
+      };
+      const { service } = makeServiceWithWarehouseStock({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift()),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'SKU-A', description: 'Product A', category: 'Cat', demandQty: 564, orderCount: 1, lineCount: 1 },
+          { sku: 'SKU-B', description: 'Product B', category: 'Cat', demandQty: 100, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: vi.fn(async () => {
+          throw new Error('should not be called');
+        })
+      }, mockWarehouse);
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(mockWarehouse.getLatestCompletedSnapshot).toHaveBeenCalledWith(ids.tenant, '2026-05-26');
+      expect(result.rows[0].warehouseQty).toBe(300);
+      expect(result.rows[0].shortageQty).toBe(264);
+      expect(result.rows[1].warehouseQty).toBe(50);
+      expect(result.rows[1].shortageQty).toBe(50);
+      expect(result.warehouseStockSnapshot).toBeTruthy();
+      expect(result.warehouseStockSnapshot!.id).toBe('wsnap-001');
+      expect(result.warehouseStockSnapshot!.sourceRowCount).toBe(1348);
+      expect(result.warehouseStockSnapshot!.uniqueSkuCount).toBe(300);
+    });
+
+    it('does not emit unknown_sku when SKU exists in stock snapshot but not in products.sku', async () => {
+      const mockWarehouse = {
+        getLatestCompletedSnapshot: vi.fn(async () => makeWarehouseSnapshot({
+          rows: [makeWarehouseRow('IMPORTED-ONLY', 200)]
+        }))
+      };
+      const { service } = makeServiceWithWarehouseStock({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift()),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'IMPORTED-ONLY', description: 'Imported', category: 'Cat', demandQty: 100, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: vi.fn(async () => {
+          throw new Error('should not be called');
+        })
+      }, mockWarehouse);
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(result.rows[0].warehouseQty).toBe(200);
+      expect(result.rows[0].dataIssues).toBeUndefined();
+      expect(result.rows[0].status).not.toBe('data_issue');
+      expect(result.rows[0].status).toBe('ok');
+    });
+
+    it('sets missing_warehouse_stock_snapshot_sku data issue when demand SKU not in active snapshot', async () => {
+      const mockWarehouse = {
+        getLatestCompletedSnapshot: vi.fn(async () => makeWarehouseSnapshot({
+          rows: [makeWarehouseRow('OTHER-SKU', 100)]
+        }))
+      };
+      const { service } = makeServiceWithWarehouseStock({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift()),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'MISSING-FROM-SNAPSHOT', description: 'Missing', category: 'Cat', demandQty: 50, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: vi.fn(async () => {
+          throw new Error('should not be called');
+        })
+      }, mockWarehouse);
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(result.rows[0].warehouseQty).toBe(0);
+      expect(result.rows[0].dataIssues).toEqual(['missing_warehouse_stock_snapshot_sku']);
+      expect(result.rows[0].status).toBe('data_issue');
+    });
+
+    it('falls back to legacy lookup and emits warning when no exact-date snapshot exists', async () => {
+      const mockWarehouse = {
+        getLatestCompletedSnapshot: vi.fn(async () => null)
+      };
+      const { service } = makeServiceWithWarehouseStock({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift()),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'SKU-A', description: 'Product A', category: 'Cat', demandQty: 100, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: vi.fn(async () => {
+          const map = new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>();
+          map.set('SKU-A', { sku: 'SKU-A', warehouseQty: 50, canonicalProductIds: ['p-a'] });
+          return map;
+        })
+      }, mockWarehouse);
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(result.rows[0].warehouseQty).toBe(50);
+      expect(result.warnings).toContain('no_warehouse_stock_snapshot_for_planning_date');
+      expect(result.warehouseStockSnapshot).toBeNull();
+    });
+
+    it('does not use stock snapshot with wrong planning date', async () => {
+      const mockWarehouse = {
+        getLatestCompletedSnapshot: vi.fn(async (tenantId: string, planningDate: string) => {
+          if (planningDate === '2026-05-26') return null;
+          return makeWarehouseSnapshot({ planningDate: '2026-05-25' });
+        })
+      };
+      const { service } = makeServiceWithWarehouseStock({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift({ date: '2026-05-26' })),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'SKU-A', description: 'Product A', category: 'Cat', demandQty: 100, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: vi.fn(async () => {
+          const map = new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>();
+          map.set('SKU-A', { sku: 'SKU-A', warehouseQty: 50, canonicalProductIds: ['p-a'] });
+          return map;
+        })
+      }, mockWarehouse);
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(result.rows[0].warehouseQty).toBe(50);
+      expect(result.warehouseStockSnapshot).toBeNull();
+      expect(result.warnings).toContain('no_warehouse_stock_snapshot_for_planning_date');
+    });
+
+    it('uses latest snapshot by imported_at desc when multiple exist for same date', async () => {
+      let callCount = 0;
+      const mockWarehouse = {
+        getLatestCompletedSnapshot: vi.fn(async () => {
+          callCount++;
+          return makeWarehouseSnapshot({
+            id: 'latest-wsnap',
+            importedAt: '2026-05-26T10:00:00.000Z',
+            rows: [makeWarehouseRow('SKU-A', 500)]
+          });
+        })
+      };
+      const { service } = makeServiceWithWarehouseStock({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift()),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'SKU-A', description: 'Product A', category: 'Cat', demandQty: 100, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: vi.fn(async () => {
+          throw new Error('should not be called');
+        })
+      }, mockWarehouse);
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(mockWarehouse.getLatestCompletedSnapshot).toHaveBeenCalledTimes(1);
+      expect(result.rows[0].warehouseQty).toBe(500);
+      expect(result.warehouseStockSnapshot!.id).toBe('latest-wsnap');
+    });
+
+    it('negative stock row from snapshot gives warehouseQty 0', async () => {
+      const mockWarehouse = {
+        getLatestCompletedSnapshot: vi.fn(async () => makeWarehouseSnapshot({
+          rows: [{
+            sku: 'SKU-NEG',
+            description: 'Negative',
+            category: 'Cat',
+            warehouseQtyRaw: -50,
+            availableQty: 0,
+            sourceDemandQty: null,
+            sourceRowCount: 1,
+            diagnostics: ['negative_stock']
+          }]
+        }))
+      };
+      const { service } = makeServiceWithWarehouseStock({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift()),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'SKU-NEG', description: 'Negative', category: 'Cat', demandQty: 100, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: vi.fn(async () => {
+          throw new Error('should not be called');
+        })
+      }, mockWarehouse);
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(result.rows[0].warehouseQty).toBe(0);
+    });
+
+    it('warehouse stock snapshot is not added to inventory_unit stock', async () => {
+      const mockWarehouse = {
+        getLatestCompletedSnapshot: vi.fn(async () => makeWarehouseSnapshot({
+          rows: [makeWarehouseRow('SKU-A', 300)]
+        }))
+      };
+      const listWarehouseStock = vi.fn(async () => {
+        throw new Error('should not be called');
+      });
+      const { service } = makeServiceWithWarehouseStock({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift()),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'SKU-A', description: 'Product A', category: 'Cat', demandQty: 100, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: listWarehouseStock
+      }, mockWarehouse);
+
+      await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(listWarehouseStock).not.toHaveBeenCalled();
+    });
+
+    it('bonded covers only shortage after warehouse stock, not full demand', async () => {
+      const mockWarehouse = {
+        getLatestCompletedSnapshot: vi.fn(async () => makeWarehouseSnapshot({
+          rows: [makeWarehouseRow('SKU-A', 300)]
+        }))
+      };
+      const mockBonded = {
+        getLatestCompletedSnapshot: vi.fn(async () => ({
+          id: 'snap-bonded-001',
+          planningDate: '2026-05-26',
+          fileName: 'bonded.xlsx',
+          importedAt: '2026-05-26T08:00:00.000Z',
+          rowCount: 10,
+          status: 'completed',
+          diagnostics: { totalRows: 10, populatedRows: 10, missingSkuRows: 0, negativeBalanceRows: 0, duplicateSkuGroups: 0, formulaDiscrepancyRows: 0, warnings: [] },
+          sourceSheetName: 'בונדד!',
+          rows: [{
+            rowNumber: 2, sku: 'SKU-A', description: null, availableQty: 2979,
+            block: 'B1', sourceLabel: 'SrcA', releasedQty: 5000, totalPulledQty: 2021,
+            releasedBalanceQty: 2979, packFactor: null, cartonsPerPallet: null,
+            unitsPerPallet: null, notes: null, pullColumns: [],
+            remainingBondedRaw: null, diagnostics: []
+          }]
+        }))
+      };
+      const { service } = makeServiceWithWarehouseStock({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift()),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'SKU-A', description: 'Product A', category: 'Cat', demandQty: 564, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: vi.fn(async () => {
+          throw new Error('should not be called');
+        })
+      }, mockWarehouse, mockBonded);
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(result.rows[0].warehouseQty).toBe(300);
+      expect(result.rows[0].shortageQty).toBe(264);
+      expect(result.rows[0].bondedAvailableQty).toBe(2979);
+      expect(result.rows[0].bondedCoverQty).toBe(264);
+      expect(result.rows[0].finalMissingQty).toBe(0);
+      expect(result.rows[0].status).toBe('covered_by_bonded');
+      expect(result.rows[0].dataIssues).toBeUndefined();
+    });
+
+    it('enforces tenant isolation: snapshot from another tenant not used', async () => {
+      let capturedTenantId: string | undefined;
+      const mockWarehouse = {
+        getLatestCompletedSnapshot: vi.fn(async (tenantId: string) => {
+          capturedTenantId = tenantId;
+          if (tenantId === ids.otherTenant) return makeWarehouseSnapshot();
+          return null;
+        })
+      };
+      const { service } = makeServiceWithWarehouseStock({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift()),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'SKU-A', description: 'Product A', category: 'Cat', demandQty: 100, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: vi.fn(async () => {
+          const map = new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>();
+          map.set('SKU-A', { sku: 'SKU-A', warehouseQty: 50, canonicalProductIds: ['p-a'] });
+          return map;
+        })
+      }, mockWarehouse);
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(capturedTenantId).toBe(ids.tenant);
+      expect(result.rows[0].warehouseQty).toBe(50);
+      expect(result.warnings).toContain('no_warehouse_stock_snapshot_for_planning_date');
+    });
+
+    it('when warehouseStockService undefined, no new warning emitted and current behavior remains', async () => {
+      const service = createManualShiftsServiceFromRepo(
+        {
+          ...createRepo().repo,
+          findShiftById: vi.fn(async () => createShift()),
+          listProductControlDemand: vi.fn(async () => [
+            { sku: 'SKU-A', description: 'Product A', category: 'Cat', demandQty: 100, orderCount: 1, lineCount: 1 }
+          ]),
+          listWarehouseStockBySku: vi.fn(async () => {
+            const map = new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>();
+            map.set('SKU-A', { sku: 'SKU-A', warehouseQty: 50, canonicalProductIds: ['p-a'] });
+            return map;
+          })
+        },
+        { getNowIso: () => nowIso }
+      );
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(result.rows[0].warehouseQty).toBe(50);
+      expect(result.warehouseStockSnapshot).toBeNull();
+      if (result.warnings) {
+        expect(result.warnings).not.toContain('no_warehouse_stock_snapshot_for_planning_date');
+      }
+    });
+
+    it('existing bonded integration works alongside warehouse stock snapshot', async () => {
+      const mockWarehouse = {
+        getLatestCompletedSnapshot: vi.fn(async () => makeWarehouseSnapshot({
+          rows: [makeWarehouseRow('SKU-A', 30)]
+        }))
+      };
+      const mockBonded = {
+        getLatestCompletedSnapshot: vi.fn(async () => ({
+          id: 'snap-bonded-001',
+          planningDate: '2026-05-26',
+          fileName: 'bonded.xlsx',
+          importedAt: '2026-05-26T08:00:00.000Z',
+          rowCount: 10,
+          status: 'completed',
+          diagnostics: { totalRows: 10, populatedRows: 10, missingSkuRows: 0, negativeBalanceRows: 0, duplicateSkuGroups: 0, formulaDiscrepancyRows: 0, warnings: [] },
+          sourceSheetName: 'בונדד!',
+          rows: [{
+            rowNumber: 2, sku: 'SKU-A', description: null, availableQty: 100,
+            block: 'B1', sourceLabel: 'SrcA', releasedQty: 200, totalPulledQty: 100,
+            releasedBalanceQty: 100, packFactor: null, cartonsPerPallet: null,
+            unitsPerPallet: null, notes: null, pullColumns: [],
+            remainingBondedRaw: null, diagnostics: []
+          }]
+        }))
+      };
+      const { service } = makeServiceWithWarehouseStock({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift()),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'SKU-A', description: 'Product A', category: 'Cat', demandQty: 100, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: vi.fn(async () => {
+          throw new Error('should not be called');
+        })
+      }, mockWarehouse, mockBonded);
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(result.bondedSnapshot).toBeTruthy();
+      expect(result.bondedSnapshot!.id).toBe('snap-bonded-001');
+      expect(result.rows[0].bondedAvailableQty).toBe(100);
+      expect(result.rows[0].bondedCandidates).toHaveLength(1);
+      expect(result.rows[0].bondedCoverQty).toBe(70);
+      expect(result.rows[0].finalMissingQty).toBe(0);
+      expect(result.warnings).toBeUndefined();
+    });
+  });
 });
 
 function makeBondedRow(overrides: {

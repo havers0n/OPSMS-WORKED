@@ -214,7 +214,9 @@ export function ProductControlDetailPanel({ row, onClose }: DetailPanelProps) {
                       ? 'מק"ט לא נמצא בקטלוג המוצרים'
                       : issue === 'duplicate_canonical_sku'
                         ? 'נמצאו כמה מוצרים בקטלוג לאותו מק"ט'
-                        : issue}
+                        : issue === 'missing_warehouse_stock_snapshot_sku'
+                          ? 'המק"ט לא נמצא ב-Snapshot מלאי המחסן'
+                          : issue}
                   </p>
                 ))}
                 {row.bondedCoverQty > 0 && (

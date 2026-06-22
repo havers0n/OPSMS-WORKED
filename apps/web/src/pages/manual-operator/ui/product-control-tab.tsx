@@ -101,6 +101,32 @@ export function ProductControlTab({ shiftId }: ProductControlTabProps) {
         </div>
       </div>
 
+      {/* Warehouse stock snapshot banner */}
+      {data?.warehouseStockSnapshot && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-3">
+          <Info size={16} className="text-green-600 shrink-0" />
+          <div className="text-sm text-green-800">
+            <span className="font-bold">Snapshot מלאי מחסן פעיל לתאריך זה</span>
+            <span className="mx-2 text-green-400">|</span>
+            <span>
+              קובץ: {data.warehouseStockSnapshot.fileName ?? '—'}
+              <span className="mx-1.5 text-green-400">·</span>
+              מק״טים: {data.warehouseStockSnapshot.uniqueSkuCount}
+              <span className="mx-1.5 text-green-400">·</span>
+              שורות מקור: {data.warehouseStockSnapshot.sourceRowCount}
+            </span>
+          </div>
+        </div>
+      )}
+      {!data?.warehouseStockSnapshot && data?.warnings?.includes('no_warehouse_stock_snapshot_for_planning_date') && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center gap-3">
+          <AlertCircle size={16} className="text-amber-600 shrink-0" />
+          <span className="text-sm text-amber-800">
+            לא נמצא Snapshot מלאי מחסן לתאריך העבודה הנבחר. המערכת משתמשת במקור המלאי הישן.
+          </span>
+        </div>
+      )}
+
       {/* Bonded snapshot banner */}
       {data?.bondedSnapshot && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-3">

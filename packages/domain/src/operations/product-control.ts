@@ -33,7 +33,8 @@ export type ProductControlWorkLine = z.infer<typeof productControlWorkLineSchema
 
 export const productControlDataIssueSchema = z.enum([
   'unknown_sku',
-  'duplicate_canonical_sku'
+  'duplicate_canonical_sku',
+  'missing_warehouse_stock_snapshot_sku'
 ]);
 export type ProductControlDataIssue = z.infer<typeof productControlDataIssueSchema>;
 
@@ -85,12 +86,23 @@ export const productControlBondedSnapshotMetaSchema = z.object({
 });
 export type ProductControlBondedSnapshotMeta = z.infer<typeof productControlBondedSnapshotMetaSchema>;
 
+export const productControlWarehouseStockSnapshotMetaSchema = z.object({
+  id: z.string(),
+  planningDate: z.string(),
+  importedAt: z.string(),
+  fileName: z.string().nullable(),
+  sourceRowCount: z.number().int().min(0),
+  uniqueSkuCount: z.number().int().min(0)
+});
+export type ProductControlWarehouseStockSnapshotMeta = z.infer<typeof productControlWarehouseStockSnapshotMetaSchema>;
+
 export const productControlResponseSchema = z.object({
   shiftId: z.string(),
   generatedAt: z.string(),
   rows: z.array(productControlRowSchema),
   totals: productControlTotalsSchema,
   bondedSnapshot: productControlBondedSnapshotMetaSchema.nullable().optional(),
+  warehouseStockSnapshot: productControlWarehouseStockSnapshotMetaSchema.nullable().optional(),
   warnings: z.array(z.string()).optional()
 });
 export type ProductControlResponse = z.infer<typeof productControlResponseSchema>;
