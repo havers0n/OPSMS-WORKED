@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  productControlBondedCandidateSchema,
+  type ProductControlBondedCandidate
+} from './bonded-snapshot.js';
 
 export const productControlStatusSchema = z.enum([
   'ok',
@@ -57,7 +61,8 @@ export const productControlRowSchema = z.object({
   bondedCandidateAvailableBalance: nonNegativeNumber.optional(),
   workLines: z.array(productControlWorkLineSchema).optional(),
   dataIssues: z.array(productControlDataIssueSchema).optional(),
-  notes: z.string().optional()
+  notes: z.string().optional(),
+  bondedCandidates: z.array(productControlBondedCandidateSchema).optional()
 });
 export type ProductControlRow = z.infer<typeof productControlRowSchema>;
 
@@ -71,11 +76,22 @@ export const productControlTotalsSchema = z.object({
 });
 export type ProductControlTotals = z.infer<typeof productControlTotalsSchema>;
 
+export const productControlBondedSnapshotMetaSchema = z.object({
+  id: z.string(),
+  planningDate: z.string(),
+  importedAt: z.string(),
+  fileName: z.string().nullable(),
+  rowCount: z.number().int().min(0)
+});
+export type ProductControlBondedSnapshotMeta = z.infer<typeof productControlBondedSnapshotMetaSchema>;
+
 export const productControlResponseSchema = z.object({
   shiftId: z.string(),
   generatedAt: z.string(),
   rows: z.array(productControlRowSchema),
-  totals: productControlTotalsSchema
+  totals: productControlTotalsSchema,
+  bondedSnapshot: productControlBondedSnapshotMetaSchema.nullable().optional(),
+  warnings: z.array(z.string()).optional()
 });
 export type ProductControlResponse = z.infer<typeof productControlResponseSchema>;
 
@@ -170,6 +186,7 @@ export function buildProductControlRow(input: {
   workLines?: ProductControlWorkLine[];
   dataIssues?: ProductControlDataIssue[];
   notes?: string;
+  bondedCandidates?: ProductControlBondedCandidate[];
 }): ProductControlRow {
   const shortageQty = deriveShortageQty(input.demandQty, input.warehouseQty);
   const bondedCoverQty = deriveBondedCoverQty(shortageQty, input.bondedAvailableQty);
@@ -202,6 +219,7 @@ export function buildProductControlRow(input: {
     bondedCandidateAvailableBalance: input.bondedCandidateAvailableBalance,
     workLines: input.workLines,
     dataIssues: input.dataIssues,
-    notes: input.notes
+    notes: input.notes,
+    bondedCandidates: input.bondedCandidates
   };
 }

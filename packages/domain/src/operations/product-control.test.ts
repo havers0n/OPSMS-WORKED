@@ -12,6 +12,7 @@ import {
   deriveProductControlStatus,
   computeProductControlTotals,
   buildProductControlRow,
+  productControlBondedSnapshotMetaSchema,
   type ProductControlRow,
   type ProductControlStatus
 } from './product-control';
@@ -342,5 +343,118 @@ describe('buildProductControlRow', () => {
       unresolvedSkus: 0,
       dataIssueSkus: 0
     });
+  });
+
+  it('preserves bonded candidates array', () => {
+    const candidates = [
+      { block: '7488/23', sourceLabel: 'נעמן', availableQty: 200, releasedQty: 300, totalPulledQty: 100, releasedBalanceQty: 200, packFactor: 20, cartonsPerPallet: 20, unitsPerPallet: 400, notes: null }
+    ];
+    const row = buildProductControlRow({
+      sku: '100001',
+      description: 'Test',
+      category: 'Cat',
+      demandQty: 500,
+      warehouseQty: 500,
+      bondedAvailableQty: 0,
+      bondedCandidates: candidates
+    });
+    expect(row.bondedCandidates).toEqual(candidates);
+  });
+
+  it('shortage fully covered by bonded — covered_by_bonded status and finalMissingQty 0', () => {
+    const row = buildProductControlRow({
+      sku: '100001',
+      description: 'Test',
+      category: 'Cat',
+      demandQty: 500,
+      warehouseQty: 100,
+      bondedAvailableQty: 500
+    });
+    expect(row.shortageQty).toBe(400);
+    expect(row.bondedCoverQty).toBe(400);
+    expect(row.finalMissingQty).toBe(0);
+    expect(row.status).toBe('covered_by_bonded');
+  });
+
+  it('shortage partially covered by bonded — partial_bonded status and finalMissingQty > 0', () => {
+    const row = buildProductControlRow({
+      sku: '100001',
+      description: 'Test',
+      category: 'Cat',
+      demandQty: 500,
+      warehouseQty: 200,
+      bondedAvailableQty: 150
+    });
+    expect(row.shortageQty).toBe(300);
+    expect(row.bondedCoverQty).toBe(150);
+    expect(row.finalMissingQty).toBe(150);
+    expect(row.status).toBe('partial_bonded');
+  });
+
+  it('data issue priority: unknown SKU with bonded available remains data_issue', () => {
+    const row = buildProductControlRow({
+      sku: '999999',
+      description: 'Issue',
+      category: '—',
+      demandQty: 0,
+      warehouseQty: 9999,
+      bondedAvailableQty: 500,
+      status: 'data_issue',
+      dataIssues: ['unknown_sku'],
+      notes: 'Manual override'
+    });
+    expect(row.status).toBe('data_issue');
+    expect(row.bondedAvailableQty).toBe(500);
+    expect(row.dataIssues).toEqual(['unknown_sku']);
+  });
+});
+
+describe('productControlBondedSnapshotMetaSchema', () => {
+  it('accepts valid bonded snapshot metadata', () => {
+    const meta = {
+      id: 'snap-1',
+      planningDate: '2026-06-22',
+      importedAt: '2026-06-22T10:00:00.000Z',
+      fileName: 'bonded.xlsx',
+      rowCount: 120
+    };
+    const parsed = productControlBondedSnapshotMetaSchema.parse(meta);
+    expect(parsed.fileName).toBe('bonded.xlsx');
+  });
+});
+
+describe('productControlResponseSchema with optional metadata', () => {
+  it('accepts response with bondedSnapshot and warnings', () => {
+    const response = {
+      shiftId: 'shift-1',
+      generatedAt: '2026-06-22T10:00:00.000Z',
+      rows: [],
+      totals: {
+        totalSkus: 0, shortageSkus: 0, coveredByBondedSkus: 0,
+        partialBondedSkus: 0, unresolvedSkus: 0, dataIssueSkus: 0
+      },
+      bondedSnapshot: {
+        id: 'snap-1',
+        planningDate: '2026-06-22',
+        importedAt: '2026-06-22T10:00:00.000Z',
+        fileName: 'bonded.xlsx',
+        rowCount: 120
+      },
+      warnings: ['no_bonded_snapshot_for_planning_date']
+    };
+    expect(() => productControlResponseSchema.parse(response)).not.toThrow();
+  });
+
+  it('accepts response without bondedSnapshot or warnings', () => {
+    const response = {
+      shiftId: 'shift-1',
+      generatedAt: '2026-06-22T10:00:00.000Z',
+      rows: [],
+      totals: {
+        totalSkus: 0, shortageSkus: 0, coveredByBondedSkus: 0,
+        partialBondedSkus: 0, unresolvedSkus: 0, dataIssueSkus: 0
+      }
+    };
+    expect(() => productControlResponseSchema.parse(response)).not.toThrow();
   });
 });

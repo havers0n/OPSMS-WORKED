@@ -47,8 +47,10 @@ export function createRouteDeps(options: BuildAppOptions = {}): RouteDeps {
     ((context) => createProductLocationRolesService(getUserSupabase(context)));
   const getStoragePresetsService =
     options.getStoragePresetsService ?? ((context) => createStoragePresetsService(getUserSupabase(context)));
+  const getBondedService =
+    options.getBondedService ?? ((context) => createBondedService(getUserSupabase(context)));
   const getManualShiftsService =
-    options.getManualShiftsService ?? ((context) => createManualShiftsService(getUserSupabase(context)));
+    options.getManualShiftsService ?? ((context) => createManualShiftsService(getUserSupabase(context), getBondedService(context)));
   const getWarehouseLabelsService =
     options.getWarehouseLabelsService ?? ((context) => createWarehouseLabelsService(getUserSupabase(context)));
   const getPickingPlanningPreviewService =
@@ -66,8 +68,6 @@ export function createRouteDeps(options: BuildAppOptions = {}): RouteDeps {
     });
   const getFloorRoutingService =
     options.getFloorRoutingService ?? ((context) => createFloorRoutingService(getUserSupabase(context)));
-  const getBondedService =
-    options.getBondedService ?? ((context) => createBondedService(getUserSupabase(context)));
 
   return {
     getAuthContext,
