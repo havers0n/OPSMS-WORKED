@@ -154,6 +154,8 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
     listOrderAshlamot: vi.fn(async () => []),
     listOpenShiftAshlamot: vi.fn(async () => []),
     listShiftOrderItems: vi.fn(async () => []),
+    listPickerSheetItems: vi.fn(async () => []),
+    listPickerSheetLineItems: vi.fn(async () => ({ orders: [], items: [] })),
     countMonthlyImportShiftRows: vi.fn(async ({ shiftId }) => ({
       shiftId,
       activeLinesCount: 0,
@@ -245,7 +247,6 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
         new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>()
     ),
     findLineByShiftAndName: vi.fn(async () => null),
-    listPickerSheetItems: vi.fn(async () => [])
   };
 }
 

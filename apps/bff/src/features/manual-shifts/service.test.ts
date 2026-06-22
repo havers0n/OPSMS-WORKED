@@ -346,6 +346,8 @@ function createRepo() {
       return state.orders.filter((order) => order.lineId === lineId && order.deletedAt === null);
     }),
     listShiftOrderItems: vi.fn(async () => []),
+    listPickerSheetItems: vi.fn(async () => []),
+    listPickerSheetLineItems: vi.fn(async () => ({ orders: [], items: [] })),
     findOrderById: vi.fn(async (orderId: string) => {
       return state.orders.find((order) => order.id === orderId) ?? null;
     }),
@@ -643,7 +645,6 @@ function createRepo() {
         new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>()
     ),
     findLineByShiftAndName: vi.fn(async (_shiftId: string, _lineName: string) => null),
-    listPickerSheetItems: vi.fn(async (_lineId: string, _workGroupName: string) => [])
   };
  
   return { repo, state };
