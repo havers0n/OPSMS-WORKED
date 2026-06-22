@@ -9,6 +9,7 @@ import { AreaOverview } from './area-overview';
 import { WorkGroupWorkspace } from './work-group-workspace';
 import { ItemsDrawerV2 } from './items-drawer-v2';
 import { AssignModalV2 } from './assign-modal-v2';
+import { QuantityAllocationModal } from './quantity-allocation-modal';
 import { ProblemQueue } from './problem-queue';
 import { PublishSummary } from './publish-summary';
 
@@ -17,15 +18,22 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
 
   const selectedAreaName = useSchemeBuilderStore((s) => s.selectedAreaName);
   const setSelectedArea = useSchemeBuilderStore((s) => s.setSelectedArea);
-  const assignItemRows = useSchemeBuilderStore((s) => s.assignItemRows);
-  const assignWholeOrder = useSchemeBuilderStore((s) => s.assignWholeOrder);
+  const allocateItemQty = useSchemeBuilderStore((s) => s.allocateItemQty);
+  const allocateItemRows = useSchemeBuilderStore((s) => s.allocateItemRows);
   const targetWorkGroupId = useSchemeBuilderStore((s) => s.targetWorkGroupId);
   const setTargetWorkGroup = useSchemeBuilderStore((s) => s.setTargetWorkGroup);
   const getWorkGroup = useSchemeBuilderStore((s) => s.getWorkGroup);
+  const getAssignedQty = useSchemeBuilderStore((s) => s.getAssignedQty);
 
   const [drawerOrderId, setDrawerOrderId] = useState<string | null>(null);
   const [assignItemIds, setAssignItemIds] = useState<string[]>([]);
   const [showAssignModal, setShowAssignModal] = useState(false);
+
+  const [quantityModalState, setQuantityModalState] = useState<{
+    itemRowIds: string[];
+    workGroupId: string;
+  } | null>(null);
+
   const [isWholeOrderAssign, setIsWholeOrderAssign] = useState(false);
 
   const source = useMemo(() => {
@@ -75,33 +83,60 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
     setIsWholeOrderAssign(false);
   }, []);
 
+  const handleOpenQuantityModal = useCallback((itemRowIds: string[], workGroupId: string) => {
+    setQuantityModalState({ itemRowIds, workGroupId });
+  }, []);
+
+  const handleConfirmAllocations = useCallback(
+    (allocations: { itemRowId: string; qty: number }[], workGroupId: string) => {
+      for (const alloc of allocations) {
+        const item = drawerItems.find((i) => i.id === alloc.itemRowId);
+        if (!item) continue;
+        allocateItemQty({
+          itemRowId: alloc.itemRowId,
+          workGroupId,
+          qty: alloc.qty,
+          totalQty: item.quantity,
+        });
+      }
+      setQuantityModalState(null);
+      setAssignItemIds([]);
+    },
+    [allocateItemQty, drawerItems],
+  );
+
   const handleAssignSelected = useCallback((itemRowIds: string[]) => {
     if (targetWorkGroupId) {
-      assignItemRows(itemRowIds, targetWorkGroupId);
+      handleOpenQuantityModal(itemRowIds, targetWorkGroupId);
       return;
     }
     setAssignItemIds(itemRowIds);
     setIsWholeOrderAssign(false);
     setShowAssignModal(true);
-  }, [targetWorkGroupId, assignItemRows]);
+  }, [targetWorkGroupId, handleOpenQuantityModal]);
 
   const handleAssignAllUnassigned = useCallback((itemRowIds: string[]) => {
+    if (targetWorkGroupId) {
+      allocateItemRows(itemRowIds, targetWorkGroupId, orderItemMap);
+      return;
+    }
     setAssignItemIds(itemRowIds);
     setIsWholeOrderAssign(true);
     setShowAssignModal(true);
-  }, []);
+  }, [targetWorkGroupId, allocateItemRows, orderItemMap]);
 
   const handleConfirmAssign = useCallback(
     (workGroupId: string) => {
       if (isWholeOrderAssign) {
-        assignWholeOrder(assignItemIds, workGroupId);
+        allocateItemRows(assignItemIds, workGroupId, orderItemMap);
+        setAssignItemIds([]);
+        setIsWholeOrderAssign(false);
       } else {
-        assignItemRows(assignItemIds, workGroupId);
+        handleOpenQuantityModal(assignItemIds, workGroupId);
+        setIsWholeOrderAssign(false);
       }
-      setAssignItemIds([]);
-      setIsWholeOrderAssign(false);
     },
-    [assignItemIds, isWholeOrderAssign, assignItemRows, assignWholeOrder],
+    [assignItemIds, isWholeOrderAssign, allocateItemRows, handleOpenQuantityModal, orderItemMap],
   );
 
   const handleStartAssign = useCallback((workGroupId: string) => {
@@ -111,6 +146,19 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
   const handleCancelTarget = useCallback(() => {
     setTargetWorkGroup(null);
   }, [setTargetWorkGroup]);
+
+  const quantityModalRows = useMemo(() => {
+    if (!quantityModalState) return [];
+    return quantityModalState.itemRowIds.map((id) => {
+      const item = drawerItems.find((i) => i.id === id);
+      const assignedQty = getAssignedQty(id);
+      return {
+        item: item!,
+        remainingQty: Math.max(0, (item?.quantity ?? 0) - assignedQty),
+        assignedQty,
+      };
+    }).filter((r) => r.item);
+  }, [quantityModalState, drawerItems, getAssignedQty]);
 
   if (isLoading) {
     return (
@@ -140,7 +188,7 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50" dir="rtl">
-      <header className="bg-white border-b border-gray-200 px-6 py-4 shrink-0 shadow-sm sticky top-0 z-20">
+      <header className="bg-white border-b border-gray-200 px-6 py-4 shrink-0 shadow-sm sticky top-0 z-30">
         <div className="flex justify-between items-start mb-4">
           <h1 className="text-xl font-bold text-gray-900">תכנון קווי עבודה</h1>
           <span className="text-xs text-amber-700 bg-amber-50 px-3 py-1 rounded font-medium border border-amber-200">
@@ -255,6 +303,16 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
         itemCount={assignItemIds.length}
         onAssign={handleConfirmAssign}
       />
+
+      {quantityModalState && (
+        <QuantityAllocationModal
+          isOpen={true}
+          onClose={() => { setQuantityModalState(null); setAssignItemIds([]); }}
+          itemRows={quantityModalRows}
+          workGroupName={getWorkGroup(quantityModalState.workGroupId)?.name ?? ''}
+          onConfirm={(allocs) => handleConfirmAllocations(allocs, quantityModalState.workGroupId)}
+        />
+      )}
     </div>
   );
 }
