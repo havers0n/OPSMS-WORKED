@@ -1816,3 +1816,97 @@ describe('listBucketProductRollup work bucket scoping', () => {
     expect(result.reduce((sum: number, row: BucketProductRollupRow) => sum + row.totalQuantity, 0)).toBe(93);
   });
 });
+
+describe('listPickerSheetItems work group scoping', () => {
+  const SHIFT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const LINE = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+  it('treats כללי as a general work bucket and ignores sibling work buckets', async () => {
+    const orders = [
+      {
+        id: 'o-general-null',
+        shift_id: SHIFT,
+        line_id: LINE,
+        point_name: 'גליל',
+        work_bucket_name: null,
+        deleted_at: null
+      },
+      {
+        id: 'o-general-empty',
+        shift_id: SHIFT,
+        line_id: LINE,
+        point_name: 'גליל',
+        work_bucket_name: '',
+        deleted_at: null
+      },
+      {
+        id: 'o-sibling',
+        shift_id: SHIFT,
+        line_id: LINE,
+        point_name: 'כללי',
+        work_bucket_name: 'סיגריות-מנטה עין המפרץ',
+        deleted_at: null
+      }
+    ];
+    const items = [
+      { id: 'i-1', tenant_id: 't1', shift_id: SHIFT, line_id: LINE, order_id: 'o-general-null', sku: 'SKU-G1', description: null, category: null, quantity: 4, notes: null, zone: null, source_sheet: null, source_rows: null, source_file: null, sort_order: 1, created_at: '2026-06-14T06:00:00.000Z' },
+      { id: 'i-2', tenant_id: 't1', shift_id: SHIFT, line_id: LINE, order_id: 'o-general-empty', sku: 'SKU-G2', description: null, category: null, quantity: 6, notes: null, zone: null, source_sheet: null, source_rows: null, source_file: null, sort_order: 2, created_at: '2026-06-14T06:00:00.000Z' },
+      { id: 'i-3', tenant_id: 't1', shift_id: SHIFT, line_id: LINE, order_id: 'o-sibling', sku: 'SKU-SIB', description: null, category: null, quantity: 99, notes: null, zone: null, source_sheet: null, source_rows: null, source_file: null, sort_order: 3, created_at: '2026-06-14T06:00:00.000Z' }
+    ];
+    const supabase = fakeSupabase(orders, items);
+    const repo = createManualShiftsRepo(supabase as never);
+
+    const result = await repo.listPickerSheetItems(LINE, 'כללי');
+
+    expect(result.map((row: BucketProductRollupRow | { sku: string }) => row.sku).sort()).toEqual(['SKU-G1', 'SKU-G2']);
+  });
+
+  it('keeps legacy point_name fallback only for non-general work groups when work_bucket_name is empty', async () => {
+    const orders = [
+      {
+        id: 'o-target-null',
+        shift_id: SHIFT,
+        line_id: LINE,
+        point_name: 'סלולר',
+        work_bucket_name: null,
+        deleted_at: null
+      },
+      {
+        id: 'o-target-empty',
+        shift_id: SHIFT,
+        line_id: LINE,
+        point_name: 'סלולר',
+        work_bucket_name: '',
+        deleted_at: null
+      },
+      {
+        id: 'o-wrong-point',
+        shift_id: SHIFT,
+        line_id: LINE,
+        point_name: 'גליל',
+        work_bucket_name: null,
+        deleted_at: null
+      },
+      {
+        id: 'o-sibling',
+        shift_id: SHIFT,
+        line_id: LINE,
+        point_name: 'סלולר',
+        work_bucket_name: 'רכב-פז ירכא',
+        deleted_at: null
+      }
+    ];
+    const items = [
+      { id: 'i-1', tenant_id: 't1', shift_id: SHIFT, line_id: LINE, order_id: 'o-target-null', sku: 'SKU-1', description: null, category: null, quantity: 4, notes: null, zone: null, source_sheet: null, source_rows: null, source_file: null, sort_order: 1, created_at: '2026-06-14T06:00:00.000Z' },
+      { id: 'i-2', tenant_id: 't1', shift_id: SHIFT, line_id: LINE, order_id: 'o-target-empty', sku: 'SKU-2', description: null, category: null, quantity: 6, notes: null, zone: null, source_sheet: null, source_rows: null, source_file: null, sort_order: 2, created_at: '2026-06-14T06:00:00.000Z' },
+      { id: 'i-3', tenant_id: 't1', shift_id: SHIFT, line_id: LINE, order_id: 'o-wrong-point', sku: 'SKU-3', description: null, category: null, quantity: 9, notes: null, zone: null, source_sheet: null, source_rows: null, source_file: null, sort_order: 3, created_at: '2026-06-14T06:00:00.000Z' },
+      { id: 'i-4', tenant_id: 't1', shift_id: SHIFT, line_id: LINE, order_id: 'o-sibling', sku: 'SKU-4', description: null, category: null, quantity: 99, notes: null, zone: null, source_sheet: null, source_rows: null, source_file: null, sort_order: 4, created_at: '2026-06-14T06:00:00.000Z' }
+    ];
+    const supabase = fakeSupabase(orders, items);
+    const repo = createManualShiftsRepo(supabase as never);
+
+    const result = await repo.listPickerSheetItems(LINE, 'סלולר');
+
+    expect(result.map((row: BucketProductRollupRow | { sku: string }) => row.sku).sort()).toEqual(['SKU-1', 'SKU-2']);
+  });
+});

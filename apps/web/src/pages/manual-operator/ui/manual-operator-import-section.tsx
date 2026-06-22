@@ -4,6 +4,8 @@ import type { ManualShiftSession } from '@wos/domain';
 import { monthlyReplaceSafetyQueryOptions } from '@/entities/manual-shift/api/queries';
 import { BondedImportPanel } from './bonded-import-panel';
 import { BondedImportSheet } from './bonded-import-sheet';
+import { WarehouseStockImportPanel } from './warehouse-stock-import-panel';
+import { WarehouseStockImportSheet } from './warehouse-stock-import-sheet';
 import { ImportExcelSheet } from './import-excel-sheet';
 import { MonthlyImportPreviewSheet } from './monthly-import-preview-sheet';
 
@@ -55,6 +57,7 @@ export function ManualOperatorImportSection({
   hasExistingWork
 }: ManualOperatorImportSectionProps) {
   const [showBondedSheet, setShowBondedSheet] = useState(false);
+  const [showWarehouseStockSheet, setShowWarehouseStockSheet] = useState(false);
   const [showImportExcel, setShowImportExcel] = useState(false);
   const [showMonthlyPreview, setShowMonthlyPreview] = useState(false);
   const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
@@ -121,6 +124,16 @@ export function ManualOperatorImportSection({
           </div>
           <BondedImportPanel shiftId={shift?.id ?? null} selectedDate={selectedDate} />
         </section>
+
+        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 space-y-2">
+            <h2 className="text-xl font-semibold text-gray-900">ייבוא מלאי מחסן</h2>
+            <p className="text-sm text-gray-600">
+              העלאת קובץ אקסל עם גיליון מלאי, בדיקת נתונים, פרסום snapshot ורשימת snapshots אחרונים.
+            </p>
+          </div>
+          <WarehouseStockImportPanel shiftId={shift?.id ?? null} selectedDate={selectedDate} />
+        </section>
       </div>
 
       {showBondedSheet ? (
@@ -128,6 +141,14 @@ export function ManualOperatorImportSection({
           shiftId={shift?.id ?? null}
           selectedDate={selectedDate}
           onClose={() => setShowBondedSheet(false)}
+        />
+      ) : null}
+
+      {showWarehouseStockSheet ? (
+        <WarehouseStockImportSheet
+          shiftId={shift?.id ?? null}
+          selectedDate={selectedDate}
+          onClose={() => setShowWarehouseStockSheet(false)}
         />
       ) : null}
 

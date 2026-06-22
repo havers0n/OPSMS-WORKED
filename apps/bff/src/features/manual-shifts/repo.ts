@@ -992,16 +992,33 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
     },
 
     async listPickerSheetItems(lineId, workGroupName) {
+      const normalizedWorkGroupName = normalizeOptionalString(workGroupName);
+      if (normalizedWorkGroupName === null) return [];
+
       const { data: orders, error: ordersError } = await supabase
         .from('manual_shift_orders')
-        .select('id')
+        .select('id,work_bucket_name,point_name')
         .eq('line_id', lineId)
-        .is('deleted_at', null)
-        .or(`work_bucket_name.eq.${workGroupName},and(work_bucket_name.is.null,point_name.eq.${workGroupName})`);
+        .is('deleted_at', null);
 
       if (ordersError) throw ordersError;
 
-      const orderIds = (orders ?? []).map((row: { id: string }) => row.id);
+      const matchingOrders = (orders ?? []).filter((row: { work_bucket_name?: string | null; point_name?: string | null }) => {
+        const workBucketName = normalizeOptionalString(row.work_bucket_name ?? null);
+
+        if (normalizedWorkGroupName === 'כללי') {
+          return workBucketName === null || workBucketName === 'כללי';
+        }
+
+        if (workBucketName !== null) {
+          return workBucketName === normalizedWorkGroupName;
+        }
+
+        const legacyPointName = normalizeOptionalString(row.point_name ?? null);
+        return legacyPointName === normalizedWorkGroupName;
+      });
+
+      const orderIds = matchingOrders.map((row: { id: string }) => row.id);
       if (orderIds.length === 0) return [];
 
       const items: ManualShiftOrderItem[] = [];
