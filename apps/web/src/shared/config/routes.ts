@@ -11,6 +11,7 @@ export const routes = {
   operatorManualImport: '/operator/manual/import',
   operatorManualLines: '/operator/manual/lines',
   operatorManualPrintScheme: '/operator/manual/print/scheme',
+  operatorManualPrintPickerSheet: '/operator/manual/print/picker-sheet',
   warehouse: '/warehouse',
   warehouseView: '/warehouse/view',
   warehouseActions: '/warehouse/actions',

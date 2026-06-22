@@ -14,6 +14,7 @@ const MobilePickerPage = lazy(() => import('@/pages/picker/picker-page').then(m 
 const MobilePickTaskPage = lazy(() => import('@/pages/picker/pick-task-page').then(m => ({ default: m.PickTaskPage })));
 const MobilePickStepPage = lazy(() => import('@/pages/picker/pick-step-page').then(m => ({ default: m.PickStepPage })));
 const PrintSchemePage = lazy(() => import('@/pages/manual-operator/printing/routes/PrintSchemePage').then(m => ({ default: m.PrintSchemePage })));
+const PrintPickerSheetPage = lazy(() => import('@/pages/manual-operator/printing/routes/PrintPickerSheetPage').then(m => ({ default: m.PrintPickerSheetPage })));
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { AppRouteErrorBoundary } from '@/app/diagnostics/app-route-error-boundary';
 import { AppRouteRuntime } from '@/app/diagnostics/app-route-runtime';
@@ -87,6 +88,14 @@ export function AppRouter() {
           element={
             <ProtectedRoute>
               <PrintSchemePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path={routes.operatorManualPrintPickerSheet}
+          element={
+            <ProtectedRoute>
+              <PrintPickerSheetPage />
             </ProtectedRoute>
           }
         />
