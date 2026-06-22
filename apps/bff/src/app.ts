@@ -30,6 +30,7 @@ import { registerManualShiftsRoutes } from './features/manual-shifts/routes.js';
 import { registerPickerRoutes } from './features/picker/routes.js';
 import { registerWarehouseLabelRoutes } from './features/warehouse-labels/routes.js';
 import { registerBondedRoutes } from './features/bonded/routes.js';
+import { registerWarehouseStockRoutes } from './features/warehouse-stock/routes.js';
 
 const MANUAL_SHIFT_IMPORT_FILE_SIZE_LIMIT_BYTES = 20 * 1024 * 1024;
 const MANUAL_SHIFT_IMPORT_BODY_LIMIT_BYTES = 20 * 1024 * 1024;
@@ -69,7 +70,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     getWarehouseLabelsService,
     getPickingPlanningPreviewService,
     getFloorRoutingService,
-    getBondedService
+    getBondedService,
+    getWarehouseStockService
   } = deps;
 
   void app.register(cors, {
@@ -180,6 +182,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerWavesRoutes(app, { getAuthContext, getUserSupabase, getWavesService });
   registerManualShiftsRoutes(app, { getAuthContext, getManualShiftsService, getUserSupabase });
   registerBondedRoutes(app, { getAuthContext, getBondedService: deps.getBondedService });
+  registerWarehouseStockRoutes(app, { getAuthContext, getWarehouseStockService: deps.getWarehouseStockService });
   registerPickerRoutes(app, { getAuthContext, getUserSupabase });
 
   app.setErrorHandler((error, request, reply) => {

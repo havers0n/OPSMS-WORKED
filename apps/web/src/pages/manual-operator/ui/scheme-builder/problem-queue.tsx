@@ -9,7 +9,7 @@ export function ProblemQueue({
   orders: SourceOrder[];
   orderItemMap: Record<string, SourceOrderItem[]>;
 }) {
-  const itemAssignments = useSchemeBuilderStore((s) => s.itemAssignments);
+  const itemAllocations = useSchemeBuilderStore((s) => s.itemAllocations);
 
   const unassignedOrders: SourceOrder[] = [];
   const partialOrders: SourceOrder[] = [];
@@ -18,25 +18,36 @@ export function ProblemQueue({
   const checkUnitOrders: SourceOrder[] = [];
 
   for (const order of orders) {
-    const itemIds = (orderItemMap[order.orderId] ?? []).map((i) => i.id);
-    if (itemIds.length === 0) continue;
+    const items = orderItemMap[order.orderId] ?? [];
+    if (items.length === 0) continue;
 
-    let assignedCount = 0;
-    const groups = new Set<string>();
-    for (const itemId of itemIds) {
-      const wgId = itemAssignments[itemId];
-      if (wgId) {
-        assignedCount++;
-        groups.add(wgId);
+    let unassignedCount = 0;
+    let fullyAssignedCount = 0;
+    let hasSplit = false;
+
+    for (const item of items) {
+      const allocs = itemAllocations.filter((a) => a.itemRowId === item.id);
+      const assignedQty = allocs.reduce((s, a) => s + a.qty, 0);
+      const remainingQty = item.quantity - assignedQty;
+
+      const wgIds = new Set(allocs.map((a) => a.workGroupId));
+      if (wgIds.size > 1) hasSplit = true;
+
+      if (assignedQty === 0) {
+        unassignedCount++;
+      } else if (remainingQty > 0) {
+        // partially allocated
+      } else {
+        fullyAssignedCount++;
       }
     }
 
-    if (assignedCount === 0) {
+    if (unassignedCount === items.length) {
       unassignedOrders.push(order);
-    } else if (assignedCount < itemIds.length) {
-      partialOrders.push(order);
-    } else if (groups.size > 1) {
+    } else if (hasSplit) {
       splitOrders.push(order);
+    } else if (fullyAssignedCount < items.length) {
+      partialOrders.push(order);
     }
 
     if (order.hasAshlama) ashlamaOrders.push(order);
