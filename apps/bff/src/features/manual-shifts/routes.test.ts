@@ -2802,6 +2802,58 @@ describe('manual shifts routes', () => {
     });
   });
 
+  describe('print-picker-sheet', () => {
+    it('returns picker sheet data for a valid workGroup scope', async () => {
+      const sheet = {
+        shift: 'Morning Shift',
+        scope: 'workGroup' as const,
+        shiftDate: '2026-06-22',
+        distributionArea: 'גליל',
+        generatedAt: '2026-06-22T10:00:00.000Z',
+        totals: { lines: 1, workGroups: 1, items: 1 },
+        planningLines: [
+          {
+            name: 'גליל',
+            workGroups: [
+              {
+                name: 'כללי',
+                items: [
+                  { sku: 'SKU-1', displaySku: 'SKU-1', description: 'מוצר', quantity: 1 }
+                ]
+              }
+            ]
+          }
+        ]
+      };
+      const service = createServiceMock({
+        getPickerSheetWorkGroup: vi.fn(async () => sheet)
+      });
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/print/picker-sheet?scope=workGroup&distributionArea=%D7%92%D7%9C%D7%99%D7%9C&planningLineName=%D7%92%D7%9C%D7%99%D7%9C&workGroupName=%D7%9B%D7%9C%D7%9C%D7%99`
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        shift: 'Morning Shift',
+        scope: 'workGroup',
+        shiftDate: '2026-06-22',
+        distributionArea: 'גליל'
+      });
+      expect(service.getPickerSheetWorkGroup).toHaveBeenCalledWith({
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        distributionArea: 'גליל',
+        planningLineName: 'גליל',
+        workGroupName: 'כללי'
+      });
+
+      await app.close();
+    });
+  });
+
   describe('GET /api/manual-shifts/:shiftId/product-control', () => {
     it('returns 200 with shiftId, rows and totals', async () => {
       const mockRows = [
