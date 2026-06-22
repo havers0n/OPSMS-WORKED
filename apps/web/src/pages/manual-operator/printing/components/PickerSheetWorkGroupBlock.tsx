@@ -39,7 +39,7 @@ export function PickerSheetWorkGroupBlock({ workGroup, scope, lineName, isFirst 
                   </span>
                 )}
               </td>
-              <td>{item.productName}</td>
+              <td>{item.description}</td>
               <td className="print-qty">{item.quantity}</td>
               <td>{item.warning === 'sku_display_collision' ? 'מק״ט מלא זמני' : ''}</td>
             </tr>

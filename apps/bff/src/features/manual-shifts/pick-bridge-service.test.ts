@@ -243,7 +243,9 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
     listWarehouseStockBySku: vi.fn(
       async () =>
         new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>()
-    )
+    ),
+    findLineByShiftAndName: vi.fn(async () => null),
+    listPickerSheetItems: vi.fn(async () => [])
   };
 }
 

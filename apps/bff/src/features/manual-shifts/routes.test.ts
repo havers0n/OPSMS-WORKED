@@ -358,6 +358,27 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
       sourceZone: null,
       products: []
     })),
+    getPickerSheetWorkGroup: vi.fn(async () => ({
+      shift: 'Morning Shift',
+      scope: 'workGroup' as const,
+      shiftDate: '2026-06-22',
+      distributionArea: 'שפלה 2',
+      generatedAt: '2026-06-22T10:00:00.000Z',
+      totals: { lines: 1, workGroups: 1, items: 1 },
+      planningLines: [
+        {
+          name: 'קו אריזה 1',
+          workGroups: [
+            {
+              name: 'סיגריות-מנטה',
+              items: [
+                { sku: 'SKU-001', displaySku: 'U-001', description: 'Product A', quantity: 10 },
+              ],
+            },
+          ],
+        },
+      ],
+    })),
     getProductControl: vi.fn(async () => ({
       shiftId: ids.shift,
       generatedAt: new Date().toISOString(),

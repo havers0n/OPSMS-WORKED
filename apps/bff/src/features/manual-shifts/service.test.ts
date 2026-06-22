@@ -641,7 +641,9 @@ function createRepo() {
     listWarehouseStockBySku: vi.fn(
       async (_sku: string[], _tenantId: string) =>
         new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>()
-    )
+    ),
+    findLineByShiftAndName: vi.fn(async (_shiftId: string, _lineName: string) => null),
+    listPickerSheetItems: vi.fn(async (_lineId: string, _workGroupName: string) => [])
   };
  
   return { repo, state };
@@ -3836,5 +3838,357 @@ describe('getProductControl', () => {
     });
     expect(result.totals.dataIssueSkus).toBe(1);
   });
+
+  describe('getProductControl bonded integration', () => {
+    function makeBondedSnapshot(overrides: Partial<{
+      id: string;
+      planningDate: string;
+      fileName: string | null;
+      importedAt: string;
+      rowCount: number;
+      rows: Array<{
+        sku: string | null;
+        availableQty: number;
+        block: string | null;
+        sourceLabel: string | null;
+        releasedQty: number;
+        totalPulledQty: number;
+        releasedBalanceQty: number;
+        packFactor: number | null;
+        cartonsPerPallet: number | null;
+        unitsPerPallet: number | null;
+        notes: string | null;
+        rowNumber: number;
+        description: string | null;
+        pullColumns: (number | null)[];
+        diagnostics: string[];
+        remainingBondedRaw: string | null;
+      }>;
+    }> = {}) {
+      return {
+        id: 'snap-bonded-001',
+        planningDate: '2026-05-26',
+        fileName: 'bonded.xlsx',
+        importedAt: '2026-05-26T08:00:00.000Z',
+        rowCount: 10,
+        status: 'completed',
+        diagnostics: { totalRows: 10, populatedRows: 10, missingSkuRows: 0, negativeBalanceRows: 0, duplicateSkuGroups: 0, formulaDiscrepancyRows: 0, warnings: [] },
+        sourceSheetName: 'בונדד!',
+        rows: [],
+        ...overrides
+      };
+    }
+
+    function makeServiceWithBonded(
+      repo: ManualShiftsRepo,
+      bondedService: { getLatestCompletedSnapshot: ReturnType<typeof vi.fn> }
+    ) {
+      const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso }, bondedService as never);
+      return { service };
+    }
+
+    it('returns bondedAvailableQty 0 and no candidates when no bonded snapshot exists for shift date', async () => {
+      const mockBonded = {
+        getLatestCompletedSnapshot: vi.fn(async () => null)
+      };
+      const { service } = makeServiceWithBonded({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift()),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'SKU-A', description: 'Product A', category: 'Cat', demandQty: 100, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: vi.fn(async () => {
+          const map = new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>();
+          map.set('SKU-A', { sku: 'SKU-A', warehouseQty: 50, canonicalProductIds: ['p-a'] });
+          return map;
+        })
+      }, mockBonded);
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(mockBonded.getLatestCompletedSnapshot).toHaveBeenCalledWith(ids.tenant, '2026-05-26');
+      expect(result.rows[0].bondedAvailableQty).toBe(0);
+      expect(result.rows[0].bondedCandidates).toEqual([]);
+      expect(result.warnings).toEqual(['no_bonded_snapshot_for_planning_date']);
+      expect(result.bondedSnapshot).toBeNull();
+    });
+
+    it('populates bondedAvailableQty and candidates from matching bonded snapshot', async () => {
+      const mockBonded = {
+        getLatestCompletedSnapshot: vi.fn(async () => makeBondedSnapshot({
+          rows: [
+            makeBondedRow({ sku: 'SKU-A', availableQty: 100, block: 'B1', sourceLabel: 'SrcA', releasedQty: 200, totalPulledQty: 100, releasedBalanceQty: 100, rowNumber: 2 })
+          ]
+        }))
+      };
+      const { service } = makeServiceWithBonded({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift()),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'SKU-A', description: 'Product A', category: 'Cat', demandQty: 100, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: vi.fn(async () => {
+          const map = new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>();
+          map.set('SKU-A', { sku: 'SKU-A', warehouseQty: 30, canonicalProductIds: ['p-a'] });
+          return map;
+        })
+      }, mockBonded);
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(result.rows[0].bondedAvailableQty).toBe(100);
+      expect(result.rows[0].bondedCandidates).toHaveLength(1);
+      expect(result.rows[0].bondedCandidates![0].block).toBe('B1');
+      expect(result.rows[0].bondedCandidates![0].availableQty).toBe(100);
+      expect(result.rows[0].bondedCoverQty).toBe(70);
+      expect(result.rows[0].finalMissingQty).toBe(0);
+      expect(result.rows[0].status).toBe('covered_by_bonded');
+      expect(result.bondedSnapshot).toBeTruthy();
+      expect(result.bondedSnapshot!.id).toBe('snap-bonded-001');
+      expect(result.warnings).toBeUndefined();
+    });
+
+    it('aggregates duplicate SKU bonded rows into sum of availableQty with multiple candidates', async () => {
+      const mockBonded = {
+        getLatestCompletedSnapshot: vi.fn(async () => makeBondedSnapshot({
+          rows: [
+            makeBondedRow({ sku: 'SKU-A', availableQty: 60, block: 'B1', sourceLabel: 'SrcA', releasedQty: 100, totalPulledQty: 40, releasedBalanceQty: 60, rowNumber: 2 }),
+            makeBondedRow({ sku: 'SKU-A', availableQty: 40, block: 'B2', sourceLabel: 'SrcB', releasedQty: 80, totalPulledQty: 40, releasedBalanceQty: 40, rowNumber: 5 })
+          ]
+        }))
+      };
+      const { service } = makeServiceWithBonded({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift()),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'SKU-A', description: 'Product A', category: 'Cat', demandQty: 100, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: vi.fn(async () => {
+          const map = new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>();
+          map.set('SKU-A', { sku: 'SKU-A', warehouseQty: 0, canonicalProductIds: ['p-a'] });
+          return map;
+        })
+      }, mockBonded);
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(result.rows[0].bondedAvailableQty).toBe(100);
+      expect(result.rows[0].bondedCandidates).toHaveLength(2);
+      expect(result.rows[0].bondedCandidates![0].availableQty).toBe(60);
+      expect(result.rows[0].bondedCandidates![1].availableQty).toBe(40);
+    });
+
+    it('does not use bonded snapshot with wrong planning date', async () => {
+      const wrongDateBonded = {
+        getLatestCompletedSnapshot: vi.fn(async (tenantId: string, planningDate: string) => {
+          if (planningDate === '2026-05-26') return null;
+          return makeBondedSnapshot();
+        })
+      };
+      const { service } = makeServiceWithBonded({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift({ date: '2026-05-26' })),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'SKU-A', description: 'Product A', category: 'Cat', demandQty: 100, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: vi.fn(async () => {
+          const map = new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>();
+          map.set('SKU-A', { sku: 'SKU-A', warehouseQty: 50, canonicalProductIds: ['p-a'] });
+          return map;
+        })
+      }, wrongDateBonded);
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(result.rows[0].bondedAvailableQty).toBe(0);
+      expect(result.warnings).toEqual(['no_bonded_snapshot_for_planning_date']);
+    });
+
+    it('uses latest completed snapshot by imported_at desc when multiple exist for same date', async () => {
+      let callCount = 0;
+      const mockBonded = {
+        getLatestCompletedSnapshot: vi.fn(async () => {
+          callCount++;
+          return makeBondedSnapshot({
+            id: 'latest-snap',
+            importedAt: '2026-05-26T10:00:00.000Z',
+            rows: [
+              makeBondedRow({ sku: 'SKU-A', availableQty: 200, block: 'B-LATEST', releasedQty: 300, totalPulledQty: 100, releasedBalanceQty: 200, rowNumber: 2 })
+            ]
+          });
+        })
+      };
+      const { service } = makeServiceWithBonded({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift()),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'SKU-A', description: 'Product A', category: 'Cat', demandQty: 100, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: vi.fn(async () => {
+          const map = new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>();
+          map.set('SKU-A', { sku: 'SKU-A', warehouseQty: 50, canonicalProductIds: ['p-a'] });
+          return map;
+        })
+      }, mockBonded);
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(mockBonded.getLatestCompletedSnapshot).toHaveBeenCalledTimes(1);
+      expect(result.rows[0].bondedAvailableQty).toBe(200);
+      expect(result.bondedSnapshot!.id).toBe('latest-snap');
+    });
+
+    it('ignores negative balance rows: availableQty stays 0, does not increase bondedAvailableQty', async () => {
+      const mockBonded = {
+        getLatestCompletedSnapshot: vi.fn(async () => makeBondedSnapshot({
+          rows: [
+            makeBondedRow({ sku: 'SKU-NEG', availableQty: 0, block: 'NEG', releasedQty: 50, totalPulledQty: 100, releasedBalanceQty: -50, rowNumber: 2 })
+          ]
+        }))
+      };
+      const { service } = makeServiceWithBonded({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift()),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'SKU-NEG', description: 'Negative', category: 'Cat', demandQty: 100, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: vi.fn(async () => {
+          const map = new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>();
+          map.set('SKU-NEG', { sku: 'SKU-NEG', warehouseQty: 50, canonicalProductIds: ['p-neg'] });
+          return map;
+        })
+      }, mockBonded);
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(result.rows[0].bondedAvailableQty).toBe(0);
+      expect(result.rows[0].bondedCandidates).toHaveLength(1);
+      expect(result.rows[0].bondedCandidates![0].availableQty).toBe(0);
+      expect(result.rows[0].status).toBe('unresolved');
+    });
+
+    it('ignores bonded rows with missing SKU — no crash, no impact on demand rows', async () => {
+      const mockBonded = {
+        getLatestCompletedSnapshot: vi.fn(async () => makeBondedSnapshot({
+          rows: [
+            makeBondedRow({ sku: null, availableQty: 999, block: null, releasedQty: 999, totalPulledQty: 0, releasedBalanceQty: 999, rowNumber: 1 }),
+            makeBondedRow({ sku: 'SKU-A', availableQty: 50, block: 'B1', releasedQty: 100, totalPulledQty: 50, releasedBalanceQty: 50, rowNumber: 2 })
+          ]
+        }))
+      };
+      const { service } = makeServiceWithBonded({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift()),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'SKU-A', description: 'Product A', category: 'Cat', demandQty: 100, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: vi.fn(async () => {
+          const map = new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>();
+          map.set('SKU-A', { sku: 'SKU-A', warehouseQty: 50, canonicalProductIds: ['p-a'] });
+          return map;
+        })
+      }, mockBonded);
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(result.rows[0].bondedAvailableQty).toBe(50);
+      expect(result.rows).toHaveLength(1);
+    });
+
+    it('enforces tenant isolation: bonded service called with correct tenantId even when snapshot exists for different tenant', async () => {
+      let capturedTenantId: string | undefined;
+      const mockBonded = {
+        getLatestCompletedSnapshot: vi.fn(async (tenantId: string) => {
+          capturedTenantId = tenantId;
+          if (tenantId === ids.otherTenant) return makeBondedSnapshot();
+          return null;
+        })
+      };
+      const { service } = makeServiceWithBonded({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift()),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'SKU-A', description: 'Product A', category: 'Cat', demandQty: 100, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: vi.fn(async () => {
+          const map = new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>();
+          map.set('SKU-A', { sku: 'SKU-A', warehouseQty: 50, canonicalProductIds: ['p-a'] });
+          return map;
+        })
+      }, mockBonded);
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(capturedTenantId).toBe(ids.tenant);
+      expect(mockBonded.getLatestCompletedSnapshot).toHaveBeenCalledWith(ids.tenant, '2026-05-26');
+      expect(result.rows[0].bondedAvailableQty).toBe(0);
+      expect(result.warnings).toEqual(['no_bonded_snapshot_for_planning_date']);
+    });
+
+    it('data issue priority: unknown SKU with bonded available remains data_issue', async () => {
+      const mockBonded = {
+        getLatestCompletedSnapshot: vi.fn(async () => makeBondedSnapshot({
+          rows: [
+            makeBondedRow({ sku: 'UNKNOWN-SKU', availableQty: 500, block: 'B1', releasedQty: 500, totalPulledQty: 0, releasedBalanceQty: 500, rowNumber: 2 })
+          ]
+        }))
+      };
+      const { service } = makeServiceWithBonded({
+        ...createRepo().repo,
+        findShiftById: vi.fn(async () => createShift()),
+        listProductControlDemand: vi.fn(async () => [
+          { sku: 'UNKNOWN-SKU', description: 'Unknown', category: 'Cat', demandQty: 100, orderCount: 1, lineCount: 1 }
+        ]),
+        listWarehouseStockBySku: vi.fn(
+          async () => new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>()
+        )
+      }, mockBonded);
+
+      const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+      expect(result.rows[0].status).toBe('data_issue');
+      expect(result.rows[0].dataIssues).toEqual(['unknown_sku']);
+      expect(result.rows[0].bondedAvailableQty).toBe(500);
+      expect(result.rows[0].bondedCandidates).toHaveLength(1);
+    });
+  });
 });
+
+function makeBondedRow(overrides: {
+  sku: string | null;
+  availableQty: number;
+  block: string | null;
+  sourceLabel?: string | null;
+  releasedQty: number;
+  totalPulledQty: number;
+  releasedBalanceQty: number;
+  rowNumber: number;
+  description?: string | null;
+  packFactor?: number | null;
+  cartonsPerPallet?: number | null;
+  unitsPerPallet?: number | null;
+  notes?: string | null;
+  pullColumns?: (number | null)[];
+  diagnostics?: string[];
+  remainingBondedRaw?: string | null;
+}) {
+  return {
+    rowNumber: overrides.rowNumber,
+    sourceLabel: overrides.sourceLabel ?? null,
+    block: overrides.block,
+    sku: overrides.sku,
+    description: overrides.description ?? null,
+    releasedQty: overrides.releasedQty,
+    packFactor: overrides.packFactor ?? null,
+    cartonsPerPallet: overrides.cartonsPerPallet ?? null,
+    unitsPerPallet: overrides.unitsPerPallet ?? null,
+    pullColumns: overrides.pullColumns ?? [],
+    totalPulledQty: overrides.totalPulledQty,
+    releasedBalanceQty: overrides.releasedBalanceQty,
+    availableQty: overrides.availableQty,
+    notes: overrides.notes ?? null,
+    remainingBondedRaw: overrides.remainingBondedRaw ?? null,
+    diagnostics: overrides.diagnostics ?? []
+  };
+}
 

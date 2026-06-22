@@ -604,6 +604,8 @@ export type ManualShiftsRepo = {
   listShiftLines(shiftId: string): Promise<ManualShiftLineRow[]>;
   listShiftLineSummaries(shiftId: string, tenantId: string): Promise<ManualShiftLineSummary[]>;
   findLineById(lineId: string): Promise<ManualShiftLineRow | null>;
+  findLineByShiftAndName(shiftId: string, lineName: string): Promise<ManualShiftLineRow | null>;
+  listPickerSheetItems(lineId: string, workGroupName: string): Promise<ManualShiftOrderItem[]>;
   createLine(input: {
     tenantId: string;
     shiftId: string;
@@ -971,6 +973,61 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       }
 
       return (data as ManualShiftLineRow | null) ?? null;
+    },
+
+    async findLineByShiftAndName(shiftId, lineName) {
+      const { data, error } = await supabase
+        .from('manual_shift_lines')
+        .select(lineColumns)
+        .eq('shift_id', shiftId)
+        .eq('name', lineName)
+        .is('deleted_at', null)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return (data as ManualShiftLineRow | null) ?? null;
+    },
+
+    async listPickerSheetItems(lineId, workGroupName) {
+      const { data: orders, error: ordersError } = await supabase
+        .from('manual_shift_orders')
+        .select('id')
+        .eq('line_id', lineId)
+        .is('deleted_at', null)
+        .or(`work_bucket_name.eq.${workGroupName},and(work_bucket_name.is.null,point_name.eq.${workGroupName})`);
+
+      if (ordersError) throw ordersError;
+
+      const orderIds = (orders ?? []).map((row: { id: string }) => row.id);
+      if (orderIds.length === 0) return [];
+
+      const items: ManualShiftOrderItem[] = [];
+      const PAGE_SIZE = 1000;
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('manual_shift_order_items')
+          .select(itemColumns)
+          .in('order_id', orderIds)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) throw error;
+
+        const rows = (data ?? []) as ManualShiftOrderItemRow[];
+        for (const row of rows) {
+          items.push(mapOrderItemRow(row));
+        }
+
+        hasMore = rows.length === PAGE_SIZE;
+        offset += PAGE_SIZE;
+      }
+
+      return items;
     },
 
     async createLine(input) {

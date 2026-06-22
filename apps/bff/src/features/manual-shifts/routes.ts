@@ -62,7 +62,8 @@ import {
   transitionManualShiftOrderStatusBodySchema,
   pickTaskDetailResponseSchema,
   openAshlamaBoardResponseSchema,
-  productControlResponseSchema as manualShiftProductControlResponseSchema
+  productControlResponseSchema as manualShiftProductControlResponseSchema,
+  pickerSheetPrintDataSchema
 } from '../../schemas.js';
 import { parseOrThrow } from '../../validation.js';
 import { createPickBridgeServiceFromSupabase } from './pick-bridge-service.js';
@@ -1242,6 +1243,56 @@ export function registerManualShiftsRoutes(
         shiftId
       });
       return parseOrThrow(manualShiftProductControlResponseSchema, result);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return sendApiError(reply, error, request.id);
+      }
+      if (error instanceof ZodError) {
+        return sendApiError(reply, new ApiError(400, 'VALIDATION_ERROR', error.message), request.id);
+      }
+      return sendApiError(reply, new ApiError(500, 'INTERNAL_ERROR', 'Unexpected error'), request.id);
+    }
+  });
+
+  // ── Print / Picker sheet ────────────────────────────────────────────────────
+
+  app.get('/api/manual-shifts/:shiftId/print/picker-sheet', async (request, reply) => {
+    try {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      const tenantId = requireTenant(auth);
+      const shiftId = parseOrThrow(idResponseSchema, {
+        id: (request.params as Record<string, string>).shiftId ?? ''
+      }).id;
+
+      const query = request.query as Record<string, string | undefined>;
+      const scope = query.scope;
+      const distributionArea = query.distributionArea;
+      const planningLineName = query.planningLineName;
+      const workGroupName = query.workGroupName;
+
+      if (scope !== 'workGroup') {
+        throw new ApiError(400, 'INVALID_SCOPE', 'Only scope=workGroup is supported for this endpoint.');
+      }
+
+      if (!distributionArea || !planningLineName || !workGroupName) {
+        throw new ApiError(
+          400,
+          'MISSING_PARAMS',
+          'Query params distributionArea, planningLineName, and workGroupName are required.'
+        );
+      }
+
+      const data = await getManualShiftsService(auth).getPickerSheetWorkGroup({
+        tenantId,
+        shiftId,
+        distributionArea,
+        planningLineName,
+        workGroupName
+      });
+
+      return parseOrThrow(pickerSheetPrintDataSchema, data);
     } catch (error) {
       if (error instanceof ApiError) {
         return sendApiError(reply, error, request.id);

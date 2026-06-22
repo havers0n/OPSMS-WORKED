@@ -29,7 +29,8 @@ import type {
   ManualShiftWorkHierarchyResponse,
   OpenAshlamaBoardItem,
   BucketProductRollupResponse,
-  ProductControlResponse
+  ProductControlResponse,
+  PickerSheetPrintData
 } from '@wos/domain';
 import {
   buildProductControlRow,
@@ -39,8 +40,14 @@ import {
   computeProductControlTotals,
   deriveManualShiftLineStatus,
   getEffectiveExpectedCheckUnitsCount,
-  manualShiftBulkAddInputRowSchema
+  manualShiftBulkAddInputRowSchema,
+  aggregateBondedAvailabilityBySku,
+  aggregatePickerItems,
+  processCollisions,
+  getDisplaySku,
+  type SkuBondedAggregate
 } from '@wos/domain';
+import type { BondedService } from '../bonded/bonded-service.js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   invalidManualShiftOrderCreateStatus,
@@ -50,6 +57,8 @@ import {
   manualShiftClosed,
   manualShiftLineDeleteBlocked,
   manualShiftLineNotFound,
+  manualShiftLineNotFoundByName,
+  manualShiftLineAreaMismatch,
   manualShiftNotFound,
   manualShiftOrderNotFound,
   manualShiftOrderCheckUnitNotFound,
@@ -282,6 +291,13 @@ export type ManualShiftsService = {
     sourceLineName?: string;
   }): Promise<BucketProductRollupResponse>;
   getProductControl(input: { tenantId: string; shiftId: string }): Promise<ProductControlResponse>;
+  getPickerSheetWorkGroup(input: {
+    tenantId: string;
+    shiftId: string;
+    distributionArea: string;
+    planningLineName: string;
+    workGroupName: string;
+  }): Promise<PickerSheetPrintData>;
 };
 
 function formatLocalDate(date: Date, timeZone: string) {
@@ -420,7 +436,8 @@ export function createManualShiftsServiceFromRepo(
   options?: {
     getNowIso?: () => string;
     getTodayDate?: () => string;
-  }
+  },
+  bondedService?: BondedService
 ): ManualShiftsService {
   const getNowIso = options?.getNowIso ?? (() => new Date().toISOString());
   const getTodayDate = options?.getTodayDate ?? (() => formatLocalDate(new Date(), DEFAULT_TIME_ZONE));
@@ -1882,6 +1899,33 @@ export function createManualShiftsServiceFromRepo(
       const skus = demandRows.map((r) => r.sku);
       const stockBySku = await repo.listWarehouseStockBySku(skus, input.tenantId);
 
+      const planningDate = shift.date;
+      let bondedBySku = new Map<string, SkuBondedAggregate>();
+      let bondedSnapshotInfo: {
+        id: string;
+        planningDate: string;
+        importedAt: string;
+        fileName: string | null;
+        rowCount: number;
+      } | null = null;
+      const warnings: string[] = [];
+
+      if (bondedService) {
+        const snapshot = await bondedService.getLatestCompletedSnapshot(input.tenantId, planningDate);
+        if (snapshot) {
+          bondedBySku = aggregateBondedAvailabilityBySku(snapshot.rows);
+          bondedSnapshotInfo = {
+            id: snapshot.id,
+            planningDate: snapshot.planningDate,
+            importedAt: snapshot.importedAt,
+            fileName: snapshot.fileName,
+            rowCount: snapshot.rowCount
+          };
+        } else {
+          warnings.push('no_bonded_snapshot_for_planning_date');
+        }
+      }
+
       const rows = demandRows.map((demand) => {
         const stock = stockBySku.get(demand.sku);
         const dataIssues: Array<'unknown_sku' | 'duplicate_canonical_sku'> = [];
@@ -1892,17 +1936,22 @@ export function createManualShiftsServiceFromRepo(
           dataIssues.push('duplicate_canonical_sku');
         }
 
+        const bondedAgg = bondedBySku.get(demand.sku);
+        const bondedAvailableQty = bondedAgg?.bondedAvailableQty ?? 0;
+        const bondedCandidates = bondedAgg?.candidates ?? [];
+
         return buildProductControlRow({
           sku: demand.sku,
           description: demand.description ?? '',
           category: demand.category ?? '',
           demandQty: demand.demandQty,
           warehouseQty: stock?.warehouseQty ?? 0,
-          bondedAvailableQty: 0,
+          bondedAvailableQty,
           status: dataIssues.length > 0 ? 'data_issue' : undefined,
           affectedOrdersCount: demand.orderCount,
           affectedLinesCount: demand.lineCount,
-          dataIssues: dataIssues.length > 0 ? dataIssues : undefined
+          dataIssues: dataIssues.length > 0 ? dataIssues : undefined,
+          bondedCandidates
         });
       });
 
@@ -1912,12 +1961,61 @@ export function createManualShiftsServiceFromRepo(
         shiftId: input.shiftId,
         generatedAt: new Date().toISOString(),
         rows,
-        totals
+        totals,
+        bondedSnapshot: bondedSnapshotInfo,
+        warnings: warnings.length > 0 ? warnings : undefined
       };
-    }
+    },
+
+    async getPickerSheetWorkGroup(input) {
+      const shift = await requireShift(input.shiftId);
+      if (shift.tenantId !== input.tenantId) {
+        throw manualShiftNotFound(input.shiftId);
+      }
+
+      const lineRow = await repo.findLineByShiftAndName(input.shiftId, input.planningLineName);
+      if (!lineRow) {
+        throw manualShiftLineNotFoundByName(input.planningLineName);
+      }
+
+      const line = mapManualShiftLineRowToDomain(lineRow, 'open');
+
+      if (line.distributionArea !== input.distributionArea) {
+        throw manualShiftLineAreaMismatch(input.planningLineName, input.distributionArea);
+      }
+
+      const items = await repo.listPickerSheetItems(line.id, input.workGroupName);
+      const aggregated = aggregatePickerItems(items);
+
+      const data: PickerSheetPrintData = {
+        shift: shift.name,
+        scope: 'workGroup',
+        shiftDate: shift.date,
+        distributionArea: input.distributionArea,
+        generatedAt: new Date().toISOString(),
+        totals: {
+          lines: 1,
+          workGroups: 1,
+          items: aggregated.length,
+        },
+        planningLines: [
+          {
+            name: line.name,
+            workGroups: [
+              {
+                name: input.workGroupName,
+                items: aggregated,
+              },
+            ],
+          },
+        ],
+      };
+
+      return processCollisions(data);
+    },
   };
 }
 
-export function createManualShiftsService(supabase: SupabaseClient) {
-  return createManualShiftsServiceFromRepo(createManualShiftsRepo(supabase));
+export function createManualShiftsService(supabase: SupabaseClient, bondedService?: BondedService) {
+  return createManualShiftsServiceFromRepo(createManualShiftsRepo(supabase), undefined, bondedService);
 }

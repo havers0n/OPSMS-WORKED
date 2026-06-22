@@ -7,8 +7,8 @@ function makeWorkGroup(overrides?: Partial<PickerSheetWorkGroup>): PickerSheetWo
   return {
     name: 'קבוצה א',
     items: [
-      { sku: 'PREM-ABC001', displaySku: 'ABC001', productName: 'מחברת A4', quantity: 10, warning: 'sku_display_collision' },
-      { sku: '123456', displaySku: '123456', productName: 'עט כדורי', quantity: 5 },
+      { sku: 'PREM-ABC001', displaySku: 'ABC001', description: 'מחברת A4', quantity: 10, warning: 'sku_display_collision' },
+      { sku: '123456', displaySku: '123456', description: 'עט כדורי', quantity: 5 },
     ],
     ...overrides,
   };

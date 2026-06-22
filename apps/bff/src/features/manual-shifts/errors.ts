@@ -10,6 +10,14 @@ export function manualShiftLineNotFound(lineId: string) {
   return new ApiError(404, 'MANUAL_SHIFT_LINE_NOT_FOUND', `Manual shift line ${lineId} was not found.`);
 }
 
+export function manualShiftLineNotFoundByName(lineName: string) {
+  return new ApiError(404, 'MANUAL_SHIFT_LINE_NOT_FOUND', `Manual shift line "${lineName}" was not found.`);
+}
+
+export function manualShiftLineAreaMismatch(lineName: string, expectedArea: string) {
+  return new ApiError(400, 'LINE_AREA_MISMATCH', `Line "${lineName}" does not belong to distribution area "${expectedArea}".`);
+}
+
 export function manualShiftOrderNotFound(orderId: string) {
   return new ApiError(404, 'MANUAL_SHIFT_ORDER_NOT_FOUND', `Manual shift order ${orderId} was not found.`);
 }

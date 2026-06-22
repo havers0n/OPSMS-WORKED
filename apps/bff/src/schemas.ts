@@ -583,6 +583,10 @@ export const warehouseLabelPreviewResponseSchema = warehouseLabelPreviewResponse
 export const rackSlotLocationRefsResponseSchema = rackSlotLocationRefsResponseDtoSchema;
 export { manualShiftWorkHierarchyResponseSchema, bucketProductRollupResponseSchema, productControlResponseSchema };
 
+// ── Manual shift print ──────────────────────────────────────────────────────────
+
+export { pickerSheetPrintDataSchema } from '@wos/domain';
+
 // ── Orders ────────────────────────────────────────────────────────────────────
 
 export const createOrderBodySchema = z.object({
