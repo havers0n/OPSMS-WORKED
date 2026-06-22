@@ -606,6 +606,10 @@ export type ManualShiftsRepo = {
   findLineById(lineId: string): Promise<ManualShiftLineRow | null>;
   findLineByShiftAndName(shiftId: string, lineName: string): Promise<ManualShiftLineRow | null>;
   listPickerSheetItems(lineId: string, workGroupName: string): Promise<ManualShiftOrderItem[]>;
+  listPickerSheetLineItems(lineId: string): Promise<{
+    orders: Array<{ id: string; workBucketName: string | null; pointName: string | null }>;
+    items: ManualShiftOrderItem[];
+  }>;
   createLine(input: {
     tenantId: string;
     shiftId: string;
@@ -1045,6 +1049,50 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       }
 
       return items;
+    },
+
+    async listPickerSheetLineItems(lineId) {
+      const { data: orders, error: ordersError } = await supabase
+        .from('manual_shift_orders')
+        .select('id,work_bucket_name,point_name')
+        .eq('line_id', lineId)
+        .is('deleted_at', null);
+
+      if (ordersError) throw ordersError;
+
+      const orderRows = (orders ?? []) as Array<{ id: string; work_bucket_name: string | null; point_name: string | null }>;
+      const mappedOrders = orderRows.map((row) => ({
+        id: row.id,
+        workBucketName: row.work_bucket_name ?? null,
+        pointName: row.point_name ?? null,
+      }));
+      const orderIds = mappedOrders.map((row) => row.id);
+      if (orderIds.length === 0) return { orders: mappedOrders, items: [] };
+
+      const items: ManualShiftOrderItem[] = [];
+      const PAGE_SIZE = 1000;
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('manual_shift_order_items')
+          .select(itemColumns)
+          .in('order_id', orderIds)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) throw error;
+
+        const rows = (data ?? []) as ManualShiftOrderItemRow[];
+        for (const row of rows) {
+          items.push(mapOrderItemRow(row));
+        }
+
+        hasMore = rows.length === PAGE_SIZE;
+        offset += PAGE_SIZE;
+      }
+
+      return { orders: mappedOrders, items };
     },
 
     async createLine(input) {

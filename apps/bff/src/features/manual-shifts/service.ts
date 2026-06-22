@@ -30,7 +30,8 @@ import type {
   OpenAshlamaBoardItem,
   BucketProductRollupResponse,
   ProductControlResponse,
-  PickerSheetPrintData
+  PickerSheetPrintData,
+  PickerSheetWorkGroup
 } from '@wos/domain';
 import {
   buildProductControlRow,
