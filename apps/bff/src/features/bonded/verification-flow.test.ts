@@ -92,7 +92,8 @@ function createFakeBondedService(): BondedService {
         rows: record.rows
       };
     },
-    async getLatestCompletedSnapshot(tenantId) {
+    async getLatestCompletedSnapshot(tenantId, planningDate) {
+      void planningDate;
       const list = await this.listSnapshots(tenantId);
       if (list.length === 0) return null;
       const latest = list[0];

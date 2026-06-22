@@ -18,6 +18,7 @@ import { createPickingPlanningOrderInputReadRepo, createPickingPlanningWaveReadR
 import { createFloorRoutingService } from './features/floor-routing/service.js';
 import { createManualShiftsService } from './features/manual-shifts/service.js';
 import { createWarehouseLabelsService } from './features/warehouse-labels/service.js';
+import { createBondedService } from './features/bonded/bonded-service.js';
 import type { BuildAppOptions } from './app-options.js';
 import { ApiError } from './errors.js';
 
@@ -65,6 +66,8 @@ export function createRouteDeps(options: BuildAppOptions = {}): RouteDeps {
     });
   const getFloorRoutingService =
     options.getFloorRoutingService ?? ((context) => createFloorRoutingService(getUserSupabase(context)));
+  const getBondedService =
+    options.getBondedService ?? ((context) => createBondedService(getUserSupabase(context)));
 
   return {
     getAuthContext,
@@ -85,6 +88,7 @@ export function createRouteDeps(options: BuildAppOptions = {}): RouteDeps {
     getManualShiftsService,
     getWarehouseLabelsService,
     getPickingPlanningPreviewService,
-    getFloorRoutingService
+    getFloorRoutingService,
+    getBondedService
   };
 }
