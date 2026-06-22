@@ -23,20 +23,39 @@ export function ItemsDrawerV2({
   onAssignAllUnassigned: (itemRowIds: string[]) => void;
   targetWorkGroupName?: string | null;
 }) {
-  const itemAssignments = useSchemeBuilderStore((s) => s.itemAssignments);
+  const itemAllocations = useSchemeBuilderStore((s) => s.itemAllocations);
+  const getWorkGroup = useSchemeBuilderStore((s) => s.getWorkGroup);
+  const allocationsByItem = useMemo(() => {
+    const map = new Map<string, typeof itemAllocations>();
+    for (const alloc of itemAllocations) {
+      const existing = map.get(alloc.itemRowId);
+      if (existing) existing.push(alloc);
+      else map.set(alloc.itemRowId, [alloc]);
+    }
+    return map;
+  }, [itemAllocations]);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const itemIds = useMemo(() => items.map((i) => i.id), [items]);
+  const itemSplitStatus = getOrderSplitStatus(order.orderId, items, itemAllocations);
 
-  const splitStatus = getOrderSplitStatus(order.orderId, itemIds, itemAssignments);
-
-  const unassignedItemIds = useMemo(
-    () => items.filter((i) => !(i.id in itemAssignments)).map((i) => i.id),
-    [items, itemAssignments],
+  const rowsWithRemaining = useMemo(
+    () => items.filter((i) => {
+      const allocs = allocationsByItem.get(i.id) ?? [];
+      const assignedQty = allocs.reduce((s, a) => s + a.qty, 0);
+      return i.quantity - assignedQty > 0;
+    }),
+    [items, allocationsByItem],
   );
 
+  const unassignedItemIds = rowsWithRemaining.map((i) => i.id);
+
   const toggleId = (id: string) => {
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
+    const allocs = allocationsByItem.get(id) ?? [];
+    const assignedQty = allocs.reduce((s, a) => s + a.qty, 0);
+    if (item.quantity - assignedQty <= 0) return;
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -46,10 +65,14 @@ export function ItemsDrawerV2({
   };
 
   const toggleSelectAllVisible = () => {
-    if (selectedIds.size === items.length) {
+    if (selectedIds.size === items.filter((i) => {
+      const allocs = allocationsByItem.get(i.id) ?? [];
+      const assignedQty = allocs.reduce((s, a) => s + a.qty, 0);
+      return i.quantity - assignedQty > 0;
+    }).length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(items.map((i) => i.id)));
+      setSelectedIds(new Set(unassignedItemIds));
     }
   };
 
@@ -69,7 +92,7 @@ export function ItemsDrawerV2({
   };
 
   const statusLabel = () => {
-    switch (splitStatus) {
+    switch (itemSplitStatus) {
       case 'unassigned': return { label: 'לא שובץ', tone: 'neutral' as const };
       case 'assigned': return { label: 'שובץ', tone: 'success' as const };
       case 'partial': return { label: 'שובץ חלקית', tone: 'warning' as const };
@@ -79,10 +102,21 @@ export function ItemsDrawerV2({
 
   const sb = statusLabel();
 
+  const workGroupNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const alloc of itemAllocations) {
+      if (!map.has(alloc.workGroupId)) {
+        const wg = getWorkGroup(alloc.workGroupId);
+        map.set(alloc.workGroupId, wg?.name ?? alloc.workGroupId);
+      }
+    }
+    return map;
+  }, [itemAllocations, getWorkGroup]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col overflow-hidden"
+        className="bg-white rounded-lg shadow-xl w-full max-w-3xl mx-4 max-h-[90vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-6 py-4 border-b border-gray-200 shrink-0">
@@ -126,7 +160,7 @@ export function ItemsDrawerV2({
             onClick={toggleSelectAllVisible}
             className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1"
           >
-            {selectedIds.size === items.length ? <CheckSquare size={14} /> : <Square size={14} />}
+            {selectedIds.size === unassignedItemIds.length && unassignedItemIds.length > 0 ? <CheckSquare size={14} /> : <Square size={14} />}
             בחר הכל
           </button>
           <button
@@ -181,37 +215,52 @@ export function ItemsDrawerV2({
                   <th className="p-2 font-medium text-gray-700">מק"ט</th>
                   <th className="p-2 font-medium text-gray-700">תיאור</th>
                   <th className="p-2 font-medium text-gray-700">קטגוריה</th>
-                  <th className="p-2 font-medium text-gray-700 text-center">כמות</th>
-                  <th className="p-2 font-medium text-gray-700">קבוצה</th>
+                  <th className="p-2 font-medium text-gray-700 text-center">כמות מקורית</th>
+                  <th className="p-2 font-medium text-gray-700 text-center">שויך</th>
+                  <th className="p-2 font-medium text-gray-700 text-center">נותר</th>
+                  <th className="p-2 font-medium text-gray-700 min-w-[100px]">קבוצות</th>
                   <th className="p-2 font-medium text-gray-700">הערות</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {items.map((item) => {
-                  const isAssigned = item.id in itemAssignments;
+                  const allocs = allocationsByItem.get(item.id) ?? [];
+                  const assignedQty = allocs.reduce((s, a) => s + a.qty, 0);
+                  const remainingQty = item.quantity - assignedQty;
+                  const isFullyAllocated = remainingQty <= 0;
                   const isSelected = selectedIds.has(item.id);
                   return (
-                    <tr key={item.id} className={`hover:bg-gray-50 ${isAssigned ? 'bg-gray-50/50' : ''}`}>
+                    <tr key={item.id} className={`hover:bg-gray-50 ${isFullyAllocated ? 'opacity-60' : ''}`}>
                       <td className="p-2">
                         <button
                           type="button"
                           onClick={() => toggleId(item.id)}
-                          className="text-gray-400 hover:text-blue-600 transition-colors"
+                          disabled={isFullyAllocated}
+                          className={`transition-colors ${isFullyAllocated ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-blue-600'}`}
                         >
                           {isSelected ? <CheckSquare size={16} className="text-blue-600" /> : <Square size={16} />}
                         </button>
                       </td>
                       <td className="p-2 font-mono text-xs">{item.sku}</td>
-                      <td className="p-2 max-w-[180px] truncate text-xs" title={item.description ?? ''}>{item.description}</td>
+                      <td className="p-2 max-w-[140px] truncate text-xs" title={item.description ?? ''}>{item.description}</td>
                       <td className="p-2">
                         <Badge tone="neutral">{item.category}</Badge>
                       </td>
                       <td className="p-2 font-semibold text-center text-xs">{item.quantity}</td>
-                      <td className="p-2 text-xs">
-                        {isAssigned ? (
-                          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800">
-                            משויך
-                          </span>
+                      <td className="p-2 text-center text-xs text-gray-500">{assignedQty > 0 ? assignedQty : '—'}</td>
+                      <td className="p-2 text-center text-xs font-semibold">{remainingQty}</td>
+                      <td className="p-2 min-w-[100px]">
+                        {allocs.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {Array.from(new Map(allocs.map((a) => [a.workGroupId, a.workGroupId])).entries()).map(([wgId]) => (
+                              <span
+                                key={wgId}
+                                className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800"
+                              >
+                                {workGroupNameById.get(wgId) ?? wgId.slice(0, 8)}
+                              </span>
+                            ))}
+                          </div>
                         ) : (
                           <span className="text-gray-400">—</span>
                         )}

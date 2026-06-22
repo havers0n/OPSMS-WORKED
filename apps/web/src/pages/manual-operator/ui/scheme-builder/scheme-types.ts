@@ -60,8 +60,20 @@ export interface WorkGroup {
   createdAt: number;
 }
 
+export interface ItemAllocation {
+  id: string;
+  itemRowId: string;
+  workGroupId: string;
+  qty: number;
+  createdAt: number;
+}
+
 export type DeleteResult =
   | { ok: true }
   | { ok: false; reason: 'has_work_groups' | 'has_assignments' };
+
+export type AllocateResult =
+  | { ok: true }
+  | { ok: false; reason: 'invalid_qty' | 'exceeds_remaining' | 'fully_allocated' | 'missing_item_qty' };
 
 export type OrderSplitStatus = 'unassigned' | 'assigned' | 'partial' | 'split';

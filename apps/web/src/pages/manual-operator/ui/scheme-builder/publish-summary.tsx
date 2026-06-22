@@ -11,10 +11,11 @@ export function PublishSummary({
 }) {
   const planningLines = useSchemeBuilderStore((s) => s.planningLines);
   const workGroups = useSchemeBuilderStore((s) => s.workGroups);
-  const itemAssignments = useSchemeBuilderStore((s) => s.itemAssignments);
+  const itemAllocations = useSchemeBuilderStore((s) => s.itemAllocations);
 
   const loadedItemRows = Object.values(orderItemMap).reduce((acc, items) => acc + items.length, 0);
-  const assignedCount = Object.keys(itemAssignments).length;
+  const assignedRowIds = new Set(itemAllocations.map((a) => a.itemRowId));
+  const assignedCount = assignedRowIds.size;
   const loadedUnassignedCount = loadedItemRows - assignedCount;
   const totalEstimatedRows = orders.reduce((acc, o) => acc + o.itemLinesCount, 0);
   const groupCount = workGroups.length;

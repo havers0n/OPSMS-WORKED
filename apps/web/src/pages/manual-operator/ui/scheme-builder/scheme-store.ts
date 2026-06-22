@@ -1,5 +1,5 @@
 ﻿import { create } from 'zustand';
-import type { PlanningLine, WorkGroup, OrderSplitStatus, SourceOrderItem, DeleteResult } from './scheme-types';
+import type { PlanningLine, WorkGroup, OrderSplitStatus, SourceOrderItem, DeleteResult, AllocateResult, ItemAllocation } from './scheme-types';
 
 function generateId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
@@ -11,7 +11,7 @@ export interface SchemeBuilderState {
 
   planningLines: PlanningLine[];
   workGroups: WorkGroup[];
-  itemAssignments: Record<string, string>;
+  itemAllocations: ItemAllocation[];
 
   setSelectedArea: (areaName: string | null) => void;
   setTargetWorkGroup: (workGroupId: string | null) => void;
@@ -24,10 +24,12 @@ export interface SchemeBuilderState {
   renameWorkGroup: (workGroupId: string, name: string) => void;
   deleteWorkGroup: (workGroupId: string) => DeleteResult;
 
-  assignItemRows: (itemRowIds: string[], workGroupId: string) => void;
-  assignWholeOrder: (itemRowIds: string[], workGroupId: string) => void;
-  unassignItemRow: (itemRowId: string) => void;
-  unassignItemRows: (itemRowIds: string[]) => void;
+  allocateItemQty: (input: { itemRowId: string; workGroupId: string; qty: number; totalQty: number }) => AllocateResult;
+  allocateItemRows: (itemRowIds: string[], workGroupId: string, orderItemMap: Record<string, SourceOrderItem[]>) => AllocateResult;
+  allocateWholeOrder: (orderId: string, workGroupId: string, orderItemMap: Record<string, SourceOrderItem[]>) => AllocateResult;
+  removeAllocation: (allocationId: string) => void;
+  removeAllocationsForItem: (itemRowId: string) => void;
+  removeAllocationsForItems: (itemRowIds: string[]) => void;
 
   clearLocalDraft: () => void;
 
@@ -36,10 +38,13 @@ export interface SchemeBuilderState {
   getWorkGroup: (workGroupId: string) => WorkGroup | undefined;
   getWorkGroupsByPlanningLine: (planningLineId: string) => WorkGroup[];
   isItemAssigned: (itemRowId: string) => boolean;
-  getItemWorkGroupId: (itemRowId: string) => string | undefined;
-  getWorkGroupItemCount: (workGroupId: string, orderItemMap?: Record<string, SourceOrderItem[]>) => number;
-  getWorkGroupTotalQuantity: (workGroupId: string, orderItemMap?: Record<string, SourceOrderItem[]>) => number;
-  getWorkGroupOrderIds: (workGroupId: string, orderItemMap?: Record<string, SourceOrderItem[]>) => Set<string>;
+  getAssignedQty: (itemRowId: string) => number;
+  getRemainingQty: (itemRowId: string, totalQty: number) => number;
+  getItemAllocations: (itemRowId: string) => ItemAllocation[];
+  getAllocationsForWorkGroup: (workGroupId: string) => ItemAllocation[];
+  getWorkGroupItemCount: (workGroupId: string) => number;
+  getWorkGroupTotalQuantity: (workGroupId: string) => number;
+  getWorkGroupOrderIds: (workGroupId: string, orderItemMap: Record<string, SourceOrderItem[]>) => Set<string>;
 }
 
 export const useSchemeBuilderStore = create<SchemeBuilderState>((set, get) => ({
@@ -48,7 +53,7 @@ export const useSchemeBuilderStore = create<SchemeBuilderState>((set, get) => ({
 
   planningLines: [],
   workGroups: [],
-  itemAssignments: {},
+  itemAllocations: [],
 
   setSelectedArea: (areaName: string | null) => {
     set({ selectedAreaName: areaName, targetWorkGroupId: null });
@@ -107,8 +112,8 @@ export const useSchemeBuilderStore = create<SchemeBuilderState>((set, get) => ({
     if (workGroupId === state.targetWorkGroupId) {
       set({ targetWorkGroupId: null });
     }
-    const hasAssignments = Object.values(state.itemAssignments).some((wgId) => wgId === workGroupId);
-    if (hasAssignments) {
+    const hasAllocations = state.itemAllocations.some((a) => a.workGroupId === workGroupId);
+    if (hasAllocations) {
       return { ok: false, reason: 'has_assignments' };
     }
     set((s) => ({
@@ -117,46 +122,99 @@ export const useSchemeBuilderStore = create<SchemeBuilderState>((set, get) => ({
     return { ok: true };
   },
 
-  assignItemRows: (itemRowIds: string[], workGroupId: string) => {
-    set((state) => {
-      const next = { ...state.itemAssignments };
-      for (const id of itemRowIds) {
-        next[id] = workGroupId;
-      }
-      return { itemAssignments: next };
-    });
+  allocateItemQty: (input: { itemRowId: string; workGroupId: string; qty: number; totalQty: number }): AllocateResult => {
+    const { itemRowId, workGroupId, qty, totalQty } = input;
+    if (!Number.isInteger(qty) || qty <= 0) {
+      return { ok: false, reason: 'invalid_qty' };
+    }
+    if (totalQty <= 0) {
+      return { ok: false, reason: 'missing_item_qty' };
+    }
+    const state = get();
+    const currentAssigned = state.itemAllocations
+      .filter((a) => a.itemRowId === itemRowId)
+      .reduce((sum, a) => sum + a.qty, 0);
+    const remaining = totalQty - currentAssigned;
+    if (remaining <= 0) {
+      return { ok: false, reason: 'fully_allocated' };
+    }
+    if (qty > remaining) {
+      return { ok: false, reason: 'exceeds_remaining' };
+    }
+    const allocation: ItemAllocation = {
+      id: generateId('alloc'),
+      itemRowId,
+      workGroupId,
+      qty,
+      createdAt: Date.now(),
+    };
+    set((state) => ({ itemAllocations: [...state.itemAllocations, allocation] }));
+    return { ok: true };
   },
 
-  assignWholeOrder: (itemRowIds: string[], workGroupId: string) => {
-    set((state) => {
-      const next = { ...state.itemAssignments };
-      for (const id of itemRowIds) {
-        next[id] = workGroupId;
+  allocateItemRows: (itemRowIds: string[], workGroupId: string, orderItemMap: Record<string, SourceOrderItem[]>): AllocateResult => {
+    const state = get();
+    let hasError: AllocateResult | null = null;
+    for (const itemRowId of itemRowIds) {
+      let totalQty = 0;
+      for (const items of Object.values(orderItemMap)) {
+        const found = items.find((i) => i.id === itemRowId);
+        if (found) {
+          totalQty = found.quantity;
+          break;
+        }
       }
-      return { itemAssignments: next };
-    });
+      if (totalQty <= 0) {
+        hasError = { ok: false, reason: 'missing_item_qty' };
+        continue;
+      }
+      const currentAssigned = state.itemAllocations
+        .filter((a) => a.itemRowId === itemRowId)
+        .reduce((sum, a) => sum + a.qty, 0);
+      const remaining = totalQty - currentAssigned;
+      if (remaining <= 0) continue;
+      const allocation: ItemAllocation = {
+        id: generateId('alloc'),
+        itemRowId,
+        workGroupId,
+        qty: remaining,
+        createdAt: Date.now(),
+      };
+      set((s) => ({ itemAllocations: [...s.itemAllocations, allocation] }));
+    }
+    return hasError ?? { ok: true };
   },
 
-  unassignItemRow: (itemRowId: string) => {
-    set((state) => {
-      const next = { ...state.itemAssignments };
-      delete next[itemRowId];
-      return { itemAssignments: next };
-    });
+  allocateWholeOrder: (orderId: string, workGroupId: string, orderItemMap: Record<string, SourceOrderItem[]>): AllocateResult => {
+    const items = orderItemMap[orderId];
+    if (!items || items.length === 0) {
+      return { ok: false, reason: 'missing_item_qty' };
+    }
+    const itemRowIds = items.map((i) => i.id);
+    return get().allocateItemRows(itemRowIds, workGroupId, orderItemMap);
   },
 
-  unassignItemRows: (itemRowIds: string[]) => {
-    set((state) => {
-      const next = { ...state.itemAssignments };
-      for (const id of itemRowIds) {
-        delete next[id];
-      }
-      return { itemAssignments: next };
-    });
+  removeAllocation: (allocationId: string) => {
+    set((state) => ({
+      itemAllocations: state.itemAllocations.filter((a) => a.id !== allocationId),
+    }));
+  },
+
+  removeAllocationsForItem: (itemRowId: string) => {
+    set((state) => ({
+      itemAllocations: state.itemAllocations.filter((a) => a.itemRowId !== itemRowId),
+    }));
+  },
+
+  removeAllocationsForItems: (itemRowIds: string[]) => {
+    const removeSet = new Set(itemRowIds);
+    set((state) => ({
+      itemAllocations: state.itemAllocations.filter((a) => !removeSet.has(a.itemRowId)),
+    }));
   },
 
   clearLocalDraft: () => {
-    set({ planningLines: [], workGroups: [], itemAssignments: {}, selectedAreaName: null, targetWorkGroupId: null });
+    set({ planningLines: [], workGroups: [], itemAllocations: [], selectedAreaName: null, targetWorkGroupId: null });
   },
 
   getPlanningLine: (planningLineId: string) => {
@@ -176,47 +234,52 @@ export const useSchemeBuilderStore = create<SchemeBuilderState>((set, get) => ({
   },
 
   isItemAssigned: (itemRowId: string) => {
-    return itemRowId in get().itemAssignments;
+    return get().itemAllocations.some((a) => a.itemRowId === itemRowId);
   },
 
-  getItemWorkGroupId: (itemRowId: string) => {
-    return get().itemAssignments[itemRowId];
+  getAssignedQty: (itemRowId: string) => {
+    return get().itemAllocations
+      .filter((a) => a.itemRowId === itemRowId)
+      .reduce((sum, a) => sum + a.qty, 0);
+  },
+
+  getRemainingQty: (itemRowId: string, totalQty: number) => {
+    return totalQty - get().getAssignedQty(itemRowId);
+  },
+
+  getItemAllocations: (itemRowId: string) => {
+    return get().itemAllocations.filter((a) => a.itemRowId === itemRowId);
+  },
+
+  getAllocationsForWorkGroup: (workGroupId: string) => {
+    return get().itemAllocations.filter((a) => a.workGroupId === workGroupId);
   },
 
   getWorkGroupItemCount: (workGroupId: string) => {
-    const state = get();
-    return Object.entries(state.itemAssignments).filter(([, wgId]) => wgId === workGroupId).length;
+    const uniqueRows = new Set(
+      get().itemAllocations
+        .filter((a) => a.workGroupId === workGroupId)
+        .map((a) => a.itemRowId),
+    );
+    return uniqueRows.size;
   },
 
-  getWorkGroupTotalQuantity: (workGroupId: string, orderItemMap?: Record<string, SourceOrderItem[]>) => {
-    const state = get();
-    const assignedIds = Object.entries(state.itemAssignments)
-      .filter(([, wgId]) => wgId === workGroupId)
-      .map(([itemId]) => itemId);
-    if (!orderItemMap) return assignedIds.length;
-    let total = 0;
-    for (const items of Object.values(orderItemMap)) {
-      for (const item of items) {
-        if (assignedIds.includes(item.id)) {
-          total += item.quantity;
-        }
-      }
-    }
-    return total;
+  getWorkGroupTotalQuantity: (workGroupId: string) => {
+    return get().itemAllocations
+      .filter((a) => a.workGroupId === workGroupId)
+      .reduce((sum, a) => sum + a.qty, 0);
   },
 
-  getWorkGroupOrderIds: (workGroupId: string, orderItemMap?: Record<string, SourceOrderItem[]>) => {
-    const state = get();
-    const assignedIds = Object.entries(state.itemAssignments)
-      .filter(([, wgId]) => wgId === workGroupId)
-      .map(([itemId]) => itemId);
+  getWorkGroupOrderIds: (workGroupId: string, orderItemMap: Record<string, SourceOrderItem[]>) => {
+    const allocatedItemRowIds = new Set(
+      get().itemAllocations
+        .filter((a) => a.workGroupId === workGroupId)
+        .map((a) => a.itemRowId),
+    );
     const orderIds = new Set<string>();
-    if (!orderItemMap) {
-      return orderIds;
-    }
     for (const [orderId, items] of Object.entries(orderItemMap)) {
       for (const item of items) {
-        if (assignedIds.includes(item.id)) {
+        if (allocatedItemRowIds.has(item.id)) {
           orderIds.add(orderId);
           break;
         }
@@ -228,21 +291,38 @@ export const useSchemeBuilderStore = create<SchemeBuilderState>((set, get) => ({
 
 export function getOrderSplitStatus(
   orderId: string,
-  itemIds: string[],
-  itemAssignments: Record<string, string>,
+  items: SourceOrderItem[],
+  itemAllocations: ItemAllocation[],
 ): OrderSplitStatus {
-  const assignedGroups = new Set<string>();
-  let assignedCount = 0;
-  for (const itemId of itemIds) {
-    const wgId = itemAssignments[itemId];
-    if (wgId) {
-      assignedGroups.add(wgId);
-      assignedCount++;
+  const itemIds = items.map((i) => i.id);
+  if (itemIds.length === 0) return 'unassigned';
+
+  let unassignedCount = 0;
+  let fullyAssignedCount = 0;
+  const allGroups = new Set<string>();
+  let hasItemSplit = false;
+
+  for (const item of items) {
+    const allocs = itemAllocations.filter((a) => a.itemRowId === item.id);
+    const assignedQty = allocs.reduce((s, a) => s + a.qty, 0);
+    const remainingQty = item.quantity - assignedQty;
+
+    const wgIds = new Set(allocs.map((a) => a.workGroupId));
+    if (wgIds.size > 1) hasItemSplit = true;
+    wgIds.forEach((g) => allGroups.add(g));
+
+    if (assignedQty === 0) {
+      unassignedCount++;
+    } else if (remainingQty > 0) {
+      // partially allocated
+    } else {
+      fullyAssignedCount++;
     }
   }
-  if (assignedCount === 0) return 'unassigned';
-  if (assignedCount === itemIds.length && assignedGroups.size <= 1) return 'assigned';
-  if (assignedGroups.size > 1) return 'split';
+
+  if (unassignedCount === itemIds.length) return 'unassigned';
+  if (hasItemSplit) return 'split';
+  if (fullyAssignedCount === itemIds.length && allGroups.size > 1) return 'split';
+  if (fullyAssignedCount === itemIds.length) return 'assigned';
   return 'partial';
 }
-

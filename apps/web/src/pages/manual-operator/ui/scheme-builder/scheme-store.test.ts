@@ -1,15 +1,19 @@
 ﻿import { describe, expect, it, beforeEach } from 'vitest';
 import { useSchemeBuilderStore, getOrderSplitStatus } from './scheme-store';
-import type { SourceOrderItem } from './scheme-types';
+import type { SourceOrderItem, ItemAllocation } from './scheme-types';
 
 function resetStore() {
   useSchemeBuilderStore.setState({
     selectedAreaName: null,
     planningLines: [],
     workGroups: [],
-    itemAssignments: {},
+    itemAllocations: [],
     targetWorkGroupId: null,
   });
+}
+
+function makeItem(id: string, orderId: string, qty: number): SourceOrderItem {
+  return { id, orderId, sku: 'SKU', description: null, category: null, quantity: qty, notes: null, zone: null, sourceRows: null, sourceFile: null };
 }
 
 describe('scheme-store', () => {
@@ -100,17 +104,17 @@ describe('scheme-store', () => {
   });
 
   describe('delete guards', () => {
-    it('blocks deleting a work group that has assigned items', () => {
+    it('blocks deleting a work group that has allocations', () => {
       const store = useSchemeBuilderStore.getState();
       const plId = store.createPlanningLine('south', 'קו 1');
       const wgId = store.createWorkGroup(plId, 'קבוצה 1');
-      store.assignItemRows(['item-1'], wgId);
+      store.allocateItemQty({ itemRowId: 'item-1', workGroupId: wgId, qty: 5, totalQty: 10 });
       const result = store.deleteWorkGroup(wgId);
       expect(result).toEqual({ ok: false, reason: 'has_assignments' });
       expect(store.getWorkGroup(wgId)).toBeTruthy();
     });
 
-    it('deletes a work group without assigned items', () => {
+    it('deletes a work group without allocated items', () => {
       const store = useSchemeBuilderStore.getState();
       const plId = store.createPlanningLine('south', 'קו 1');
       const wgId = store.createWorkGroup(plId, 'קבוצה 1');
@@ -119,130 +123,320 @@ describe('scheme-store', () => {
       expect(store.getWorkGroup(wgId)).toBeUndefined();
     });
 
-    it('deletePlanningLine still works after work group with assignments is deleted', () => {
+    it('deletePlanningLine still works after work group with allocations is deleted', () => {
       const store = useSchemeBuilderStore.getState();
       const plId = store.createPlanningLine('south', 'קו 1');
       const wgId = store.createWorkGroup(plId, 'קבוצה 1');
-      store.assignItemRows(['item-1'], wgId);
+      store.allocateItemQty({ itemRowId: 'item-1', workGroupId: wgId, qty: 5, totalQty: 10 });
       expect(store.deletePlanningLine(plId)).toEqual({ ok: false, reason: 'has_work_groups' });
-      store.unassignItemRow('item-1');
+      store.removeAllocationsForItem('item-1');
       expect(store.deleteWorkGroup(wgId)).toEqual({ ok: true });
       expect(store.deletePlanningLine(plId)).toEqual({ ok: true });
     });
   });
 
-  describe('assignment (remains by itemRowId)', () => {
-    it('assigns items by itemRowId, not orderId', () => {
+  describe('allocateItemQty', () => {
+    it('creates an allocation record with correct fields', () => {
       const store = useSchemeBuilderStore.getState();
       const plId = store.createPlanningLine('south', 'קו 1');
       const wgId = store.createWorkGroup(plId, 'קבוצה 1');
-      store.assignItemRows(['item-1', 'item-2'], wgId);
-      const state = useSchemeBuilderStore.getState();
-      expect(state.itemAssignments['item-1']).toBe(wgId);
-      expect(state.itemAssignments['item-2']).toBe(wgId);
-      expect(state.itemAssignments['item-3']).toBeUndefined();
+      const result = store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 4, totalQty: 10 });
+      expect(result).toEqual({ ok: true });
+      const allocs = useSchemeBuilderStore.getState().itemAllocations;
+      expect(allocs).toHaveLength(1);
+      expect(allocs[0].itemRowId).toBe('i1');
+      expect(allocs[0].workGroupId).toBe(wgId);
+      expect(allocs[0].qty).toBe(4);
+      expect(allocs[0].id).toBeTruthy();
+      expect(allocs[0].createdAt).toBeGreaterThan(0);
     });
 
-    it('assigns item rows even if work group id is unknown (store does not validate wg existence)', () => {
-      const store = useSchemeBuilderStore.getState();
-      store.assignItemRows(['item-1'], 'nonexistent');
-      expect(useSchemeBuilderStore.getState().itemAssignments['item-1']).toBe('nonexistent');
-    });
-
-    it('whole-order shortcut assigns all given item rows', () => {
+    it('rejects qty <= 0', () => {
       const store = useSchemeBuilderStore.getState();
       const plId = store.createPlanningLine('south', 'קו 1');
       const wgId = store.createWorkGroup(plId, 'קבוצה 1');
-      store.assignWholeOrder(['item-a', 'item-b'], wgId);
-      expect(useSchemeBuilderStore.getState().itemAssignments['item-a']).toBe(wgId);
-      expect(useSchemeBuilderStore.getState().itemAssignments['item-b']).toBe(wgId);
+      expect(store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 0, totalQty: 10 })).toEqual({ ok: false, reason: 'invalid_qty' });
+      expect(store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: -1, totalQty: 10 })).toEqual({ ok: false, reason: 'invalid_qty' });
     });
 
-    it('unassigns a single item row', () => {
+    it('rejects non-integer qty', () => {
       const store = useSchemeBuilderStore.getState();
       const plId = store.createPlanningLine('south', 'קו 1');
       const wgId = store.createWorkGroup(plId, 'קבוצה 1');
-      store.assignItemRows(['item-1', 'item-2'], wgId);
-      store.unassignItemRow('item-1');
-      const state = useSchemeBuilderStore.getState();
-      expect(state.itemAssignments['item-1']).toBeUndefined();
-      expect(state.itemAssignments['item-2']).toBe(wgId);
+      const result = store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 2.5, totalQty: 10 });
+      expect(result).toEqual({ ok: false, reason: 'invalid_qty' });
     });
 
-    it('getItemWorkGroupId returns correct group', () => {
+    it('rejects qty exceeding remaining', () => {
       const store = useSchemeBuilderStore.getState();
       const plId = store.createPlanningLine('south', 'קו 1');
       const wgId = store.createWorkGroup(plId, 'קבוצה 1');
-      store.assignItemRows(['item-1'], wgId);
-      expect(useSchemeBuilderStore.getState().getItemWorkGroupId('item-1')).toBe(wgId);
-      expect(useSchemeBuilderStore.getState().getItemWorkGroupId('item-2')).toBeUndefined();
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 4, totalQty: 10 });
+      const result = store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 7, totalQty: 10 });
+      expect(result).toEqual({ ok: false, reason: 'exceeds_remaining' });
+    });
+
+    it('rejects allocation when fully allocated', () => {
+      const store = useSchemeBuilderStore.getState();
+      const plId = store.createPlanningLine('south', 'קו 1');
+      const wgId = store.createWorkGroup(plId, 'קבוצה 1');
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 10, totalQty: 10 });
+      const result = store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 1, totalQty: 10 });
+      expect(result).toEqual({ ok: false, reason: 'fully_allocated' });
+    });
+
+    it('rejects allocation when totalQty is 0 or missing', () => {
+      const store = useSchemeBuilderStore.getState();
+      const plId = store.createPlanningLine('south', 'קו 1');
+      const wgId = store.createWorkGroup(plId, 'קבוצה 1');
+      expect(store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 5, totalQty: 0 })).toEqual({ ok: false, reason: 'missing_item_qty' });
+    });
+
+    it('allows allocation at exactly remaining qty', () => {
+      const store = useSchemeBuilderStore.getState();
+      const plId = store.createPlanningLine('south', 'קו 1');
+      const wgId = store.createWorkGroup(plId, 'קבוצה 1');
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 4, totalQty: 10 });
+      const result = store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 6, totalQty: 10 });
+      expect(result).toEqual({ ok: true });
     });
   });
 
-  describe('work group totals still work', () => {
-    it('computes item count and quantity correctly', () => {
+  describe('allocateItemRows', () => {
+    it('allocates full remaining qty for each row', () => {
       const store = useSchemeBuilderStore.getState();
       const plId = store.createPlanningLine('south', 'קו 1');
       const wgId = store.createWorkGroup(plId, 'קבוצה 1');
-      const orderItemMap: Record<string, SourceOrderItem[]> = {
-        'order-1': [
-          { id: 'i1', orderId: 'order-1', sku: 'A', description: null, category: null, quantity: 5, notes: null, zone: null, sourceRows: null, sourceFile: null },
-          { id: 'i2', orderId: 'order-1', sku: 'B', description: null, category: null, quantity: 10, notes: null, zone: null, sourceRows: null, sourceFile: null },
-        ],
-        'order-2': [
-          { id: 'i3', orderId: 'order-2', sku: 'C', description: null, category: null, quantity: 15, notes: null, zone: null, sourceRows: null, sourceFile: null },
-        ],
+      const orderItemMap = { 'order-1': [makeItem('i1', 'order-1', 10), makeItem('i2', 'order-1', 5)] };
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 4, totalQty: 10 });
+      const result = store.allocateItemRows(['i1', 'i2'], wgId, orderItemMap);
+      expect(result).toEqual({ ok: true });
+      const i1Assigned = useSchemeBuilderStore.getState().getAssignedQty('i1');
+      const i2Assigned = useSchemeBuilderStore.getState().getAssignedQty('i2');
+      expect(i1Assigned).toBe(10);
+      expect(i2Assigned).toBe(5);
+    });
+  });
+
+  describe('allocateWholeOrder', () => {
+    it('allocates remaining qty for all rows in the order only', () => {
+      const store = useSchemeBuilderStore.getState();
+      const plId = store.createPlanningLine('south', 'קו 1');
+      const wgId = store.createWorkGroup(plId, 'קבוצה 1');
+      const orderItemMap = {
+        'order-1': [makeItem('i1', 'order-1', 10), makeItem('i2', 'order-1', 5)],
+        'order-2': [makeItem('i3', 'order-2', 20)],
       };
-      store.assignItemRows(['i1', 'i3'], wgId);
-      const state = useSchemeBuilderStore.getState();
-      expect(state.getWorkGroupTotalQuantity(wgId, orderItemMap)).toBe(20);
-      const orderIds = state.getWorkGroupOrderIds(wgId, orderItemMap);
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 4, totalQty: 10 });
+      const result = store.allocateWholeOrder('order-1', wgId, orderItemMap);
+      expect(result).toEqual({ ok: true });
+      const i1Assigned = useSchemeBuilderStore.getState().getAssignedQty('i1');
+      const i2Assigned = useSchemeBuilderStore.getState().getAssignedQty('i2');
+      expect(i1Assigned).toBe(10);
+      expect(i2Assigned).toBe(5);
+      expect(useSchemeBuilderStore.getState().getAssignedQty('i3')).toBe(0);
+    });
+  });
+
+  describe('getAssignedQty', () => {
+    it('sums allocations for a given item row', () => {
+      const store = useSchemeBuilderStore.getState();
+      const plId = store.createPlanningLine('south', 'קו 1');
+      const wgId1 = store.createWorkGroup(plId, 'קבוצה 1');
+      const wgId2 = store.createWorkGroup(plId, 'קבוצה 2');
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId1, qty: 3, totalQty: 10 });
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId2, qty: 4, totalQty: 10 });
+      expect(useSchemeBuilderStore.getState().getAssignedQty('i1')).toBe(7);
+    });
+
+    it('returns 0 for item with no allocations', () => {
+      expect(useSchemeBuilderStore.getState().getAssignedQty('nonexistent')).toBe(0);
+    });
+  });
+
+  describe('getRemainingQty', () => {
+    it('computes remaining correctly', () => {
+      const store = useSchemeBuilderStore.getState();
+      const plId = store.createPlanningLine('south', 'קו 1');
+      const wgId = store.createWorkGroup(plId, 'קבוצה 1');
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 4, totalQty: 10 });
+      expect(useSchemeBuilderStore.getState().getRemainingQty('i1', 10)).toBe(6);
+    });
+
+    it('returns 0 when fully allocated', () => {
+      const store = useSchemeBuilderStore.getState();
+      const plId = store.createPlanningLine('south', 'קו 1');
+      const wgId = store.createWorkGroup(plId, 'קבוצה 1');
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 10, totalQty: 10 });
+      expect(useSchemeBuilderStore.getState().getRemainingQty('i1', 10)).toBe(0);
+    });
+  });
+
+  describe('getItemAllocations', () => {
+    it('returns allocations for a specific item row', () => {
+      const store = useSchemeBuilderStore.getState();
+      const plId = store.createPlanningLine('south', 'קו 1');
+      const wgId = store.createWorkGroup(plId, 'קבוצה 1');
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 3, totalQty: 10 });
+      store.allocateItemQty({ itemRowId: 'i2', workGroupId: wgId, qty: 5, totalQty: 10 });
+      const allocs = useSchemeBuilderStore.getState().getItemAllocations('i1');
+      expect(allocs).toHaveLength(1);
+      expect(allocs[0].itemRowId).toBe('i1');
+    });
+
+    it('returns empty array for item with no allocations', () => {
+      expect(useSchemeBuilderStore.getState().getItemAllocations('nonexistent')).toEqual([]);
+    });
+  });
+
+  describe('getAllocationsForWorkGroup', () => {
+    it('returns allocations for a specific work group', () => {
+      const store = useSchemeBuilderStore.getState();
+      const plId = store.createPlanningLine('south', 'קו 1');
+      const wgId1 = store.createWorkGroup(plId, 'קבוצה 1');
+      const wgId2 = store.createWorkGroup(plId, 'קבוצה 2');
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId1, qty: 3, totalQty: 10 });
+      store.allocateItemQty({ itemRowId: 'i2', workGroupId: wgId2, qty: 5, totalQty: 10 });
+      const allocs = useSchemeBuilderStore.getState().getAllocationsForWorkGroup(wgId1);
+      expect(allocs).toHaveLength(1);
+      expect(allocs[0].itemRowId).toBe('i1');
+    });
+  });
+
+  describe('removeAllocation', () => {
+    it('removes a specific allocation and restores remaining qty', () => {
+      const store = useSchemeBuilderStore.getState();
+      const plId = store.createPlanningLine('south', 'קו 1');
+      const wgId = store.createWorkGroup(plId, 'קבוצה 1');
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 4, totalQty: 10 });
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 3, totalQty: 10 });
+      expect(useSchemeBuilderStore.getState().getAssignedQty('i1')).toBe(7);
+      const allocs = useSchemeBuilderStore.getState().getItemAllocations('i1');
+      store.removeAllocation(allocs[0].id);
+      expect(useSchemeBuilderStore.getState().getAssignedQty('i1')).toBe(3);
+      expect(useSchemeBuilderStore.getState().getRemainingQty('i1', 10)).toBe(7);
+    });
+  });
+
+  describe('removeAllocationsForItem', () => {
+    it('removes all allocations for a given item row', () => {
+      const store = useSchemeBuilderStore.getState();
+      const plId = store.createPlanningLine('south', 'קו 1');
+      const wgId1 = store.createWorkGroup(plId, 'קבוצה 1');
+      const wgId2 = store.createWorkGroup(plId, 'קבוצה 2');
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId1, qty: 3, totalQty: 10 });
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId2, qty: 4, totalQty: 10 });
+      store.removeAllocationsForItem('i1');
+      expect(useSchemeBuilderStore.getState().getAssignedQty('i1')).toBe(0);
+      expect(useSchemeBuilderStore.getState().getRemainingQty('i1', 10)).toBe(10);
+    });
+  });
+
+  describe('removeAllocationsForItems', () => {
+    it('removes allocations for multiple item rows', () => {
+      const store = useSchemeBuilderStore.getState();
+      const plId = store.createPlanningLine('south', 'קו 1');
+      const wgId = store.createWorkGroup(plId, 'קבוצה 1');
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 3, totalQty: 10 });
+      store.allocateItemQty({ itemRowId: 'i2', workGroupId: wgId, qty: 5, totalQty: 10 });
+      store.removeAllocationsForItems(['i1', 'i2']);
+      expect(useSchemeBuilderStore.getState().getAssignedQty('i1')).toBe(0);
+      expect(useSchemeBuilderStore.getState().getAssignedQty('i2')).toBe(0);
+    });
+  });
+
+  describe('work group totals', () => {
+    it('item count is unique itemRowIds allocated to the group', () => {
+      const store = useSchemeBuilderStore.getState();
+      const plId = store.createPlanningLine('south', 'קו 1');
+      const wgId = store.createWorkGroup(plId, 'קבוצה 1');
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 3, totalQty: 10 });
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 4, totalQty: 10 });
+      store.allocateItemQty({ itemRowId: 'i2', workGroupId: wgId, qty: 5, totalQty: 10 });
+      expect(useSchemeBuilderStore.getState().getWorkGroupItemCount(wgId)).toBe(2);
+    });
+
+    it('total quantity uses allocation.qty not full item qty', () => {
+      const store = useSchemeBuilderStore.getState();
+      const plId = store.createPlanningLine('south', 'קו 1');
+      const wgId = store.createWorkGroup(plId, 'קבוצה 1');
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 4, totalQty: 10 });
+      store.allocateItemQty({ itemRowId: 'i2', workGroupId: wgId, qty: 8, totalQty: 10 });
+      expect(useSchemeBuilderStore.getState().getWorkGroupTotalQuantity(wgId)).toBe(12);
+    });
+
+    it('total qty returns 0 for empty group', () => {
+      const store = useSchemeBuilderStore.getState();
+      const plId = store.createPlanningLine('south', 'קו 1');
+      const wgId = store.createWorkGroup(plId, 'קבוצה 1');
+      expect(useSchemeBuilderStore.getState().getWorkGroupTotalQuantity(wgId)).toBe(0);
+    });
+
+    it('order ids resolved from orderItemMap', () => {
+      const store = useSchemeBuilderStore.getState();
+      const plId = store.createPlanningLine('south', 'קו 1');
+      const wgId = store.createWorkGroup(plId, 'קבוצה 1');
+      const orderItemMap = {
+        'order-1': [makeItem('i1', 'order-1', 10), makeItem('i2', 'order-1', 5)],
+        'order-2': [makeItem('i3', 'order-2', 20)],
+      };
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 4, totalQty: 10 });
+      store.allocateItemQty({ itemRowId: 'i3', workGroupId: wgId, qty: 10, totalQty: 20 });
+      const orderIds = useSchemeBuilderStore.getState().getWorkGroupOrderIds(wgId, orderItemMap);
       expect(orderIds.size).toBe(2);
       expect(orderIds.has('order-1')).toBe(true);
       expect(orderIds.has('order-2')).toBe(true);
     });
+  });
 
-    it('returns zero for a group with no assignments', () => {
+  describe('isItemAssigned', () => {
+    it('returns true if item has any allocation', () => {
       const store = useSchemeBuilderStore.getState();
       const plId = store.createPlanningLine('south', 'קו 1');
       const wgId = store.createWorkGroup(plId, 'קבוצה 1');
-      const state = useSchemeBuilderStore.getState();
-      expect(state.getWorkGroupTotalQuantity(wgId, {})).toBe(0);
-      expect(state.getWorkGroupOrderIds(wgId, {}).size).toBe(0);
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 1, totalQty: 10 });
+      expect(useSchemeBuilderStore.getState().isItemAssigned('i1')).toBe(true);
+    });
+
+    it('returns false if item has no allocation', () => {
+      expect(useSchemeBuilderStore.getState().isItemAssigned('i1')).toBe(false);
     });
   });
 
   describe('clearLocalDraft', () => {
-    it('clears everything including planning lines and target work group', () => {
+    it('clears everything including allocations', () => {
       const store = useSchemeBuilderStore.getState();
       store.createPlanningLine('south', 'קו 1');
       const plId = store.createPlanningLine('south', 'קו 2');
       store.createWorkGroup(plId, 'קבוצה 1');
       store.setSelectedArea('south');
       store.setTargetWorkGroup('wg-1');
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: 'wg-1', qty: 5, totalQty: 10 });
       let state = useSchemeBuilderStore.getState();
       expect(state.planningLines).toHaveLength(2);
       expect(state.workGroups).toHaveLength(1);
+      expect(state.itemAllocations).toHaveLength(1);
       expect(state.selectedAreaName).toBe('south');
       expect(state.targetWorkGroupId).toBe('wg-1');
       state.clearLocalDraft();
       state = useSchemeBuilderStore.getState();
       expect(state.planningLines).toHaveLength(0);
       expect(state.workGroups).toHaveLength(0);
-      expect(state.itemAssignments).toEqual({});
+      expect(state.itemAllocations).toEqual([]);
       expect(state.selectedAreaName).toBeNull();
       expect(state.targetWorkGroupId).toBeNull();
     });
   });
 
   describe('duplicate orderNumber safety', () => {
-    it('still work with duplicate order numbers (backend may return duplicates)', () => {
+    it('still works with duplicate order numbers', () => {
       const store = useSchemeBuilderStore.getState();
       const plId = store.createPlanningLine('south', 'קו 1');
       const wgId1 = store.createWorkGroup(plId, 'קבוצה 1');
       const wgId2 = store.createWorkGroup(plId, 'קבוצה 2');
-      store.assignItemRows(['i1', 'i2'], wgId1);
-      store.assignItemRows(['i3'], wgId2);
+      store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId1, qty: 5, totalQty: 10 });
+      store.allocateItemQty({ itemRowId: 'i2', workGroupId: wgId1, qty: 3, totalQty: 10 });
+      store.allocateItemQty({ itemRowId: 'i3', workGroupId: wgId2, qty: 7, totalQty: 10 });
       const state = useSchemeBuilderStore.getState();
       expect(state.getWorkGroupItemCount(wgId1)).toBe(2);
       expect(state.getWorkGroupItemCount(wgId2)).toBe(1);
@@ -284,28 +478,63 @@ describe('scheme-store', () => {
 });
 
 describe('getOrderSplitStatus', () => {
-  it('returns unassigned when no items are assigned', () => {
-    const status = getOrderSplitStatus('order-1', ['i1', 'i2', 'i3'], {});
+  it('returns unassigned when all items have no allocations', () => {
+    const items = [makeItem('i1', 'order-1', 10), makeItem('i2', 'order-1', 5)];
+    const status = getOrderSplitStatus('order-1', items, []);
     expect(status).toBe('unassigned');
   });
 
-  it('returns assigned when all items in one group', () => {
-    const status = getOrderSplitStatus('order-1', ['i1', 'i2'], { i1: 'wg-1', i2: 'wg-1' });
+  it('returns assigned when all items are fully allocated to one group', () => {
+    const items = [makeItem('i1', 'order-1', 10), makeItem('i2', 'order-1', 5)];
+    const allocations: ItemAllocation[] = [
+      { id: 'a1', itemRowId: 'i1', workGroupId: 'wg-1', qty: 10, createdAt: 1 },
+      { id: 'a2', itemRowId: 'i2', workGroupId: 'wg-1', qty: 5, createdAt: 1 },
+    ];
+    const status = getOrderSplitStatus('order-1', items, allocations);
     expect(status).toBe('assigned');
   });
 
-  it('returns split when items in multiple groups', () => {
-    const status = getOrderSplitStatus('order-1', ['i1', 'i2', 'i3'], { i1: 'wg-1', i2: 'wg-2', i3: 'wg-2' });
+  it('returns split when same item row allocated to multiple groups', () => {
+    const items = [makeItem('i1', 'order-1', 10)];
+    const allocations: ItemAllocation[] = [
+      { id: 'a1', itemRowId: 'i1', workGroupId: 'wg-1', qty: 4, createdAt: 1 },
+      { id: 'a2', itemRowId: 'i1', workGroupId: 'wg-2', qty: 6, createdAt: 1 },
+    ];
+    const status = getOrderSplitStatus('order-1', items, allocations);
     expect(status).toBe('split');
   });
 
-  it('returns partial when some items assigned', () => {
-    const status = getOrderSplitStatus('order-1', ['i1', 'i2', 'i3'], { i1: 'wg-1', i2: 'wg-1' });
+  it('returns split when different items in multiple groups', () => {
+    const items = [makeItem('i1', 'order-1', 10), makeItem('i2', 'order-1', 5)];
+    const allocations: ItemAllocation[] = [
+      { id: 'a1', itemRowId: 'i1', workGroupId: 'wg-1', qty: 10, createdAt: 1 },
+      { id: 'a2', itemRowId: 'i2', workGroupId: 'wg-2', qty: 5, createdAt: 1 },
+    ];
+    const status = getOrderSplitStatus('order-1', items, allocations);
+    expect(status).toBe('split');
+  });
+
+  it('returns partial when some items have remaining qty', () => {
+    const items = [makeItem('i1', 'order-1', 10), makeItem('i2', 'order-1', 5)];
+    const allocations: ItemAllocation[] = [
+      { id: 'a1', itemRowId: 'i1', workGroupId: 'wg-1', qty: 4, createdAt: 1 },
+    ];
+    const status = getOrderSplitStatus('order-1', items, allocations);
     expect(status).toBe('partial');
   });
 
-  it('handles empty itemIds array', () => {
-    const status = getOrderSplitStatus('order-1', [], {});
+  it('handles empty items array', () => {
+    const status = getOrderSplitStatus('order-1', [], []);
     expect(status).toBe('unassigned');
+  });
+
+  it('returns assigned when partial allocation sums to full qty', () => {
+    const items = [makeItem('i1', 'order-1', 10)];
+    const allocations: ItemAllocation[] = [
+      { id: 'a1', itemRowId: 'i1', workGroupId: 'wg-1', qty: 4, createdAt: 1 },
+      { id: 'a2', itemRowId: 'i1', workGroupId: 'wg-1', qty: 6, createdAt: 1 },
+    ];
+    const status = getOrderSplitStatus('order-1', items, allocations);
+    expect(status).toBe('assigned');
   });
 });

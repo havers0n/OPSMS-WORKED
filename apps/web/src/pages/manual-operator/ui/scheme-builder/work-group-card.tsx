@@ -12,25 +12,13 @@ export function WorkGroupCard({
   onStartAssign: (workGroupId: string) => void;
 }) {
   const deleteWorkGroup = useSchemeBuilderStore((s) => s.deleteWorkGroup);
-  const itemAssignments = useSchemeBuilderStore((s) => s.itemAssignments);
+  const getWorkGroupItemCount = useSchemeBuilderStore((s) => s.getWorkGroupItemCount);
+  const getWorkGroupTotalQuantity = useSchemeBuilderStore((s) => s.getWorkGroupTotalQuantity);
+  const getWorkGroupOrderIds = useSchemeBuilderStore((s) => s.getWorkGroupOrderIds);
 
-  const assignedIds = Object.entries(itemAssignments)
-    .filter(([, wgId]) => wgId === workGroup.id)
-    .map(([itemId]) => itemId);
-
-  const itemCount = assignedIds.length;
-
-  const orderIds = new Set<string>();
-  let totalQty = 0;
-  for (const [orderId, items] of Object.entries(orderItemMap)) {
-    for (const item of items) {
-      if (assignedIds.includes(item.id)) {
-        orderIds.add(orderId);
-        totalQty += item.quantity;
-      }
-    }
-  }
-
+  const itemCount = getWorkGroupItemCount(workGroup.id);
+  const totalQty = getWorkGroupTotalQuantity(workGroup.id);
+  const orderIds = getWorkGroupOrderIds(workGroup.id, orderItemMap);
   const uniqueOrdersCount = orderIds.size;
 
   return (
