@@ -40,6 +40,12 @@ export function BondedImportPanel({ shiftId, selectedDate }: BondedImportPanelPr
   const isBlocking = uploadMutation.isPending || publishMutation.isPending;
   const canPublish = !!draft && !!planningDate && !isBlocking && !publishResult;
 
+  const existingCompletedSnapshots = snapshots.filter(
+    s => s.planningDate === planningDate && s.status === 'completed'
+  );
+  const hasDuplicateDate = existingCompletedSnapshots.length > 0;
+  const latestDuplicate = existingCompletedSnapshots[0] ?? null;
+
   async function handleSelectFile(file: File | null) {
     if (!file || isBlocking) return;
     setUploadErrorMessage(null);
@@ -146,6 +152,25 @@ export function BondedImportPanel({ shiftId, selectedDate }: BondedImportPanelPr
           <div className="rounded-xl border border-gray-200 p-4 flex items-center gap-2 text-sm text-gray-700">
             <Loader2 size={16} className="animate-spin" />
             מעלה ומנתח את הקובץ...
+          </div>
+        )}
+
+        {hasDuplicateDate && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm space-y-1">
+            <p className="font-medium text-amber-900">
+              לתאריך עבודה זה כבר קיים Snapshot בונדד. פרסום חדש יהפוך לגרסה הפעילה לתאריך זה.
+            </p>
+            <p className="text-amber-700">
+              הגרסאות הקודמות יישארו בהיסטוריית הייבוא.
+            </p>
+            {latestDuplicate && (
+              <div className="mt-2 space-y-0.5 text-xs text-amber-800">
+                <p><span className="font-medium">קובץ קיים:</span> {latestDuplicate.fileName || '—'}</p>
+                <p><span className="font-medium">הועלה:</span> {formatDateTime(latestDuplicate.importedAt)}</p>
+                <p><span className="font-medium">שורות:</span> {latestDuplicate.rowCount}</p>
+                <p><span className="font-medium">סטטוס:</span> {latestDuplicate.status}</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -279,7 +304,7 @@ export function BondedImportPanel({ shiftId, selectedDate }: BondedImportPanelPr
           className="w-full min-h-12 rounded-xl bg-gray-900 text-white font-medium disabled:opacity-40 flex items-center justify-center gap-2"
         >
           {publishMutation.isPending && <Loader2 size={16} className="animate-spin" />}
-          {publishMutation.isPending ? 'מפרסם...' : publishResult ? 'פורסם' : 'פרסם לתאריך עבודה'}
+          {publishMutation.isPending ? 'מפרסם...' : publishResult ? 'פורסם' : hasDuplicateDate ? 'פרסם כגרסה חדשה' : 'פרסם לתאריך עבודה'}
         </button>
       </div>
 
