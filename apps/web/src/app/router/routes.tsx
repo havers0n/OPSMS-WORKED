@@ -13,6 +13,7 @@ const WaveDetailPage = lazy(() => import('@/pages/wave-detail/ui/wave-detail-pag
 const MobilePickerPage = lazy(() => import('@/pages/picker/picker-page').then(m => ({ default: m.PickerPage })));
 const MobilePickTaskPage = lazy(() => import('@/pages/picker/pick-task-page').then(m => ({ default: m.PickTaskPage })));
 const MobilePickStepPage = lazy(() => import('@/pages/picker/pick-step-page').then(m => ({ default: m.PickStepPage })));
+const PrintSchemePage = lazy(() => import('@/pages/manual-operator/printing/routes/PrintSchemePage').then(m => ({ default: m.PrintSchemePage })));
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { AppRouteErrorBoundary } from '@/app/diagnostics/app-route-error-boundary';
 import { AppRouteRuntime } from '@/app/diagnostics/app-route-runtime';
@@ -78,6 +79,14 @@ export function AppRouter() {
               <Suspense fallback={<div className="flex h-full w-full items-center justify-center text-sm text-[var(--text-muted)]">{t('app.loading.session')}</div>}>
                 <MobilePickStepPage />
               </Suspense>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path={routes.operatorManualPrintScheme}
+          element={
+            <ProtectedRoute>
+              <PrintSchemePage />
             </ProtectedRoute>
           }
         />

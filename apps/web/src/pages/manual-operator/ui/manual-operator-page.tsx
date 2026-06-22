@@ -23,6 +23,7 @@ import { ManualOperatorImportSection } from './manual-operator-import-section';
 import { ManualOperatorPlaceholder } from './manual-operator-placeholder';
 import { ManualOperatorWorkSection } from './manual-operator-work-section';
 import { SchemeBuilder } from './scheme-builder';
+import { PrintingHomePage } from '../printing/routes/PrintingHomePage';
 import { manualOperatorSectionItems } from './manual-operator-navigation';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -101,6 +102,10 @@ function ManualOperatorSectionContent({
     );
   }
 
+  if (section === 'printing') {
+    return <PrintingHomePage shiftId={shift?.id} />;
+  }
+
   return (
     <ManualOperatorPlaceholder
       testId={`manual-placeholder-${section}`}
@@ -174,9 +179,9 @@ function DesktopSectionFrame({
       </header>
 
       <main className="flex-1 overflow-y-auto bg-gray-50">
-        {shift || section === 'import'
-          ? children
-          : <ShiftEmptyState onCreateShift={onCreateShift} isCreating={isCreatingShift} isToday={isToday} />}
+          {shift || section === 'import' || section === 'printing'
+            ? children
+            : <ShiftEmptyState onCreateShift={onCreateShift} isCreating={isCreatingShift} isToday={isToday} />}
       </main>
     </div>
   );
@@ -237,7 +242,7 @@ export function ManualOperatorPage() {
       hasExistingWork={hasExistingWork}
     />
   ) : null;
-  const renderSectionWithoutShift = section === 'import';
+  const renderSectionWithoutShift = section === 'import' || section === 'printing';
 
   if (isDesktop && section === 'work') {
     return (

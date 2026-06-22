@@ -1,0 +1,86 @@
+@page {
+  size: A4 portrait;
+  margin: 8mm;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .print-root {
+    direction: rtl;
+    font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+    color: #000;
+  }
+
+  .print-page {
+    box-sizing: border-box;
+    background: #fff;
+  }
+
+  .print-page h1 {
+    font-size: 18pt;
+    margin: 0 0 4mm;
+    color: #000;
+  }
+
+  .print-page h2 {
+    font-size: 14pt;
+    margin: 6mm 0 3mm;
+    color: #000;
+  }
+
+  .print-page .print-meta {
+    font-size: 10pt;
+    color: #000;
+    margin-bottom: 6mm;
+  }
+
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 4mm;
+  }
+
+  .print-table th {
+    background: #eef3f7;
+    font-weight: 600;
+    font-size: 9pt;
+    padding: 3mm 2mm;
+    text-align: right;
+    border: 1px solid #ccc;
+    color: #000;
+  }
+
+  .print-table td {
+    font-size: 9pt;
+    padding: 2mm;
+    border: 1px solid #ddd;
+    color: #000;
+  }
+
+  .print-table tr:nth-child(even) td {
+    background: #f8fafb;
+  }
+
+  .print-table .print-qty {
+    text-align: left;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .page-break-before {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  .page-break-inside {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .page-break-after {
+    page-break-after: always;
+    break-after: page;
+  }
+}

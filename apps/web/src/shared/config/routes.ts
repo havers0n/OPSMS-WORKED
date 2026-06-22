@@ -10,6 +10,7 @@ export const routes = {
   operatorManualPrinting: '/operator/manual/printing',
   operatorManualImport: '/operator/manual/import',
   operatorManualLines: '/operator/manual/lines',
+  operatorManualPrintScheme: '/operator/manual/print/scheme',
   warehouse: '/warehouse',
   warehouseView: '/warehouse/view',
   warehouseActions: '/warehouse/actions',

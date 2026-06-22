@@ -692,6 +692,23 @@ describe('ManualOperatorPage URL sections', () => {
     });
   });
 
+  it('renders printing section instead of placeholder', async () => {
+    mockWorkspaceData();
+    renderAt(routes.operatorManualPrinting);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location').textContent).toBe(routes.operatorManualPrinting);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('manual-printing-section')).toBeTruthy();
+    });
+
+    expect(screen.queryByText('המסך הזה עדיין לא מחובר')).toBeNull();
+    expect(screen.queryByTestId('manual-placeholder-printing')).toBeNull();
+    expect(screen.getByText('הדפסת מסמכים')).toBeTruthy();
+  });
+
   it('still renders placeholders for other unimplemented sections', async () => {
     mockWorkspaceData();
     renderAt(routes.operatorManualAshlamot);
