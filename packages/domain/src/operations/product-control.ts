@@ -27,6 +27,12 @@ export const productControlWorkLineSchema = z.object({
 });
 export type ProductControlWorkLine = z.infer<typeof productControlWorkLineSchema>;
 
+export const productControlDataIssueSchema = z.enum([
+  'unknown_sku',
+  'duplicate_canonical_sku'
+]);
+export type ProductControlDataIssue = z.infer<typeof productControlDataIssueSchema>;
+
 export const productControlRowSchema = z.object({
   sku: z.string(),
   description: z.string(),
@@ -50,6 +56,7 @@ export const productControlRowSchema = z.object({
   bondedCandidateAlreadyPulled: nonNegativeInt.optional(),
   bondedCandidateAvailableBalance: nonNegativeNumber.optional(),
   workLines: z.array(productControlWorkLineSchema).optional(),
+  dataIssues: z.array(productControlDataIssueSchema).optional(),
   notes: z.string().optional()
 });
 export type ProductControlRow = z.infer<typeof productControlRowSchema>;
@@ -161,6 +168,7 @@ export function buildProductControlRow(input: {
   bondedCandidateAlreadyPulled?: number;
   bondedCandidateAvailableBalance?: number;
   workLines?: ProductControlWorkLine[];
+  dataIssues?: ProductControlDataIssue[];
   notes?: string;
 }): ProductControlRow {
   const shortageQty = deriveShortageQty(input.demandQty, input.warehouseQty);
@@ -193,6 +201,7 @@ export function buildProductControlRow(input: {
     bondedCandidateAlreadyPulled: input.bondedCandidateAlreadyPulled,
     bondedCandidateAvailableBalance: input.bondedCandidateAvailableBalance,
     workLines: input.workLines,
+    dataIssues: input.dataIssues,
     notes: input.notes
   };
 }

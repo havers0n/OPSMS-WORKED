@@ -496,6 +496,87 @@ describe('buildShiftWorkHierarchy', () => {
   });
 });
 
+describe('listWarehouseStockBySku', () => {
+  function createStockSupabaseStub() {
+    const products = [
+      { id: 'product-1', sku: 'SKU-1' },
+      { id: 'product-2', sku: 'SKU-DUP' },
+      { id: 'product-3', sku: 'SKU-DUP' }
+    ];
+    const inventoryUnits = [
+      { product_id: 'product-1', quantity: 0, tenant_id: 'tenant-1', status: 'available' },
+      { product_id: 'product-2', quantity: 30, tenant_id: 'tenant-1', status: 'available' },
+      { product_id: 'product-3', quantity: 45, tenant_id: 'tenant-1', status: 'available' },
+      { product_id: 'product-3', quantity: 10, tenant_id: 'tenant-2', status: 'available' },
+      { product_id: 'product-2', quantity: 5, tenant_id: 'tenant-1', status: 'damaged' }
+    ];
+
+    return {
+      from(table: string) {
+        if (table === 'products') {
+          let filtered = [...products];
+          return {
+            select() {
+              return this;
+            },
+            in(column: 'sku', values: string[]) {
+              filtered = filtered.filter((row) => values.includes(row[column]));
+              return this;
+            },
+            then(resolve: (value: { data: typeof filtered; error: null }) => void) {
+              resolve({ data: filtered, error: null });
+            }
+          };
+        }
+
+        if (table === 'inventory_unit') {
+          let filtered = [...inventoryUnits];
+          return {
+            select() {
+              return this;
+            },
+            in(column: 'product_id', values: string[]) {
+              filtered = filtered.filter((row) => values.includes(row[column]));
+              return this;
+            },
+            eq(column: 'tenant_id' | 'status', value: string) {
+              filtered = filtered.filter((row) => row[column] === value);
+              return this;
+            },
+            gt(column: 'quantity', value: number) {
+              filtered = filtered.filter((row) => row[column] > value);
+              return this;
+            },
+            then(resolve: (value: { data: typeof filtered; error: null }) => void) {
+              resolve({ data: filtered, error: null });
+            }
+          };
+        }
+
+        throw new Error(`Unexpected table ${table}`);
+      }
+    };
+  }
+
+  it('returns canonical product ids and summed tenant stock for duplicate canonical SKUs', async () => {
+    const repo = createManualShiftsRepo(createStockSupabaseStub() as never);
+
+    const result = await repo.listWarehouseStockBySku(['SKU-1', 'SKU-DUP', 'UNKNOWN'], 'tenant-1');
+
+    expect(result.get('SKU-1')).toEqual({
+      sku: 'SKU-1',
+      warehouseQty: 0,
+      canonicalProductIds: ['product-1']
+    });
+    expect(result.get('SKU-DUP')).toEqual({
+      sku: 'SKU-DUP',
+      warehouseQty: 75,
+      canonicalProductIds: ['product-2', 'product-3']
+    });
+    expect(result.has('UNKNOWN')).toBe(false);
+  });
+});
+
 describe('work-hierarchy reprojection', () => {
   function makeProjectedHierarchyFixture() {
     const chitaZones = ['דרום', 'חיפה', 'שפלה 1', 'שפלה 2', 'שפלה אמצעי', 'עמקים אמצעי'] as const;

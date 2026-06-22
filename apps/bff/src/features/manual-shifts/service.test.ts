@@ -638,7 +638,10 @@ function createRepo() {
     listShiftWorkHierarchy: vi.fn(async (_shiftId: string) => ({ shiftId: '', areas: [] })),
     listBucketProductRollup: vi.fn(async () => []),
     listProductControlDemand: vi.fn(async (_shiftId: string) => []),
-    listWarehouseStockBySku: vi.fn(async (_sku: string[], _tenantId: string) => new Map())
+    listWarehouseStockBySku: vi.fn(
+      async (_sku: string[], _tenantId: string) =>
+        new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>()
+    )
   };
  
   return { repo, state };
@@ -3625,9 +3628,9 @@ describe('getProductControl', () => {
         { sku: skuB, description: 'Product B', category: 'Cat B', demandQty: 50, orderCount: 1, lineCount: 1 }
       ]),
       listWarehouseStockBySku: vi.fn(async () => {
-        const map = new Map<string, number>();
-        map.set(skuA, 80);
-        map.set(skuB, 0);
+        const map = new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>();
+        map.set(skuA, { sku: skuA, warehouseQty: 80, canonicalProductIds: ['product-a'] });
+        map.set(skuB, { sku: skuB, warehouseQty: 0, canonicalProductIds: ['product-b'] });
         return map;
       })
     });
@@ -3670,7 +3673,10 @@ describe('getProductControl', () => {
       ...createRepo().repo,
       findShiftById: vi.fn(async () => createShift()),
       listProductControlDemand: vi.fn(async () => []),
-      listWarehouseStockBySku: vi.fn(async () => new Map())
+      listWarehouseStockBySku: vi.fn(
+        async () =>
+          new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>()
+      )
     });
 
     const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
@@ -3688,7 +3694,10 @@ describe('getProductControl', () => {
       listProductControlDemand: vi.fn(async () => [
         { sku: 'REAL-SKU-100', description: 'Real Product', category: 'Real', demandQty: 10, orderCount: 1, lineCount: 1 }
       ]),
-      listWarehouseStockBySku: vi.fn(async () => new Map())
+      listWarehouseStockBySku: vi.fn(
+        async () =>
+          new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>()
+      )
     });
 
     const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
@@ -3725,7 +3734,10 @@ describe('getProductControl', () => {
       listProductControlDemand: vi.fn(async () => [
         { sku: 'SKU-X', description: 'Prod X', category: 'Cat', demandQty: 30, orderCount: 1, lineCount: 1 }
       ]),
-      listWarehouseStockBySku: vi.fn(async () => new Map())
+      listWarehouseStockBySku: vi.fn(
+        async () =>
+          new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>()
+      )
     });
 
     const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
@@ -3737,6 +3749,92 @@ describe('getProductControl', () => {
       expect(row.bondedCandidateBlock).toBeUndefined();
       expect(row.bondedCandidateSource).toBeUndefined();
     }
+  });
+
+  it('keeps zero stock without data issues when the canonical product exists', async () => {
+    const { service } = makeService({
+      ...createRepo().repo,
+      findShiftById: vi.fn(async () => createShift()),
+      listProductControlDemand: vi.fn(async () => [
+        { sku: 'KNOWN-ZERO', description: 'Known Product', category: 'Cat', demandQty: 30, orderCount: 1, lineCount: 1 }
+      ]),
+      listWarehouseStockBySku: vi.fn(async () => {
+        const map = new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>();
+        map.set('KNOWN-ZERO', {
+          sku: 'KNOWN-ZERO',
+          warehouseQty: 0,
+          canonicalProductIds: ['product-known']
+        });
+        return map;
+      })
+    });
+
+    const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+    expect(result.rows[0]).toMatchObject({
+      sku: 'KNOWN-ZERO',
+      warehouseQty: 0,
+      status: 'unresolved'
+    });
+    expect(result.rows[0].dataIssues).toBeUndefined();
+  });
+
+  it('marks unknown canonical SKU as data_issue while keeping warehouseQty at 0', async () => {
+    const { service } = makeService({
+      ...createRepo().repo,
+      findShiftById: vi.fn(async () => createShift()),
+      listProductControlDemand: vi.fn(async () => [
+        { sku: 'UNKNOWN-SKU', description: 'Imported Only', category: 'Cat', demandQty: 30, orderCount: 1, lineCount: 1 }
+      ]),
+      listWarehouseStockBySku: vi.fn(
+        async () =>
+          new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>()
+      )
+    });
+
+    const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+    expect(result.rows[0]).toMatchObject({
+      sku: 'UNKNOWN-SKU',
+      warehouseQty: 0,
+      status: 'data_issue',
+      dataIssues: ['unknown_sku']
+    });
+    expect(result.totals).toMatchObject({
+      totalSkus: 1,
+      shortageSkus: 0,
+      dataIssueSkus: 1
+    });
+  });
+
+  it('marks duplicate canonical SKU rows and keeps summed warehouse stock explicit', async () => {
+    const { service } = makeService({
+      ...createRepo().repo,
+      findShiftById: vi.fn(async () => createShift()),
+      listProductControlDemand: vi.fn(async () => [
+        { sku: 'DUP-SKU', description: 'Canonical Duplicate', category: 'Cat', demandQty: 100, orderCount: 2, lineCount: 1 }
+      ]),
+      listWarehouseStockBySku: vi.fn(async () => {
+        const map = new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>();
+        map.set('DUP-SKU', {
+          sku: 'DUP-SKU',
+          warehouseQty: 75,
+          canonicalProductIds: ['product-a', 'product-b']
+        });
+        return map;
+      })
+    });
+
+    const result = await service.getProductControl({ tenantId: ids.tenant, shiftId: ids.shift });
+
+    expect(result.rows[0]).toMatchObject({
+      sku: 'DUP-SKU',
+      warehouseQty: 75,
+      shortageQty: 25,
+      status: 'data_issue',
+      dataIssues: ['duplicate_canonical_sku']
+    });
+    expect(result.totals.dataIssueSkus).toBe(1);
   });
 });
 

@@ -37,6 +37,12 @@ export type ProductControlDemandRow = {
   orderCount: number;
   lineCount: number;
 };
+
+export type ProductControlWarehouseStockRow = {
+  sku: string;
+  warehouseQty: number;
+  canonicalProductIds: string[];
+};
 import {
   classifyRouteFragments,
   deriveManualShiftLineStatus,
@@ -736,7 +742,7 @@ export type ManualShiftsRepo = {
     sourceLineName?: string | null;
   }): Promise<BucketProductRollupRow[]>;
   listProductControlDemand(shiftId: string): Promise<ProductControlDemandRow[]>;
-  listWarehouseStockBySku(skus: string[], tenantId: string): Promise<Map<string, number>>;
+  listWarehouseStockBySku(skus: string[], tenantId: string): Promise<Map<string, ProductControlWarehouseStockRow>>;
 };
 
 export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRepo {
@@ -1955,7 +1961,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         hasMore = skuChunk.length === PAGE_SIZE;
       }
 
-      if (productsBySku.size === 0) return new Map();
+      if (productsBySku.size === 0) return new Map<string, ProductControlWarehouseStockRow>();
 
       // Phase 2: collect all unique product IDs and sum inventory_unit quantities
       const allProductIds = new Set<string>();
@@ -1994,13 +2000,17 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       }
 
       // Phase 3: map back from product_id to SKU
-      const result = new Map<string, number>();
+      const result = new Map<string, ProductControlWarehouseStockRow>();
       for (const [sku, productIds] of productsBySku) {
         let total = 0;
         for (const pid of productIds) {
           total += stockByProductId.get(pid) ?? 0;
         }
-        result.set(sku, total);
+        result.set(sku, {
+          sku,
+          warehouseQty: total,
+          canonicalProductIds: [...productIds]
+        });
       }
 
       return result;

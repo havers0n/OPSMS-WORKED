@@ -1883,16 +1883,26 @@ export function createManualShiftsServiceFromRepo(
       const stockBySku = await repo.listWarehouseStockBySku(skus, input.tenantId);
 
       const rows = demandRows.map((demand) => {
-        const warehouseQty = stockBySku.get(demand.sku) ?? 0;
+        const stock = stockBySku.get(demand.sku);
+        const dataIssues: Array<'unknown_sku' | 'duplicate_canonical_sku'> = [];
+
+        if (!stock) {
+          dataIssues.push('unknown_sku');
+        } else if (stock.canonicalProductIds.length > 1) {
+          dataIssues.push('duplicate_canonical_sku');
+        }
+
         return buildProductControlRow({
           sku: demand.sku,
           description: demand.description ?? '',
           category: demand.category ?? '',
           demandQty: demand.demandQty,
-          warehouseQty,
+          warehouseQty: stock?.warehouseQty ?? 0,
           bondedAvailableQty: 0,
+          status: dataIssues.length > 0 ? 'data_issue' : undefined,
           affectedOrdersCount: demand.orderCount,
-          affectedLinesCount: demand.lineCount
+          affectedLinesCount: demand.lineCount,
+          dataIssues: dataIssues.length > 0 ? dataIssues : undefined
         });
       });
 

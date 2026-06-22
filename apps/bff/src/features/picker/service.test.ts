@@ -205,7 +205,10 @@ function createManualRepoMock(): ManualShiftsRepo {
       blockReasons: []
     })),
     listProductControlDemand: vi.fn(async () => []),
-    listWarehouseStockBySku: vi.fn(async () => new Map())
+    listWarehouseStockBySku: vi.fn(
+      async () =>
+        new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>()
+    )
   };
 }
 

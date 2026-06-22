@@ -4,6 +4,7 @@ import {
   productControlTotalsSchema,
   productControlResponseSchema,
   productControlStatusSchema,
+  productControlDataIssueSchema,
   deriveShortageQty,
   deriveBondedCoverQty,
   deriveFinalMissingQty,
@@ -48,6 +49,17 @@ describe('productControlStatusSchema', () => {
 
   it('rejects invalid status', () => {
     expect(() => productControlStatusSchema.parse('invalid')).toThrow();
+  });
+});
+
+describe('productControlDataIssueSchema', () => {
+  it('accepts supported data issues', () => {
+    expect(productControlDataIssueSchema.parse('unknown_sku')).toBe('unknown_sku');
+    expect(productControlDataIssueSchema.parse('duplicate_canonical_sku')).toBe('duplicate_canonical_sku');
+  });
+
+  it('rejects unsupported data issues', () => {
+    expect(() => productControlDataIssueSchema.parse('canonical_metadata_mismatch')).toThrow();
   });
 });
 
@@ -103,6 +115,7 @@ describe('productControlRowSchema', () => {
       workLines: [
         { name: 'Line A', units: 80, blockedOrders: 2 }
       ],
+      dataIssues: ['unknown_sku'],
       notes: 'Some note'
     });
     expect(() => productControlRowSchema.parse(row)).not.toThrow();
@@ -297,9 +310,11 @@ describe('buildProductControlRow', () => {
       warehouseQty: 9999,
       bondedAvailableQty: 0,
       status: 'data_issue',
+      dataIssues: ['unknown_sku', 'duplicate_canonical_sku'],
       notes: 'Manual override'
     });
     expect(row.status).toBe('data_issue');
+    expect(row.dataIssues).toEqual(['unknown_sku', 'duplicate_canonical_sku']);
     expect(row.notes).toBe('Manual override');
   });
 
