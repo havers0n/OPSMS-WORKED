@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import type {
   AreaHierarchySummary,
@@ -141,37 +142,40 @@ describe('DesktopHierarchyPanel', () => {
 
   function renderPanel(overrides: Partial<Parameters<typeof DesktopHierarchyPanel>[0]> = {}) {
     return render(
-      <DesktopHierarchyPanel
-        selectedAreaKey={null}
-        selectedLineId={null}
-        selectedRouteGroupKey={null}
-        selectedWorkBucketKey={null}
-        selectedRouteGroupWorkBucket={undefined}
-        selectedWorkBucketName={null}
-        areaSummaries={mockAreaSummaries}
-        specialAreaSummaries={[]}
-        lineHierarchySummaries={[]}
-        areaLineSummaries={mockLineHierarchySummaries}
-        workBucketSummaries={[]}
-        routeGroupSummaries={[]}
-        routeGroupWorkBucketSummaries={[]}
-        hasRouteGroups={false}
-        showProductRollupDeferred={false}
-        onSelectArea={noop}
-        onSelectLine={noop}
-        onSelectRouteGroup={noop}
-        onSelectBucket={noop}
-        onSelectOrder={noop}
-        onClearArea={noop}
-        onClearLine={noop}
-        onClearRouteGroup={noop}
-        onClearBucket={noop}
-        workBucketView="products"
-        productRollup={undefined}
-        productRollupLoading={false}
-        onSetWorkBucketView={noop}
-        {...overrides}
-      />
+      <MemoryRouter>
+        <DesktopHierarchyPanel
+          selectedAreaKey={null}
+          selectedLineId={null}
+          selectedRouteGroupKey={null}
+          selectedWorkBucketKey={null}
+          selectedRouteGroupWorkBucket={undefined}
+          selectedWorkBucketName={null}
+          areaSummaries={mockAreaSummaries}
+          specialAreaSummaries={[]}
+          lineHierarchySummaries={[]}
+          areaLineSummaries={mockLineHierarchySummaries}
+          workBucketSummaries={[]}
+          routeGroupSummaries={[]}
+          routeGroupWorkBucketSummaries={[]}
+          hasRouteGroups={false}
+          shiftId={null}
+          showProductRollupDeferred={false}
+          onSelectArea={noop}
+          onSelectLine={noop}
+          onSelectRouteGroup={noop}
+          onSelectBucket={noop}
+          onSelectOrder={noop}
+          onClearArea={noop}
+          onClearLine={noop}
+          onClearRouteGroup={noop}
+          onClearBucket={noop}
+          workBucketView="products"
+          productRollup={undefined}
+          productRollupLoading={false}
+          onSetWorkBucketView={noop}
+          {...overrides}
+        />
+      </MemoryRouter>
     );
   }
 
@@ -1320,6 +1324,97 @@ describe('DesktopHierarchyPanel', () => {
       });
       expect(screen.getByText('קו הפצה: גליל')).toBeTruthy();
       expect(screen.queryByText('ערוץ משלוח:')).toBeNull();
+    });
+  });
+
+  describe('print action — work group picker sheet', () => {
+    it('shows print link on bucket cards when all required params exist', () => {
+      renderPanel({
+        selectedAreaKey: 'צפון',
+        selectedLineId: 'line-1',
+        lineHierarchySummaries: [mockLineHierarchySummaries[0]],
+        workBucketSummaries: mockWorkBucketSummaries,
+        shiftId: 'shift-1'
+      });
+      const printLinks = screen.getAllByTestId('print-picker-sheet-link');
+      expect(printLinks.length).toBeGreaterThan(0);
+    });
+
+    it('hides print link on bucket cards when shiftId is null', () => {
+      renderPanel({
+        selectedAreaKey: 'צפון',
+        selectedLineId: 'line-1',
+        lineHierarchySummaries: [mockLineHierarchySummaries[0]],
+        workBucketSummaries: mockWorkBucketSummaries,
+        shiftId: null
+      });
+      expect(screen.queryByTestId('print-picker-sheet-link')).toBeNull();
+    });
+
+    it('hides print link when distributionArea is missing on the line', () => {
+      renderPanel({
+        selectedAreaKey: 'דרום',
+        selectedLineId: 'line-2',
+        lineHierarchySummaries: [mockLineHierarchySummaries[1]],
+        areaLineSummaries: [mockLineHierarchySummaries[1]],
+        workBucketSummaries: mockWorkBucketSummaries,
+        shiftId: 'shift-1'
+      });
+      expect(screen.queryByTestId('print-picker-sheet-link')).toBeNull();
+    });
+
+    it('detail view shows print action link when bucket is selected with all params', () => {
+      renderPanel({
+        selectedAreaKey: 'צפון',
+        selectedLineId: 'line-1',
+        lineHierarchySummaries: [mockLineHierarchySummaries[0]],
+        selectedWorkBucketName: 'Point A',
+        workBucketSummaries: mockWorkBucketSummaries,
+        shiftId: 'shift-1'
+      });
+      expect(screen.getByTestId('print-picker-sheet-detail')).toBeTruthy();
+    });
+
+    it('detail view hides print action link when shiftId is null', () => {
+      renderPanel({
+        selectedAreaKey: 'צפון',
+        selectedLineId: 'line-1',
+        lineHierarchySummaries: [mockLineHierarchySummaries[0]],
+        selectedWorkBucketName: 'Point A',
+        workBucketSummaries: mockWorkBucketSummaries,
+        shiftId: null
+      });
+      expect(screen.queryByTestId('print-picker-sheet-detail')).toBeNull();
+    });
+
+    it('print link contains correct encoded route and required params', () => {
+      renderPanel({
+        selectedAreaKey: 'צפון',
+        selectedLineId: 'line-1',
+        lineHierarchySummaries: [mockLineHierarchySummaries[0]],
+        workBucketSummaries: mockWorkBucketSummaries,
+        shiftId: 'shift-1'
+      });
+      const link = screen.getAllByTestId('print-picker-sheet-link')[0];
+      const href = link.getAttribute('href') ?? '';
+      expect(href).toContain('/operator/manual/print/picker-sheet');
+      const params = new URLSearchParams(href.split('?')[1]);
+      expect(params.get('shiftId')).toBe('shift-1');
+      expect(params.get('scope')).toBe('workGroup');
+    });
+
+    it('does not break existing bucket card click behavior when print is present', () => {
+      const onSelectBucket = vi.fn();
+      renderPanel({
+        selectedAreaKey: 'צפון',
+        selectedLineId: 'line-1',
+        lineHierarchySummaries: [mockLineHierarchySummaries[0]],
+        workBucketSummaries: mockWorkBucketSummaries,
+        onSelectBucket,
+        shiftId: 'shift-1'
+      });
+      fireEvent.click(screen.getByText('Point A'));
+      expect(onSelectBucket).toHaveBeenCalledWith('Point A');
     });
   });
 });

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import type {
   RouteGroupWorkBucketSummary,
   WorkBucketSummary
@@ -10,6 +11,7 @@ interface DesktopWorkBucketCardProps {
   lineName?: string;
   routeGroupName?: string;
   onClick?: (workBucketIdentifier: string) => void;
+  printUrl?: string;
 }
 
 function getWorkBucketIdentifier(bucket: BucketForCard): string {
@@ -43,7 +45,7 @@ function bucketDisplayName(workBucketName: string, lineName?: string, routeGroup
   return workBucketName;
 }
 
-export function DesktopWorkBucketCard({ bucket, lineName, routeGroupName, onClick }: DesktopWorkBucketCardProps) {
+export function DesktopWorkBucketCard({ bucket, lineName, routeGroupName, onClick, printUrl }: DesktopWorkBucketCardProps) {
   const rawName = getWorkBucketIdentifier(bucket);
   const displayName = bucketDisplayName(getWorkBucketDisplayName(bucket), lineName, routeGroupName);
   const sb = bucket.statusBreakdown;
@@ -51,26 +53,41 @@ export function DesktopWorkBucketCard({ bucket, lineName, routeGroupName, onClic
   const itemLinesCount = getItemLinesCount(bucket);
   const totalQuantity = getTotalQuantity(bucket);
   return (
-    <button
-      type="button"
-      className="bg-white border border-gray-200 rounded-lg p-4 text-right w-full hover:bg-gray-50 hover:border-gray-300 transition-colors"
-      onClick={() => onClick?.(rawName)}
-      data-testid={`work-bucket-card-${rawName}`}
-      aria-label={`קבוצת עבודה ${displayName}`}
-    >
-      <p className="text-sm font-semibold text-gray-900 mb-2">{displayName}</p>
-      <div className="flex items-baseline gap-3 mb-2 text-xs text-gray-600">
-        <span>{ordersCount} הזמנה{ordersCount !== 1 ? 'ות' : ''}</span>
-        {itemLinesCount > 0 && <span>{itemLinesCount} פריטים / שורות</span>}
-        <span>{totalQuantity} יח'</span>
-      </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
-        {sb.queued > 0 && <span className="text-gray-500">{sb.queued} בתור</span>}
-        {sb.picking > 0 && <span className="text-blue-700">{sb.picking} בליקוט</span>}
-        {sb.waitingCheck > 0 && <span className="text-amber-700">{sb.waitingCheck} בדיקה</span>}
-        {sb.returned > 0 && <span className="text-red-600">{sb.returned} הוחזר</span>}
-        {sb.done > 0 && <span className="text-green-700">{sb.done} הושלם</span>}
-      </div>
-    </button>
+    <div className="bg-white border border-gray-200 rounded-lg w-full">
+      <button
+        type="button"
+        className="w-full text-right p-4 hover:bg-gray-50 hover:border-gray-300 transition-colors rounded-t-lg"
+        onClick={() => onClick?.(rawName)}
+        data-testid={`work-bucket-card-${rawName}`}
+        aria-label={`קבוצת עבודה ${displayName}`}
+      >
+        <p className="text-sm font-semibold text-gray-900 mb-2">{displayName}</p>
+        <div className="flex items-baseline gap-3 mb-2 text-xs text-gray-600">
+          <span>{ordersCount} הזמנה{ordersCount !== 1 ? 'ות' : ''}</span>
+          {itemLinesCount > 0 && <span>{itemLinesCount} פריטים / שורות</span>}
+          <span>{totalQuantity} יח'</span>
+        </div>
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
+          {sb.queued > 0 && <span className="text-gray-500">{sb.queued} בתור</span>}
+          {sb.picking > 0 && <span className="text-blue-700">{sb.picking} בליקוט</span>}
+          {sb.waitingCheck > 0 && <span className="text-amber-700">{sb.waitingCheck} בדיקה</span>}
+          {sb.returned > 0 && <span className="text-red-600">{sb.returned} הוחזר</span>}
+          {sb.done > 0 && <span className="text-green-700">{sb.done} הושלם</span>}
+        </div>
+      </button>
+      {printUrl && (
+        <div className="px-4 pb-3 pt-2 border-t border-gray-100" data-testid="print-picker-sheet-link-container">
+          <Link
+            to={printUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-600 hover:text-blue-800"
+            data-testid="print-picker-sheet-link"
+          >
+            הדפס דף ליקוט
+          </Link>
+        </div>
+      )}
+    </div>
   );
 }

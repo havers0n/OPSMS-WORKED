@@ -254,6 +254,7 @@ export function DesktopOperatorShell({
               routeGroupSummaries={routeGroupSummaries}
               routeGroupWorkBucketSummaries={routeGroupWorkBucketSummaries}
               hasRouteGroups={hasRouteGroups}
+              shiftId={shift?.id ?? null}
               showProductRollupDeferred={showProductRollupDeferred}
               onSelectArea={onSelectArea}
               onSelectLine={onSelectHierarchyLine}

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import type {
   AreaHierarchySummary,
   LineHierarchySummary,
@@ -6,6 +7,7 @@ import type {
   WorkBucketSummary
 } from '@/entities/manual-shift/model/shift-selectors';
 import type { BucketProductRollupRow } from '@wos/domain';
+import { routes } from '@/shared/config/routes';
 import { DesktopAreaCard } from './desktop-area-card';
 import { DesktopLineSummaryCard } from './desktop-line-summary-card';
 import { DesktopRouteGroupCard } from './desktop-route-group-card';
@@ -29,6 +31,7 @@ interface DesktopHierarchyPanelProps {
   routeGroupSummaries: RouteGroupSummary[];
   routeGroupWorkBucketSummaries: RouteGroupWorkBucketSummary[];
   hasRouteGroups: boolean;
+  shiftId: string | null;
   onSelectArea: (areaKey: string | null) => void;
   onSelectLine: (areaLineKey: string) => void;
   onSelectRouteGroup: (routeGroupKey: string) => void;
@@ -43,6 +46,23 @@ interface DesktopHierarchyPanelProps {
   productRollupLoading: boolean;
   showProductRollupDeferred: boolean;
   onSetWorkBucketView: (view: 'products' | 'orders') => void;
+}
+
+function workGroupPickerSheetUrl(
+  shiftId: string | null,
+  distributionArea: string | null | undefined,
+  planningLineName: string | undefined,
+  workGroupName: string | undefined | null,
+): string | undefined {
+  if (!shiftId || !distributionArea || !planningLineName || !workGroupName) return undefined;
+  const params = new URLSearchParams({
+    shiftId,
+    distributionArea,
+    scope: 'workGroup',
+    planningLineName,
+    workGroupName,
+  });
+  return `${routes.operatorManualPrintPickerSheet}?${params.toString()}`;
 }
 
 function AreaBreadcrumb({ areaName, onClearArea }: { areaName: string; onClearArea: () => void }) {
@@ -78,6 +98,7 @@ export function DesktopHierarchyPanel({
   routeGroupSummaries,
   routeGroupWorkBucketSummaries,
   hasRouteGroups,
+  shiftId,
   onSelectArea,
   onSelectLine,
   onSelectRouteGroup,
@@ -206,6 +227,12 @@ export function DesktopHierarchyPanel({
                   bucket={wb}
                   routeGroupName={selectedRouteGroup?.routeGroupName}
                   onClick={onSelectBucket}
+                  printUrl={workGroupPickerSheetUrl(
+                    shiftId,
+                    selectedLine?.distributionArea,
+                    selectedLine?.lineName,
+                    wb.workBucketName
+                  )}
                 />
               ))}
             </div>
@@ -294,7 +321,18 @@ export function DesktopHierarchyPanel({
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {workBucketSummaries.map((bucket) => (
-                <DesktopWorkBucketCard key={bucket.workBucketName} bucket={bucket} lineName={selectedLine?.lineName} onClick={onSelectBucket} />
+                <DesktopWorkBucketCard
+                  key={bucket.workBucketName}
+                  bucket={bucket}
+                  lineName={selectedLine?.lineName}
+                  onClick={onSelectBucket}
+                  printUrl={workGroupPickerSheetUrl(
+                    shiftId,
+                    selectedLine?.distributionArea,
+                    selectedLine?.lineName,
+                    bucket.workBucketName
+                  )}
+                />
               ))}
             </div>
           </>
@@ -319,6 +357,17 @@ export function DesktopHierarchyPanel({
   const bucketOrders = isRouteGroupBucket
     ? (selectedRouteGroupWorkBucket?.orders ?? [])
     : (selectedBucketLegacy?.orders ?? []);
+
+  const detailWorkGroupName = isRouteGroupBucket
+    ? selectedRouteGroupWorkBucket?.workBucketName
+    : selectedBucketLegacy?.workBucketName;
+
+  const printDetailUrl = workGroupPickerSheetUrl(
+    shiftId,
+    selectedLine?.distributionArea,
+    selectedLine?.lineName,
+    detailWorkGroupName
+  );
 
   return (
     <div className="p-4">
@@ -386,7 +435,7 @@ export function DesktopHierarchyPanel({
         <span className="text-xs text-gray-700 font-medium">קבוצת עבודה: {selectedWorkBucketName}</span>
       </div>
 
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 items-center">
         <button
           type="button"
           className={`px-3 py-1 text-xs rounded-full font-medium transition-colors ${
@@ -411,6 +460,18 @@ export function DesktopHierarchyPanel({
         >
           הזמנות
         </button>
+        <div className="grow" />
+        {printDetailUrl && (
+          <Link
+            to={printDetailUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+            data-testid="print-picker-sheet-detail"
+          >
+            הדפס דף ליקוט
+          </Link>
+        )}
       </div>
 
       {workBucketView === 'products' ? (
