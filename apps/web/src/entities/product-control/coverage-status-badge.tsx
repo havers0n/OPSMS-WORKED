@@ -11,9 +11,9 @@ const STATUS_TONE: Record<ProductControlStatus, 'success' | 'warning' | 'danger'
 
 const STATUS_LABEL: Record<ProductControlStatus, string> = {
   ok: 'תקין',
-  covered_by_bonded: 'כיסוי מלא',
+  covered_by_bonded: 'מכוסה בבונדד',
   partial_bonded: 'כיסוי חלקי',
-  unresolved: 'ללא כיסוי',
+  unresolved: 'חסר ללא כיסוי',
   data_issue: 'בעיית נתונים',
 };
 

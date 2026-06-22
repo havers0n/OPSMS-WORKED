@@ -1,4 +1,9 @@
-import type { ProductControlRow, ProductControlStatus } from './product-control-types';
+import type {
+  ProductControlRow,
+  ProductControlStatus,
+  ProductControlBondedCandidate,
+  ProductControlDataIssue,
+} from './product-control-types';
 
 function deriveStatus(
   shortageQty: number,
@@ -31,6 +36,8 @@ function makeRow(data: {
   bondedCandidateAlreadyPulled?: number;
   bondedCandidateAvailableBalance?: number;
   workLines?: { name: string; units: number; blockedOrders: number }[];
+  dataIssues?: ProductControlDataIssue[];
+  bondedCandidates?: ProductControlBondedCandidate[];
 }): ProductControlRow {
   const shortageQty = Math.max(0, data.demandQty - data.warehouseQty);
   const bondedCoverQty = Math.min(shortageQty, data.bondedAvailableQty);
@@ -46,6 +53,58 @@ function makeRow(data: {
     status: data.status ?? deriveStatus(shortageQty, bondedCoverQty, data.bondedAvailableQty),
   };
 }
+
+const bondedCandidate1: ProductControlBondedCandidate = {
+  block: '3346/26',
+  sourceLabel: 'נעמן',
+  availableQty: 200,
+  releasedQty: 150,
+  totalPulledQty: 0,
+  releasedBalanceQty: 150,
+  packFactor: 24,
+  cartonsPerPallet: 40,
+  unitsPerPallet: 960,
+  notes: 'בוצעה הזמנת רכש חלופית לספק משנה',
+};
+
+const bondedCandidate2: ProductControlBondedCandidate = {
+  block: '3772/24',
+  sourceLabel: 'בונדד',
+  availableQty: 100,
+  releasedQty: 120,
+  totalPulledQty: 20,
+  releasedBalanceQty: 100,
+  packFactor: 6,
+  cartonsPerPallet: 30,
+  unitsPerPallet: 180,
+  notes: null,
+};
+
+const bondedCandidateNegative: ProductControlBondedCandidate = {
+  block: '4011/18',
+  sourceLabel: 'בונדד',
+  availableQty: 0,
+  releasedQty: 50,
+  totalPulledQty: 60,
+  releasedBalanceQty: -10,
+  packFactor: 12,
+  cartonsPerPallet: 20,
+  unitsPerPallet: 240,
+  notes: 'יתרה שלילית — נמשך מעל הכמות המשוחררת',
+};
+
+const bondedCandidateDataIssue: ProductControlBondedCandidate = {
+  block: '5123/09',
+  sourceLabel: 'בונדד',
+  availableQty: 564,
+  releasedQty: 600,
+  totalPulledQty: 36,
+  releasedBalanceQty: 564,
+  packFactor: 12,
+  cartonsPerPallet: 24,
+  unitsPerPallet: 288,
+  notes: null,
+};
 
 export const productControlFixtures: ProductControlRow[] = [
   makeRow({
@@ -80,6 +139,7 @@ export const productControlFixtures: ProductControlRow[] = [
       { name: 'קמעונאות מרכז', units: 50, blockedOrders: 0 },
       { name: 'סיטונאי צפון', units: 70, blockedOrders: 1 },
     ],
+    bondedCandidates: [bondedCandidate1],
   }),
   makeRow({
     sku: '100003',
@@ -102,6 +162,7 @@ export const productControlFixtures: ProductControlRow[] = [
       { name: 'משלוח דרום הגדול', units: 80, blockedOrders: 1 },
       { name: 'סיטונאי צפון', units: 120, blockedOrders: 2 },
     ],
+    bondedCandidates: [bondedCandidate2, bondedCandidateNegative],
   }),
   makeRow({
     sku: '100004',
@@ -123,7 +184,7 @@ export const productControlFixtures: ProductControlRow[] = [
     sku: '999999',
     description: '?!? נתונים לא תקינים',
     category: '—-',
-    demandQty: -5,
+    demandQty: 0,
     warehouseQty: 9999,
     shortageQty: 0,
     bondedAvailableQty: 0,
@@ -136,4 +197,15 @@ export const productControlFixtures: ProductControlRow[] = [
     notes: 'ביקורת נתונים נדרשת: כמות דרישה שלילית',
     workLines: [],
   },
+  makeRow({
+    sku: '100005',
+    description: 'מדבקות צבעוניות A4',
+    category: 'ניירת',
+    demandQty: 564,
+    warehouseQty: 0,
+    bondedAvailableQty: 2979,
+    status: 'data_issue',
+    dataIssues: ['unknown_sku'],
+    bondedCandidates: [bondedCandidateDataIssue],
+  }),
 ];

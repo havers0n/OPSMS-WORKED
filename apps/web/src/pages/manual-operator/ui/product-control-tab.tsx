@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Package, Loader2, AlertCircle } from 'lucide-react';
+import { Package, Loader2, AlertCircle, Info } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { EmptyState } from '@/shared/ui/empty-state';
 import { productControlQueryOptions } from '@/entities/manual-shift/api/queries';
@@ -11,12 +11,25 @@ type ProductControlTabProps = {
   shiftId: string;
 };
 
+function formatDateTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString('he-IL', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return iso;
+  }
+}
+
 export function ProductControlTab({ shiftId }: ProductControlTabProps) {
   const { data, isLoading, error } = useQuery(productControlQueryOptions(shiftId));
   const [selectedRow, setSelectedRow] = useState<ProductControlRow | null>(null);
 
   const handleSelectRow = (row: ProductControlRow) => {
-    if (row.status === 'data_issue') return;
     setSelectedRow((prev) => (prev?.sku === row.sku ? null : row));
   };
 
@@ -59,9 +72,9 @@ export function ProductControlTab({ shiftId }: ProductControlTabProps) {
   }
 
   return (
-    <div className="flex flex-col gap-6 h-full" dir="rtl">
+    <div className="flex flex-col gap-4 h-full" dir="rtl">
       {/* Header with inline KPI cards */}
-      <div className="flex items-center justify-between shrink-0">
+      <div className="flex items-center justify-between shrink-0 flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-[#111827]">חוסרים להיום + כיסוי בונדד</h1>
           <p className="text-sm text-gray-500 mt-1">סקירת מלאי זמין מול דרישות הזמנה יומיות</p>
@@ -76,11 +89,43 @@ export function ProductControlTab({ shiftId }: ProductControlTabProps) {
             <span className="text-xl font-bold text-red-600">{totals?.shortageSkus ?? 0}</span>
           </div>
           <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex flex-col items-center min-w-[100px]">
-            <span className="text-xs text-gray-400 text-green-500">ניתן לכיסוי</span>
+            <span className="text-xs text-gray-400 text-green-500">ניתן לכיסוי בבונדד</span>
             <span className="text-xl font-bold text-green-600">{totals?.coveredByBondedSkus ?? 0}</span>
           </div>
+          {(totals?.dataIssueSkus ?? 0) > 0 && (
+            <div className="bg-white p-3 rounded-lg border border-amber-200 shadow-sm flex flex-col items-center min-w-[100px]">
+              <span className="text-xs text-amber-500">בעיות נתונים</span>
+              <span className="text-xl font-bold text-amber-600">{totals?.dataIssueSkus ?? 0}</span>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Bonded snapshot banner */}
+      {data?.bondedSnapshot && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-3">
+          <Info size={16} className="text-green-600 shrink-0" />
+          <div className="text-sm text-green-800">
+            <span className="font-bold">Snapshot בונדד פעיל לתאריך זה</span>
+            <span className="mx-2 text-green-400">|</span>
+            <span>
+              קובץ: {data.bondedSnapshot.fileName ?? '—'}
+              <span className="mx-1.5 text-green-400">·</span>
+              שורות: {data.bondedSnapshot.rowCount}
+              <span className="mx-1.5 text-green-400">·</span>
+              הועלה: {formatDateTime(data.bondedSnapshot.importedAt)}
+            </span>
+          </div>
+        </div>
+      )}
+      {!data?.bondedSnapshot && data?.warnings?.includes('no_bonded_snapshot_for_planning_date') && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center gap-3">
+          <AlertCircle size={16} className="text-amber-600 shrink-0" />
+          <span className="text-sm text-amber-800">
+            לא נמצא Snapshot בונדד לתאריך העבודה הנבחר. כיסוי בונדד יוצג כ-0.
+          </span>
+        </div>
+      )}
 
       {/* Shortage table */}
       <div className="flex-1 min-h-0">

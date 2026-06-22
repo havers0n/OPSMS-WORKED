@@ -8,7 +8,7 @@ type DetailPanelProps = {
 };
 
 export function ProductControlDetailPanel({ row, onClose }: DetailPanelProps) {
-  const candidates = row.bondedAvailableQty > 0;
+  const candidates = row.bondedCandidates ?? [];
   const workLines = row.workLines ?? [];
   const isDataIssue = row.status === 'data_issue';
 
@@ -60,6 +60,14 @@ export function ProductControlDetailPanel({ row, onClose }: DetailPanelProps) {
             <span className="text-sm font-bold text-blue-800 mb-1">כרגע בבונדד</span>
             <span className="text-2xl font-mono text-blue-600 font-bold">{row.bondedAvailableQty}</span>
           </div>
+          <div className="flex flex-col items-center bg-amber-50 px-6 py-3 rounded-xl border border-amber-200 shadow-sm min-w-[120px]">
+            <span className="text-sm font-bold text-amber-800 mb-1">כיסוי בונדד</span>
+            <span className="text-2xl font-mono text-amber-700 font-bold">{row.bondedCoverQty}</span>
+          </div>
+          <div className="flex flex-col items-center bg-red-50 px-6 py-3 rounded-xl border border-red-200 shadow-sm min-w-[120px]">
+            <span className="text-sm font-bold text-red-800 mb-1">נותר חסר</span>
+            <span className="text-2xl font-mono text-red-600 font-bold">{row.finalMissingQty}</span>
+          </div>
         </div>
       </div>
 
@@ -98,101 +106,130 @@ export function ProductControlDetailPanel({ row, onClose }: DetailPanelProps) {
             )}
           </div>
 
-          {/* Middle column: Bonded blocks */}
+          {/* Middle column: Bonded candidates */}
           <div className="lg:col-span-6 space-y-4 flex flex-col">
             <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
               <PackageOpen className="h-5 w-5 text-blue-600" />
-              פעולות משיכה מבונדד
+              מועמדי בונדד
             </h3>
-            {candidates ? (
-              <div className="border-2 rounded-xl p-5 shadow-sm border-blue-200 bg-white">
-                <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-3">
-                  <div>
-                    <div className="flex items-center gap-3">
-                      <h4 className="font-bold text-lg text-slate-900">
-                        גוש: {row.bondedCandidateBlock || '—'}
-                      </h4>
-                      <span className="px-3 py-1 text-xs rounded-full font-bold bg-blue-100 text-blue-800">
-                        {row.bondedCandidateSource || 'בונדד'}
-                      </span>
-                    </div>
-                    {row.notes && (
-                      <div className="mt-2 text-xs text-amber-700 font-bold bg-amber-50 inline-block px-2 py-1 rounded">
-                        <Info className="inline h-3 w-3 ml-1" />
-                        {row.notes}
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-center">
-                    <div className="text-xs text-slate-500 font-medium">זמין למשיכה</div>
-                    <div className="text-2xl font-mono font-bold text-green-600">
-                      {row.bondedCandidateAvailableBalance ?? row.bondedAvailableQty}
-                    </div>
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-4 gap-3 mb-5">
-                  <div className="bg-slate-50 p-2 rounded text-center border border-slate-100">
-                    <div className="text-[10px] text-slate-500 mb-1">כמות במשטח</div>
-                    <div className="font-mono font-bold text-slate-800 text-base">
-                      {row.bondedCandidateUnitsPerPallet ?? '—'}
-                    </div>
-                  </div>
-                  <div className="bg-slate-50 p-2 rounded text-center border border-slate-100">
-                    <div className="text-[10px] text-slate-500 mb-1">קרטונים/משטח</div>
-                    <div className="font-mono font-bold text-slate-800 text-base">
-                      {row.bondedCandidateCartonsPerPallet ?? '—'}
-                    </div>
-                  </div>
-                  <div className="bg-slate-50 p-2 rounded text-center border border-slate-100">
-                    <div className="text-[10px] text-slate-500 mb-1">שנמשך עכשיו</div>
-                    <div className="font-mono font-bold text-blue-600 text-base">
-                      {row.bondedCandidateAlreadyPulled ?? 0}
-                    </div>
-                  </div>
-                  <div className="bg-slate-50 p-2 rounded text-center border border-slate-100">
-                    <div className="text-[10px] text-slate-500 mb-1">גורם אירוז</div>
-                    <div className="font-mono font-bold text-slate-800 text-base">
-                      {row.bondedCandidatePackFactor ?? '—'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-4 items-end bg-blue-50/50 p-4 rounded-lg border border-blue-100">
-                  <div className="flex-1">
-                    <label className="block text-xs font-bold text-blue-900 mb-2">כמות למשיכה לדו"ח</label>
-                    <div className="w-full border border-blue-300 rounded-lg px-4 py-2.5 font-mono text-sm font-bold shadow-sm bg-white text-gray-300 opacity-60 cursor-not-allowed">
-                      שדה משיכה (דמו)
-                    </div>
-                  </div>
-                  <button
-                    disabled
-                    className="bg-blue-400 cursor-not-allowed text-white px-6 py-2.5 rounded-lg text-sm font-bold shadow-md shrink-0 opacity-60"
-                  >
-                    הוסף משיכה
-                  </button>
+            {candidates.length > 0 ? (
+              <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        <th className="p-2 text-right whitespace-nowrap">גוש</th>
+                        <th className="p-2 text-right whitespace-nowrap">מקור</th>
+                        <th className="p-2 text-center whitespace-nowrap">זמין</th>
+                        <th className="p-2 text-center whitespace-nowrap">משוחרר</th>
+                        <th className="p-2 text-center whitespace-nowrap">נמשך</th>
+                        <th className="p-2 text-center whitespace-nowrap">יתרה</th>
+                        <th className="p-2 text-center whitespace-nowrap">גורם אריזה</th>
+                        <th className="p-2 text-center whitespace-nowrap">קרטונים במשטח</th>
+                        <th className="p-2 text-center whitespace-nowrap">יחידות במשטח</th>
+                        <th className="p-2 text-right whitespace-nowrap">הערות</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {candidates.map((c, i) => (
+                        <tr
+                          key={i}
+                          className={joinClassNames(
+                            'border-b border-slate-100 last:border-b-0',
+                            c.releasedBalanceQty < 0 && c.availableQty === 0
+                              ? 'bg-red-50/40'
+                              : ''
+                          )}
+                        >
+                          <td className="p-2 font-mono font-medium text-slate-900 whitespace-nowrap">
+                            {c.block || '—'}
+                          </td>
+                          <td className="p-2 text-slate-600 whitespace-nowrap">
+                            {c.sourceLabel || '—'}
+                          </td>
+                          <td className={joinClassNames(
+                            'p-2 text-center font-mono',
+                            c.availableQty === 0 ? 'text-red-500' : 'text-slate-900'
+                          )}>
+                            {c.availableQty}
+                          </td>
+                          <td className="p-2 text-center font-mono text-slate-900">
+                            {c.releasedQty}
+                          </td>
+                          <td className="p-2 text-center font-mono text-slate-900">
+                            {c.totalPulledQty}
+                          </td>
+                          <td className="p-2 text-center">
+                            <span className={joinClassNames(
+                              'font-mono',
+                              c.releasedBalanceQty < 0
+                                ? 'text-red-600 font-bold'
+                                : 'text-slate-900'
+                            )}>
+                              {c.releasedBalanceQty}
+                            </span>
+                            {c.releasedBalanceQty < 0 && c.availableQty === 0 && (
+                              <span className="block text-[10px] text-red-700 font-bold mt-0.5">
+                                יתרה שלילית
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-2 text-center font-mono text-slate-600">
+                            {c.packFactor ?? '—'}
+                          </td>
+                          <td className="p-2 text-center font-mono text-slate-600">
+                            {c.cartonsPerPallet ?? '—'}
+                          </td>
+                          <td className="p-2 text-center font-mono text-slate-600">
+                            {c.unitsPerPallet ?? '—'}
+                          </td>
+                          <td className="p-2 text-xs text-slate-500 max-w-[120px] truncate" title={c.notes ?? ''}>
+                            {c.notes || '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             ) : (
               <div className="text-center py-14 bg-white border-2 border-dashed border-slate-300 rounded-xl text-slate-400 flex flex-col items-center">
                 <PackageOpen className="h-10 w-10 text-slate-300 mb-3" />
-                <span className="text-sm font-medium">לא נמצא בונדד משוחרר זמין לפריט זה</span>
+                <span className="text-sm font-medium">לא נמצאו מועמדי בונדד למק"ט זה</span>
               </div>
             )}
 
-            {row.bondedCandidateLabel && !row.bondedCandidateBlock && (
-              <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-                <p className="text-sm text-slate-600">{row.bondedCandidateLabel}</p>
-              </div>
-            )}
-
-            {isDataIssue && (
-              <div className="rounded-lg border border-red-200 bg-red-50/30 p-4">
+            {/* Data issues section */}
+            {isDataIssue && row.dataIssues && row.dataIssues.length > 0 && (
+              <div className="rounded-lg border border-red-200 bg-red-50/30 p-4 space-y-2">
                 <div className="flex items-center gap-2 mb-1">
                   <AlertTriangle size={16} className="text-red-600" />
-                  <span className="text-sm font-semibold text-red-700">אזהרת נתונים</span>
+                  <span className="text-sm font-semibold text-red-700">בעיות נתונים</span>
                 </div>
-                <p className="text-sm text-red-600">שורת נתונים זו מכילה ערכים חריגים וייתכן שאינה תקינה.</p>
+                {row.dataIssues.map((issue, i) => (
+                  <p key={i} className="text-sm text-red-600 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                    {issue === 'unknown_sku'
+                      ? 'מק"ט לא נמצא בקטלוג המוצרים'
+                      : issue === 'duplicate_canonical_sku'
+                        ? 'נמצאו כמה מוצרים בקטלוג לאותו מק"ט'
+                        : issue}
+                  </p>
+                ))}
+                {row.bondedCoverQty > 0 && (
+                  <p className="text-sm text-amber-700 bg-amber-50 rounded px-2 py-1 mt-2">
+                    <Info size={14} className="inline ml-1" />
+                    קיימת בעיית נתונים אך נמצא כיסוי בונדד.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {row.notes && !(isDataIssue && row.dataIssues && row.dataIssues.length > 0) && (
+              <div className="mt-2 text-xs text-amber-700 font-bold bg-amber-50 inline-block px-2 py-1 rounded">
+                <Info className="inline h-3 w-3 ml-1" />
+                {row.notes}
               </div>
             )}
           </div>
@@ -227,4 +264,8 @@ export function ProductControlDetailPanel({ row, onClose }: DetailPanelProps) {
       </div>
     </div>
   );
+}
+
+function joinClassNames(...values: Array<string | null | undefined | false>) {
+  return values.filter(Boolean).join(' ');
 }

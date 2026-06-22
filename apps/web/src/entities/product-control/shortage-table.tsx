@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search, AlertTriangle } from 'lucide-react';
 import type { ProductControlRow } from './product-control-types';
 import { CoverageStatusBadge } from './coverage-status-badge';
 
@@ -21,6 +21,50 @@ function getActionLabel(status: ProductControlRow['status']) {
   }
 }
 
+function DataIssueExplanation({ dataIssues }: { dataIssues: string[] }) {
+  const explanations = dataIssues.map((issue) => {
+    switch (issue) {
+      case 'unknown_sku':
+        return 'מק"ט לא נמצא בקטלוג המוצרים';
+      case 'duplicate_canonical_sku':
+        return 'נמצאו כמה מוצרים בקטלוג לאותו מק"ט';
+      default:
+        return issue;
+    }
+  });
+  return (
+    <div className="flex flex-col gap-0.5 mt-1">
+      {explanations.map((text, i) => (
+        <span key={i} className="text-[10px] text-red-600 leading-tight flex items-center gap-1">
+          <AlertTriangle size={10} className="shrink-0" />
+          {text}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function BondedCoverageSummary({
+  bondedCoverQty,
+  shortageQty,
+}: {
+  bondedCoverQty: number;
+  shortageQty: number;
+}) {
+  if (bondedCoverQty > 0) {
+    return (
+      <span className="text-[10px] text-blue-600 mt-0.5 block leading-tight">
+        כיסוי בונדד: {bondedCoverQty} מתוך {shortageQty}
+      </span>
+    );
+  }
+  return (
+    <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight">
+      אין כיסוי בונדד
+    </span>
+  );
+}
+
 function NormalRow({
   row,
   selected,
@@ -30,7 +74,7 @@ function NormalRow({
   selected: boolean;
   onSelect: (row: ProductControlRow) => void;
 }) {
-  const isUnavailable = row.status === 'unresolved' || row.status === 'data_issue';
+  const isUnavailable = row.status === 'unresolved';
   const action = getActionLabel(row.status);
 
   return (
@@ -53,8 +97,17 @@ function NormalRow({
       <td className="p-3 text-sm font-mono text-center text-blue-600">
         {row.bondedAvailableQty > 0 ? row.bondedAvailableQty : '-'}
       </td>
+      <td className="p-3 text-sm font-mono text-center text-blue-600">
+        {row.bondedCoverQty > 0 ? row.bondedCoverQty : '-'}
+      </td>
+      <td className="p-3 text-sm font-mono text-center text-red-500">
+        {row.finalMissingQty > 0 ? row.finalMissingQty : '-'}
+      </td>
       <td className="p-3 text-center">
         <CoverageStatusBadge status={row.status} />
+        {row.dataIssues && row.dataIssues.length > 0 && (
+          <DataIssueExplanation dataIssues={row.dataIssues} />
+        )}
       </td>
       <td className="p-3 text-center">
         {row.affectedLinesCount && row.affectedLinesCount > 0 ? (
@@ -80,20 +133,71 @@ function NormalRow({
   );
 }
 
-function DataIssueRow({ row }: { row: ProductControlRow }) {
+function DataIssueRow({
+  row,
+  selected,
+  onSelect,
+}: {
+  row: ProductControlRow;
+  selected: boolean;
+  onSelect: (row: ProductControlRow) => void;
+}) {
+  const action = getActionLabel(row.status);
+
   return (
-    <tr className="bg-red-50/50">
+    <tr
+      className={joinClassNames(
+        'border-b border-gray-100 last:border-b-0 cursor-pointer transition-colors bg-red-50/20 hover:bg-red-50/50',
+        selected ? 'bg-red-50/40' : ''
+      )}
+      onClick={() => onSelect(row)}
+    >
       <td className="p-3 text-sm font-mono font-medium text-gray-900 whitespace-nowrap">{row.sku}</td>
-      <td className="p-3 text-sm text-gray-900">{row.description}</td>
+      <td className="p-3 text-sm font-semibold text-gray-900">{row.description}</td>
       <td className="p-3 text-xs text-gray-500">{row.category}</td>
-      <td className="p-3 text-sm font-mono text-center text-red-600">{row.demandQty}</td>
+      <td className="p-3 text-sm font-mono text-center">{row.demandQty}</td>
       <td className="p-3 text-sm font-mono text-center">{row.warehouseQty}</td>
-      <td className="p-3 text-sm font-mono text-center text-gray-400">-</td>
-      <td className="p-3 text-sm font-mono text-center text-gray-400">-</td>
-      <td className="p-3 text-center"><CoverageStatusBadge status={row.status} /></td>
-      <td className="p-3 text-center text-gray-300">-</td>
+      <td className="p-3 text-sm font-mono text-center text-red-600 font-bold">
+        {row.shortageQty > 0 ? row.shortageQty : 0}
+      </td>
+      <td className="p-3 text-sm font-mono text-center text-blue-600">
+        {row.bondedAvailableQty > 0 ? row.bondedAvailableQty : '-'}
+      </td>
+      <td className="p-3 text-sm font-mono text-center text-blue-600">
+        {row.bondedCoverQty > 0 ? row.bondedCoverQty : '-'}
+      </td>
+      <td className="p-3 text-sm font-mono text-center text-red-500">
+        {row.finalMissingQty > 0 ? row.finalMissingQty : '-'}
+      </td>
+      <td className="p-3 text-center">
+        <CoverageStatusBadge status={row.status} />
+        {row.dataIssues && row.dataIssues.length > 0 && (
+          <DataIssueExplanation dataIssues={row.dataIssues} />
+        )}
+        <BondedCoverageSummary
+          bondedCoverQty={row.bondedCoverQty}
+          shortageQty={row.shortageQty}
+        />
+      </td>
+      <td className="p-3 text-center">
+        {row.affectedLinesCount && row.affectedLinesCount > 0 ? (
+          <span className="text-xs font-bold text-gray-500">
+            {row.affectedLinesCount} שורות
+          </span>
+        ) : (
+          <span className="text-gray-300">-</span>
+        )}
+      </td>
       <td className="p-3 text-left">
-        <span className="text-amber-600 font-bold text-xs">בדוק ידנית</span>
+        <button
+          onClick={(e) => { e.stopPropagation(); onSelect(row); }}
+          className={joinClassNames(
+            'font-bold text-xs transition-colors',
+            action.className
+          )}
+        >
+          {action.label}
+        </button>
       </td>
     </tr>
   );
@@ -141,6 +245,8 @@ export function ShortageTable({ rows, selectedSku, onSelectRow }: ShortageTableP
               <th className="p-3 text-center whitespace-nowrap">כמות במחסן</th>
               <th className="p-3 text-center whitespace-nowrap">חסר</th>
               <th className="p-3 text-center whitespace-nowrap">זמין בבונדד</th>
+              <th className="p-3 text-center whitespace-nowrap">כיסוי בבונדד</th>
+              <th className="p-3 text-center whitespace-nowrap">נותר חסר</th>
               <th className="p-3 text-center whitespace-nowrap">סטטוס כיסוי</th>
               <th className="p-3 text-center whitespace-nowrap">שורות מושפעות</th>
               <th className="p-3 text-center whitespace-nowrap"></th>
@@ -149,14 +255,24 @@ export function ShortageTable({ rows, selectedSku, onSelectRow }: ShortageTableP
           <tbody>
             {filteredRows.map((row) =>
               row.status === 'data_issue' ? (
-                <DataIssueRow key={row.sku} row={row} />
+                <DataIssueRow
+                  key={row.sku}
+                  row={row}
+                  selected={selectedSku === row.sku}
+                  onSelect={onSelectRow}
+                />
               ) : (
-                <NormalRow key={row.sku} row={row} selected={selectedSku === row.sku} onSelect={onSelectRow} />
+                <NormalRow
+                  key={row.sku}
+                  row={row}
+                  selected={selectedSku === row.sku}
+                  onSelect={onSelectRow}
+                />
               )
             )}
             {filteredRows.length === 0 && (
               <tr>
-                <td colSpan={10} className="h-24 text-center text-sm text-gray-500">
+                <td colSpan={12} className="h-24 text-center text-sm text-gray-500">
                   לא נמצאו פריטים תואמים
                 </td>
               </tr>

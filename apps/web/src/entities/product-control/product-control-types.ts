@@ -3,7 +3,10 @@ export type {
   ProductControlRow,
   ProductControlTotals,
   ProductControlResponse,
-  ProductControlWorkLine
+  ProductControlWorkLine,
+  ProductControlBondedCandidate,
+  ProductControlBondedSnapshotMeta,
+  ProductControlDataIssue
 } from '@wos/domain';
 
 export {
