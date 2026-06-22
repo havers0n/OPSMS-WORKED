@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, CheckCircle2 } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { workHierarchyQueryOptions, orderItemsQueryOptions } from '@/entities/manual-shift/api/queries';
 import { useSchemeBuilderStore } from './scheme-store';
 import { adaptWorkHierarchyToSource, adaptOrderItemsToSource } from './source-data-adapter';
@@ -17,10 +17,8 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
 
   const selectedAreaName = useSchemeBuilderStore((s) => s.selectedAreaName);
   const setSelectedArea = useSchemeBuilderStore((s) => s.setSelectedArea);
-  const workGroups = useSchemeBuilderStore((s) => s.workGroups);
   const assignItemRows = useSchemeBuilderStore((s) => s.assignItemRows);
   const assignWholeOrder = useSchemeBuilderStore((s) => s.assignWholeOrder);
-  const itemAssignments = useSchemeBuilderStore((s) => s.itemAssignments);
 
   const [drawerOrderId, setDrawerOrderId] = useState<string | null>(null);
   const [assignItemIds, setAssignItemIds] = useState<string[]>([]);
@@ -59,13 +57,6 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
     if (!source || !selectedAreaName) return [];
     return source.orders.filter((o) => o.areaName === selectedAreaName);
   }, [source, selectedAreaName]);
-
-  const unassignedCount = useMemo(() => {
-    if (!source) return 0;
-    return Object.values(orderItemMap).reduce((acc, items) => {
-      return acc + items.filter((i) => !(i.id in itemAssignments)).length;
-    }, 0);
-  }, [orderItemMap, itemAssignments]);
 
   const handleOpenItemsDrawer = useCallback((orderId: string) => {
     setDrawerOrderId(orderId);
@@ -132,28 +123,16 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
     <div className="min-h-screen flex flex-col bg-gray-50" dir="rtl">
       <header className="bg-white border-b border-gray-200 px-6 py-4 shrink-0 shadow-sm sticky top-0 z-20">
         <div className="flex justify-between items-start mb-4">
-          <h1 className="text-xl font-bold text-gray-900">תכנון קבוצות עבודה</h1>
+          <h1 className="text-xl font-bold text-gray-900">תכנון קווי עבודה</h1>
           <span className="text-xs text-amber-700 bg-amber-50 px-3 py-1 rounded font-medium border border-amber-200">
             טיוטה מקומית בלבד — שמירה תגיע בשלב הבא
           </span>
         </div>
 
-        {workGroups.length === 0 ? (
-          <div className="flex items-center gap-2 text-amber-700 bg-amber-50 px-4 py-2 rounded font-medium border border-amber-100 text-sm">
-            <AlertCircle size={18} />
-            טרם נוצרו קבוצות עבודה
-          </div>
-        ) : unassignedCount > 0 ? (
-          <div className="flex items-center gap-2 text-red-700 bg-red-50 px-4 py-2 rounded font-medium border border-red-100 text-sm">
-            <AlertCircle size={18} />
-            נותרו {unassignedCount} שורות שלא שובצו
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 text-green-700 bg-green-50 px-4 py-2 rounded font-medium border border-green-100 text-sm">
-            <CheckCircle2 size={18} />
-            כל השורות שובצו — התכנית מוכנה
-          </div>
-        )}
+        <div className="flex items-center gap-2 text-amber-700 bg-amber-50 px-4 py-2 rounded font-medium border border-amber-100 text-sm">
+          <AlertCircle size={18} />
+          טיוטה מקומית — השיוך מבוסס על שורות שנטענו
+        </div>
       </header>
 
       <main className="flex-1 p-6 flex flex-col lg:flex-row gap-6">
@@ -236,7 +215,6 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
       <AssignModalV2
         isOpen={showAssignModal}
         onClose={() => { setShowAssignModal(false); setAssignItemIds([]); setIsWholeOrderAssign(false); }}
-        workGroups={workGroups}
         targetAreaName={selectedAreaName}
         itemCount={assignItemIds.length}
         onAssign={handleConfirmAssign}

@@ -44,9 +44,13 @@ export function WorkGroupCard({
           type="button"
           onClick={() => {
             if (itemCount > 0) {
-              if (!window.confirm('האם לבטל שיוך כל השורות ולמחוק את הקבוצה?')) return;
+              alert('לא ניתן למחוק קבוצת עבודה שיש בה שורות משויכות');
+              return;
             }
-            deleteWorkGroup(workGroup.id);
+            const result = deleteWorkGroup(workGroup.id);
+            if (!result.ok && result.reason === 'has_assignments') {
+              alert('לא ניתן למחוק קבוצת עבודה שיש בה שורות משויכות');
+            }
           }}
           className="text-gray-400 hover:text-red-600 transition-colors p-1"
           title="מחק קבוצה"

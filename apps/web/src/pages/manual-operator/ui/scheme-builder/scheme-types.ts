@@ -44,11 +44,24 @@ export interface SourceArea {
   itemLinesCount?: number;
 }
 
+export interface PlanningLine {
+  id: string;
+  areaName: string;
+  name: string;
+  sortOrder: number;
+  createdAt: number;
+}
+
 export interface WorkGroup {
   id: string;
+  planningLineId: string;
   areaName: string;
   name: string;
   createdAt: number;
 }
+
+export type DeleteResult =
+  | { ok: true }
+  | { ok: false; reason: 'has_work_groups' | 'has_assignments' };
 
 export type OrderSplitStatus = 'unassigned' | 'assigned' | 'partial' | 'split';

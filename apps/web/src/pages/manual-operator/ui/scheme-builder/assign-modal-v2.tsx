@@ -1,26 +1,27 @@
 import { useState } from 'react';
-import type { WorkGroup } from './scheme-types';
+import { useSchemeBuilderStore } from './scheme-store';
 
 export function AssignModalV2({
   isOpen,
   onClose,
-  workGroups,
   targetAreaName,
   itemCount,
   onAssign,
 }: {
   isOpen: boolean;
   onClose: () => void;
-  workGroups: WorkGroup[];
   targetAreaName: string | null;
   itemCount: number;
   onAssign: (workGroupId: string) => void;
 }) {
   const [selectedWgId, setSelectedWgId] = useState<string | null>(null);
 
-  const areaGroups = targetAreaName
-    ? workGroups.filter((wg) => wg.areaName === targetAreaName)
-    : workGroups;
+  const planningLines = useSchemeBuilderStore((s) => s.planningLines);
+  const getWorkGroupsByPlanningLine = useSchemeBuilderStore((s) => s.getWorkGroupsByPlanningLine);
+
+  const areaLines = targetAreaName
+    ? planningLines.filter((pl) => pl.areaName === targetAreaName)
+    : planningLines;
 
   const handleAssign = () => {
     if (!selectedWgId) return;
@@ -36,10 +37,12 @@ export function AssignModalV2({
 
   if (!isOpen) return null;
 
+  const totalGroups = areaLines.reduce((acc, pl) => acc + getWorkGroupsByPlanningLine(pl.id).length, 0);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={handleClose}>
       <div
-        className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden"
+        className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-6 py-4 border-b border-gray-200">
@@ -47,27 +50,42 @@ export function AssignModalV2({
           <p className="text-sm text-gray-500 mt-1">{itemCount} שורות מסומנות</p>
         </div>
 
-        <div className="px-6 py-4">
-          {areaGroups.length === 0 ? (
+        <div className="px-6 py-4 max-h-72 overflow-y-auto">
+          {areaLines.length === 0 ? (
             <div className="text-sm text-gray-500 text-center py-4">
-              אין קבוצות עבודה באיזור זה. צור קבוצת עבודה תחילה.
+              יש ליצור קו עבודה וקבוצת עבודה לפני שיוך שורות
+            </div>
+          ) : totalGroups === 0 ? (
+            <div className="text-sm text-gray-500 text-center py-4">
+              יש ליצור קבוצת עבודה לפני שיוך שורות
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2">
-              {areaGroups.map((wg) => (
-                <button
-                  key={wg.id}
-                  type="button"
-                  onClick={() => setSelectedWgId(wg.id)}
-                  className={`rounded-lg border px-3 py-3 text-sm font-medium transition-colors text-center ${
-                    selectedWgId === wg.id
-                      ? 'bg-blue-50 border-blue-500 text-blue-900'
-                      : 'bg-white border-gray-200 text-gray-700 hover:border-blue-300'
-                  }`}
-                >
-                  {wg.name}
-                </button>
-              ))}
+            <div className="space-y-4">
+              {areaLines.map((pl) => {
+                const lineGroups = getWorkGroupsByPlanningLine(pl.id);
+                if (lineGroups.length === 0) return null;
+                return (
+                  <div key={pl.id}>
+                    <div className="text-xs font-bold text-gray-500 mb-2">{pl.name}</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {lineGroups.map((wg) => (
+                        <button
+                          key={wg.id}
+                          type="button"
+                          onClick={() => setSelectedWgId(wg.id)}
+                          className={`rounded-lg border px-3 py-3 text-sm font-medium transition-colors text-center ${
+                            selectedWgId === wg.id
+                              ? 'bg-blue-50 border-blue-500 text-blue-900'
+                              : 'bg-white border-gray-200 text-gray-700 hover:border-blue-300'
+                          }`}
+                        >
+                          {wg.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
