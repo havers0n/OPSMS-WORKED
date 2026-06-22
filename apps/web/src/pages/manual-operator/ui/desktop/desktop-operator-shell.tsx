@@ -56,6 +56,7 @@ export interface DesktopOperatorShellProps {
   todayDate: string;
   onChangeDate: (date: string) => void;
   onOpenDatePicker: () => void;
+  onBondedImport?: () => void;
 }
 
 function LoadingSkeleton() {
@@ -142,7 +143,8 @@ export function DesktopOperatorShell({
   selectedDate,
   todayDate,
   onChangeDate,
-  onOpenDatePicker
+  onOpenDatePicker,
+  onBondedImport
 }: DesktopOperatorShellProps) {
   if (isLoading) {
     return (
@@ -207,6 +209,16 @@ export function DesktopOperatorShell({
             </button>
           )}
         </div>
+        {onBondedImport && (
+          <button
+            type="button"
+            onClick={onBondedImport}
+            className="shrink-0 rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            aria-label="טעינת קובץ בונדד"
+          >
+            בונדד
+          </button>
+        )}
         <div className="w-px h-8 bg-gray-200 shrink-0" />
         {kpi ? (
           <DesktopKpiRow summary={kpi} />

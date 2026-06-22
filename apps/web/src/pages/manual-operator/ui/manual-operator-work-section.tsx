@@ -31,6 +31,7 @@ import { LineDetail } from './line-detail';
 import { AddLineSheet } from './add-line-sheet';
 import { ImportExcelSheet } from './import-excel-sheet';
 import { MonthlyImportPreviewSheet } from './monthly-import-preview-sheet';
+import { BondedImportSheet } from './bonded-import-sheet';
 
 const CHITA_LABEL = "צ'יטה";
 
@@ -96,6 +97,7 @@ export function ManualOperatorWorkSection({
   const [showAddLine, setShowAddLine] = useState(false);
   const [showImportExcel, setShowImportExcel] = useState(false);
   const [showMonthlyPreview, setShowMonthlyPreview] = useState(false);
+  const [showBondedImport, setShowBondedImport] = useState(false);
   const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [selectedAreaLineKey, setSelectedAreaLineKey] = useState<string | null>(null);
@@ -356,48 +358,58 @@ export function ManualOperatorWorkSection({
 
   if (isDesktop) {
     return (
-      <DesktopOperatorShell
-        shift={shift}
-        isLoading={isLoading || (!!shift && isDaySummaryLoading)}
-        kpi={kpi}
-        orderDetail={orderDetail}
-        selectedDetailType={selectedOrderId ? 'order' : null}
-        selectedAreaKey={selectedAreaKey}
-        selectedAreaLineKey={selectedAreaLineKey}
-        selectedRouteGroupKey={selectedRouteGroupKey}
-        selectedWorkBucketKey={selectedWorkBucketKey}
-        selectedRouteGroupWorkBucket={selectedRouteGroupWorkBucket}
-        selectedWorkBucketName={selectedWorkBucketName}
-        areaSummaries={areaSummaries}
-        specialAreaSummaries={specialAreaSummaries}
-        lineHierarchySummaries={lineHierarchySummaries}
-        areaLineSummaries={areaLineSummaries}
-        workBucketSummaries={workBucketSummaries}
-        routeGroupSummaries={routeGroupSummaries}
-        routeGroupWorkBucketSummaries={routeGroupWorkBucketSummaries}
-        hasRouteGroups={hasRouteGroups}
-        showProductRollupDeferred={showProductRollupDeferred}
-        onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
-        onCloseDetail={() => setSelectedOrderId(null)}
-        onSelectArea={handleSelectArea}
-        onSelectHierarchyLine={handleSelectHierarchyLine}
-        onSelectHierarchyRouteGroup={handleSelectHierarchyRouteGroup}
-        onSelectHierarchyBucket={handleSelectHierarchyBucket}
-        onClearArea={handleClearArea}
-        onClearHierarchyLine={handleClearHierarchyLine}
-        onClearHierarchyRouteGroup={handleClearHierarchyRouteGroup}
-        onClearHierarchyBucket={handleClearHierarchyBucket}
-        workBucketView={workBucketView}
-        productRollup={productRollup?.products}
-        productRollupLoading={isProductRollupLoading}
-        onSetWorkBucketView={setWorkBucketView}
-        selectedDate={selectedDate}
-        todayDate={todayDate}
-        onChangeDate={onChangeDate}
-        onOpenDatePicker={onOpenDatePicker}
-        onCreateShift={onCreateShift}
-        isCreatingShift={isCreatingShift}
-      />
+      <>
+        <DesktopOperatorShell
+          shift={shift}
+          isLoading={isLoading || (!!shift && isDaySummaryLoading)}
+          kpi={kpi}
+          orderDetail={orderDetail}
+          selectedDetailType={selectedOrderId ? 'order' : null}
+          selectedAreaKey={selectedAreaKey}
+          selectedAreaLineKey={selectedAreaLineKey}
+          selectedRouteGroupKey={selectedRouteGroupKey}
+          selectedWorkBucketKey={selectedWorkBucketKey}
+          selectedRouteGroupWorkBucket={selectedRouteGroupWorkBucket}
+          selectedWorkBucketName={selectedWorkBucketName}
+          areaSummaries={areaSummaries}
+          specialAreaSummaries={specialAreaSummaries}
+          lineHierarchySummaries={lineHierarchySummaries}
+          areaLineSummaries={areaLineSummaries}
+          workBucketSummaries={workBucketSummaries}
+          routeGroupSummaries={routeGroupSummaries}
+          routeGroupWorkBucketSummaries={routeGroupWorkBucketSummaries}
+          hasRouteGroups={hasRouteGroups}
+          showProductRollupDeferred={showProductRollupDeferred}
+          onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
+          onCloseDetail={() => setSelectedOrderId(null)}
+          onSelectArea={handleSelectArea}
+          onSelectHierarchyLine={handleSelectHierarchyLine}
+          onSelectHierarchyRouteGroup={handleSelectHierarchyRouteGroup}
+          onSelectHierarchyBucket={handleSelectHierarchyBucket}
+          onClearArea={handleClearArea}
+          onClearHierarchyLine={handleClearHierarchyLine}
+          onClearHierarchyRouteGroup={handleClearHierarchyRouteGroup}
+          onClearHierarchyBucket={handleClearHierarchyBucket}
+          workBucketView={workBucketView}
+          productRollup={productRollup?.products}
+          productRollupLoading={isProductRollupLoading}
+          onSetWorkBucketView={setWorkBucketView}
+          selectedDate={selectedDate}
+          todayDate={todayDate}
+          onChangeDate={onChangeDate}
+          onOpenDatePicker={onOpenDatePicker}
+          onCreateShift={onCreateShift}
+          isCreatingShift={isCreatingShift}
+          onBondedImport={shift ? () => setShowBondedImport(true) : undefined}
+        />
+        {showBondedImport && (
+          <BondedImportSheet
+            shiftId={shift?.id ?? null}
+            selectedDate={selectedDate}
+            onClose={() => setShowBondedImport(false)}
+          />
+        )}
+      </>
     );
   }
 
@@ -447,7 +459,18 @@ export function ManualOperatorWorkSection({
       {showAddLine && shift && !isReadOnly && (
         <AddLineSheet shiftId={shift.id} onClose={() => setShowAddLine(false)} />
       )}
-      {showImportExcel && shift && canMonthlyImport && !hasExistingWork && (
+          {shift && (
+            <div className="mx-4">
+              <button
+                type="button"
+                onClick={() => setShowBondedImport(true)}
+                className="w-full border border-gray-300 text-gray-800 font-medium py-3 rounded-xl text-sm"
+              >
+                טעינת קובץ בונדד
+              </button>
+            </div>
+          )}
+          {showImportExcel && shift && canMonthlyImport && !hasExistingWork && (
         <ImportExcelSheet
           shiftId={shift.id}
           selectedDate={selectedDate}
@@ -456,6 +479,13 @@ export function ManualOperatorWorkSection({
             setShowImportExcel(false);
             setImportSuccessMessage(`יובאו: ${linesCreated} קווים, ${ordersCreated} הזמנות`);
           }}
+        />
+      )}
+      {showBondedImport && (
+        <BondedImportSheet
+          shiftId={shift?.id ?? null}
+          selectedDate={selectedDate}
+          onClose={() => setShowBondedImport(false)}
         />
       )}
       {showMonthlyPreview && shift && canMonthlyImport && (
