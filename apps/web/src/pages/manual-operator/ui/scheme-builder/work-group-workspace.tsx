@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Plus, ClipboardList } from 'lucide-react';
 import type { SourceOrderItem } from './scheme-types';
 import { useSchemeBuilderStore } from './scheme-store';
@@ -8,11 +8,11 @@ import { PlanningLineCreateModal } from './planning-line-create-modal';
 export function WorkGroupWorkspace({
   selectedAreaName,
   orderItemMap,
-  onOpenAssignModal,
+  onStartAssign,
 }: {
   selectedAreaName: string;
   orderItemMap: Record<string, SourceOrderItem[]>;
-  onOpenAssignModal: () => void;
+  onStartAssign: (workGroupId: string) => void;
 }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const getPlanningLinesByArea = useSchemeBuilderStore((s) => s.getPlanningLinesByArea);
@@ -61,7 +61,7 @@ export function WorkGroupWorkspace({
               key={pl.id}
               planningLine={pl}
               orderItemMap={orderItemMap}
-              onOpenAssignModal={onOpenAssignModal}
+              onStartAssign={onStartAssign}
             />
           ))}
         </div>

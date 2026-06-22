@@ -1,15 +1,15 @@
-import { Plus, Trash2 } from 'lucide-react';
+﻿import { Plus, Trash2 } from 'lucide-react';
 import type { SourceOrderItem, WorkGroup } from './scheme-types';
 import { useSchemeBuilderStore } from './scheme-store';
 
 export function WorkGroupCard({
   workGroup,
   orderItemMap,
-  onAssignItems,
+  onStartAssign,
 }: {
   workGroup: WorkGroup;
   orderItemMap: Record<string, SourceOrderItem[]>;
-  onAssignItems: () => void;
+  onStartAssign: (workGroupId: string) => void;
 }) {
   const deleteWorkGroup = useSchemeBuilderStore((s) => s.deleteWorkGroup);
   const itemAssignments = useSchemeBuilderStore((s) => s.itemAssignments);
@@ -87,7 +87,7 @@ export function WorkGroupCard({
           <div className="mt-2">
             <button
               type="button"
-              onClick={onAssignItems}
+              onClick={() => onStartAssign(workGroup.id)}
               className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors"
             >
               <Plus size={14} />

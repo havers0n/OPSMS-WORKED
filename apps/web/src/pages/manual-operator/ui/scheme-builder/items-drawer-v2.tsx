@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+﻿import { useState, useMemo } from 'react';
 import { AlertCircle, CheckSquare, Loader2, Square } from 'lucide-react';
 import type { SourceOrder, SourceOrderItem } from './scheme-types';
 import { useSchemeBuilderStore, getOrderSplitStatus } from './scheme-store';
@@ -12,6 +12,7 @@ export function ItemsDrawerV2({
   onClose,
   onAssignSelected,
   onAssignAllUnassigned,
+  targetWorkGroupName,
 }: {
   order: SourceOrder;
   items: SourceOrderItem[];
@@ -20,6 +21,7 @@ export function ItemsDrawerV2({
   onClose: () => void;
   onAssignSelected: (itemRowIds: string[]) => void;
   onAssignAllUnassigned: (itemRowIds: string[]) => void;
+  targetWorkGroupName?: string | null;
 }) {
   const itemAssignments = useSchemeBuilderStore((s) => s.itemAssignments);
 
@@ -111,6 +113,11 @@ export function ItemsDrawerV2({
           {order.hasCheckUnits && (
             <div className="mt-1 text-amber-700 bg-amber-50 px-3 py-1 rounded text-xs font-bold">יש יחידות בדיקה</div>
           )}
+          {targetWorkGroupName && (
+            <div className="mt-2 text-blue-700 bg-blue-50 px-3 py-1 rounded text-xs font-bold">
+              קבוצת יעד: {targetWorkGroupName}
+            </div>
+          )}
         </div>
 
         <div className="px-6 py-3 border-b border-gray-200 shrink-0 flex items-center gap-2 flex-wrap">
@@ -137,10 +144,12 @@ export function ItemsDrawerV2({
               onClick={handleAssignSelected}
               className="px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
             >
-              שייך מסומנים ({selectedIds.size})
+              {targetWorkGroupName
+                ? `שייך לקבוצה: ${targetWorkGroupName} (${selectedIds.size})`
+                : `שייך מסומנים (${selectedIds.size})`}
             </button>
           )}
-          {unassignedItemIds.length > 0 && (
+          {!targetWorkGroupName && unassignedItemIds.length > 0 && (
             <button
               type="button"
               onClick={handleAssignAllUnassigned}

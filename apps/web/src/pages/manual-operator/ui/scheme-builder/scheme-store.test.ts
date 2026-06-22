@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+﻿import { describe, expect, it, beforeEach } from 'vitest';
 import { useSchemeBuilderStore, getOrderSplitStatus } from './scheme-store';
 import type { SourceOrderItem } from './scheme-types';
 
@@ -8,6 +8,7 @@ function resetStore() {
     planningLines: [],
     workGroups: [],
     itemAssignments: {},
+    targetWorkGroupId: null,
   });
 }
 
@@ -212,22 +213,25 @@ describe('scheme-store', () => {
   });
 
   describe('clearLocalDraft', () => {
-    it('clears everything including planning lines', () => {
+    it('clears everything including planning lines and target work group', () => {
       const store = useSchemeBuilderStore.getState();
       store.createPlanningLine('south', 'קו 1');
       const plId = store.createPlanningLine('south', 'קו 2');
       store.createWorkGroup(plId, 'קבוצה 1');
       store.setSelectedArea('south');
+      store.setTargetWorkGroup('wg-1');
       let state = useSchemeBuilderStore.getState();
       expect(state.planningLines).toHaveLength(2);
       expect(state.workGroups).toHaveLength(1);
       expect(state.selectedAreaName).toBe('south');
+      expect(state.targetWorkGroupId).toBe('wg-1');
       state.clearLocalDraft();
       state = useSchemeBuilderStore.getState();
       expect(state.planningLines).toHaveLength(0);
       expect(state.workGroups).toHaveLength(0);
       expect(state.itemAssignments).toEqual({});
       expect(state.selectedAreaName).toBeNull();
+      expect(state.targetWorkGroupId).toBeNull();
     });
   });
 
@@ -242,6 +246,39 @@ describe('scheme-store', () => {
       const state = useSchemeBuilderStore.getState();
       expect(state.getWorkGroupItemCount(wgId1)).toBe(2);
       expect(state.getWorkGroupItemCount(wgId2)).toBe(1);
+    });
+  });
+
+  describe('target work group', () => {
+    it('setTargetWorkGroup sets the target work group id', () => {
+      useSchemeBuilderStore.getState().setTargetWorkGroup('wg-1');
+      expect(useSchemeBuilderStore.getState().targetWorkGroupId).toBe('wg-1');
+    });
+
+    it('setTargetWorkGroup with null clears the target', () => {
+      useSchemeBuilderStore.getState().setTargetWorkGroup('wg-1');
+      useSchemeBuilderStore.getState().setTargetWorkGroup(null);
+      expect(useSchemeBuilderStore.getState().targetWorkGroupId).toBeNull();
+    });
+
+    it('setSelectedArea clears the target work group', () => {
+      useSchemeBuilderStore.getState().setTargetWorkGroup('wg-1');
+      useSchemeBuilderStore.getState().setSelectedArea('north');
+      expect(useSchemeBuilderStore.getState().targetWorkGroupId).toBeNull();
+    });
+
+    it('deleting the target work group clears targetWorkGroupId', () => {
+      const plId = useSchemeBuilderStore.getState().createPlanningLine('south', 'קו 1');
+      const wgId = useSchemeBuilderStore.getState().createWorkGroup(plId, 'קבוצה 1');
+      useSchemeBuilderStore.getState().setTargetWorkGroup(wgId);
+      useSchemeBuilderStore.getState().deleteWorkGroup(wgId);
+      expect(useSchemeBuilderStore.getState().targetWorkGroupId).toBeNull();
+    });
+
+    it('clearLocalDraft clears target work group', () => {
+      useSchemeBuilderStore.getState().setTargetWorkGroup('wg-1');
+      useSchemeBuilderStore.getState().clearLocalDraft();
+      expect(useSchemeBuilderStore.getState().targetWorkGroupId).toBeNull();
     });
   });
 });

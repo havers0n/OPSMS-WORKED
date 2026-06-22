@@ -1,6 +1,6 @@
-import { useState, useMemo, useCallback } from 'react';
+﻿import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, X } from 'lucide-react';
 import { workHierarchyQueryOptions, orderItemsQueryOptions } from '@/entities/manual-shift/api/queries';
 import { useSchemeBuilderStore } from './scheme-store';
 import { adaptWorkHierarchyToSource, adaptOrderItemsToSource } from './source-data-adapter';
@@ -19,6 +19,9 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
   const setSelectedArea = useSchemeBuilderStore((s) => s.setSelectedArea);
   const assignItemRows = useSchemeBuilderStore((s) => s.assignItemRows);
   const assignWholeOrder = useSchemeBuilderStore((s) => s.assignWholeOrder);
+  const targetWorkGroupId = useSchemeBuilderStore((s) => s.targetWorkGroupId);
+  const setTargetWorkGroup = useSchemeBuilderStore((s) => s.setTargetWorkGroup);
+  const getWorkGroup = useSchemeBuilderStore((s) => s.getWorkGroup);
 
   const [drawerOrderId, setDrawerOrderId] = useState<string | null>(null);
   const [assignItemIds, setAssignItemIds] = useState<string[]>([]);
@@ -58,6 +61,10 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
     return source.orders.filter((o) => o.areaName === selectedAreaName);
   }, [source, selectedAreaName]);
 
+  const targetWg = useMemo(() => {
+    return targetWorkGroupId ? getWorkGroup(targetWorkGroupId) : undefined;
+  }, [targetWorkGroupId, getWorkGroup]);
+
   const handleOpenItemsDrawer = useCallback((orderId: string) => {
     setDrawerOrderId(orderId);
   }, []);
@@ -69,10 +76,14 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
   }, []);
 
   const handleAssignSelected = useCallback((itemRowIds: string[]) => {
+    if (targetWorkGroupId) {
+      assignItemRows(itemRowIds, targetWorkGroupId);
+      return;
+    }
     setAssignItemIds(itemRowIds);
     setIsWholeOrderAssign(false);
     setShowAssignModal(true);
-  }, []);
+  }, [targetWorkGroupId, assignItemRows]);
 
   const handleAssignAllUnassigned = useCallback((itemRowIds: string[]) => {
     setAssignItemIds(itemRowIds);
@@ -92,6 +103,14 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
     },
     [assignItemIds, isWholeOrderAssign, assignItemRows, assignWholeOrder],
   );
+
+  const handleStartAssign = useCallback((workGroupId: string) => {
+    setTargetWorkGroup(workGroupId);
+  }, [setTargetWorkGroup]);
+
+  const handleCancelTarget = useCallback(() => {
+    setTargetWorkGroup(null);
+  }, [setTargetWorkGroup]);
 
   if (isLoading) {
     return (
@@ -155,11 +174,27 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
         </div>
 
         <div className="flex-1 flex flex-col min-h-0">
+          {targetWg && (
+            <div className="mb-4 flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm">
+              <span className="font-bold text-blue-800">קבוצת יעד: {targetWg.name}</span>
+              <span className="text-blue-600">— בחר הזמנה ושורות לשיוך</span>
+              <div className="flex-1" />
+              <button
+                type="button"
+                onClick={handleCancelTarget}
+                className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:text-blue-900 transition-colors"
+              >
+                <X size={14} />
+                בטל קבוצת יעד
+              </button>
+            </div>
+          )}
+
           {selectedAreaName ? (
             <WorkGroupWorkspace
               selectedAreaName={selectedAreaName}
               orderItemMap={orderItemMap}
-              onOpenAssignModal={() => {/* user opens order drawer to select items */}}
+              onStartAssign={handleStartAssign}
             />
           ) : (
             <div className="bg-white border border-dashed border-gray-300 rounded-lg p-12 text-center">
@@ -209,6 +244,7 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
           onClose={handleCloseItemsDrawer}
           onAssignSelected={handleAssignSelected}
           onAssignAllUnassigned={handleAssignAllUnassigned}
+          targetWorkGroupName={targetWg?.name ?? null}
         />
       )}
 

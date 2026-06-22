@@ -1,4 +1,4 @@
-import { AlertCircle, AlertTriangle, Info } from 'lucide-react';
+﻿import { AlertCircle, AlertTriangle, Info } from 'lucide-react';
 import type { SourceOrder, SourceOrderItem } from './scheme-types';
 import { useSchemeBuilderStore } from './scheme-store';
 
@@ -98,7 +98,7 @@ export function ProblemQueue({
   if (problems.length === 0) {
     return (
       <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-800 font-medium">
-        אין בעלות — התכנית מוכנה
+        לא נמצאו בעיות בשורות שנטענו
       </div>
     );
   }

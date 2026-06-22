@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Plus, Trash2, PackageOpen } from 'lucide-react';
 import type { PlanningLine, SourceOrderItem } from './scheme-types';
 import { useSchemeBuilderStore } from './scheme-store';
@@ -8,11 +8,11 @@ import { WorkGroupCreateModal } from './work-group-create-modal';
 export function PlanningLineSection({
   planningLine,
   orderItemMap,
-  onOpenAssignModal,
+  onStartAssign,
 }: {
   planningLine: PlanningLine;
   orderItemMap: Record<string, SourceOrderItem[]>;
-  onOpenAssignModal: () => void;
+  onStartAssign: (workGroupId: string) => void;
 }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -120,7 +120,7 @@ export function PlanningLineSection({
                 key={wg.id}
                 workGroup={wg}
                 orderItemMap={orderItemMap}
-                onAssignItems={onOpenAssignModal}
+                onStartAssign={onStartAssign}
               />
             ))}
           </div>

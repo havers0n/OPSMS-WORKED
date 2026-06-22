@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import type { PlanningLine, WorkGroup, OrderSplitStatus, SourceOrderItem, DeleteResult } from './scheme-types';
 
 function generateId(prefix: string): string {
@@ -7,12 +7,14 @@ function generateId(prefix: string): string {
 
 export interface SchemeBuilderState {
   selectedAreaName: string | null;
+  targetWorkGroupId: string | null;
 
   planningLines: PlanningLine[];
   workGroups: WorkGroup[];
   itemAssignments: Record<string, string>;
 
   setSelectedArea: (areaName: string | null) => void;
+  setTargetWorkGroup: (workGroupId: string | null) => void;
 
   createPlanningLine: (areaName: string, name: string) => string;
   renamePlanningLine: (planningLineId: string, name: string) => void;
@@ -42,13 +44,18 @@ export interface SchemeBuilderState {
 
 export const useSchemeBuilderStore = create<SchemeBuilderState>((set, get) => ({
   selectedAreaName: null,
+  targetWorkGroupId: null,
 
   planningLines: [],
   workGroups: [],
   itemAssignments: {},
 
   setSelectedArea: (areaName: string | null) => {
-    set({ selectedAreaName: areaName });
+    set({ selectedAreaName: areaName, targetWorkGroupId: null });
+  },
+
+  setTargetWorkGroup: (workGroupId: string | null) => {
+    set({ targetWorkGroupId: workGroupId });
   },
 
   createPlanningLine: (areaName: string, name: string): string => {
@@ -97,6 +104,9 @@ export const useSchemeBuilderStore = create<SchemeBuilderState>((set, get) => ({
 
   deleteWorkGroup: (workGroupId: string): DeleteResult => {
     const state = get();
+    if (workGroupId === state.targetWorkGroupId) {
+      set({ targetWorkGroupId: null });
+    }
     const hasAssignments = Object.values(state.itemAssignments).some((wgId) => wgId === workGroupId);
     if (hasAssignments) {
       return { ok: false, reason: 'has_assignments' };
@@ -146,7 +156,7 @@ export const useSchemeBuilderStore = create<SchemeBuilderState>((set, get) => ({
   },
 
   clearLocalDraft: () => {
-    set({ planningLines: [], workGroups: [], itemAssignments: {}, selectedAreaName: null });
+    set({ planningLines: [], workGroups: [], itemAssignments: {}, selectedAreaName: null, targetWorkGroupId: null });
   },
 
   getPlanningLine: (planningLineId: string) => {
@@ -235,3 +245,4 @@ export function getOrderSplitStatus(
   if (assignedGroups.size > 1) return 'split';
   return 'partial';
 }
+
