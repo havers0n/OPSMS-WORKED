@@ -46,8 +46,11 @@ export const manualOperatorSections = [
 
 export type ManualOperatorSection = (typeof manualOperatorSections)[number];
 
-export function manualOperatorSectionPath(section: ManualOperatorSection) {
-  return `${routes.operatorManual}/${section}`;
+export function manualOperatorSectionPath(section: ManualOperatorSection, date?: string) {
+  const base = `${routes.operatorManual}/${section}`;
+  if (!date) return base;
+  const params = new URLSearchParams({ date });
+  return `${base}?${params.toString()}`;
 }
 
 export function isManualOperatorSection(value: string | undefined | null): value is ManualOperatorSection {

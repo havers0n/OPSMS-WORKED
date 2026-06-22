@@ -24,7 +24,7 @@ import { ManualOperatorPlaceholder } from './manual-operator-placeholder';
 import { ManualOperatorWorkSection } from './manual-operator-work-section';
 import { SchemeBuilder } from './scheme-builder';
 import { manualOperatorSectionItems } from './manual-operator-navigation';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 function getTodayDateIsrael(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -191,7 +191,8 @@ export function ManualOperatorPage() {
   const section = getSectionFromPathname(location.pathname);
 
   const todayDate = getTodayDateIsrael();
-  const [selectedDate, setSelectedDate] = useState(todayDate);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedDate = searchParams.get('date') ?? todayDate;
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const isToday = selectedDate === todayDate;
@@ -214,11 +215,11 @@ export function ManualOperatorPage() {
   }
 
   function handleSelectDate(date: string) {
-    setSelectedDate(date);
+    setSearchParams({ date });
   }
 
   function handleChangeSection(nextSection: ManualOperatorSection) {
-    navigate(manualOperatorSectionPath(nextSection));
+    navigate(manualOperatorSectionPath(nextSection, selectedDate));
   }
 
   if (section === null) {
