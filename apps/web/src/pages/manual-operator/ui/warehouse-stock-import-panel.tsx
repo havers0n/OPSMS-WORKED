@@ -1,0 +1,318 @@
+import { useState, type ChangeEvent } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import type { WarehouseStockSnapshotPreview } from '@wos/domain';
+import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { useUploadWarehouseStockExcel, usePublishWarehouseStockSnapshot } from '@/entities/warehouse-stock/api/mutations';
+import { warehouseStockSnapshotsQueryOptions } from '@/entities/warehouse-stock/api/queries';
+import { BffRequestError } from '@/shared/api/bff/client';
+import { translateBffError } from '@/shared/i18n';
+
+interface WarehouseStockImportPanelProps {
+  shiftId?: string | null;
+  selectedDate?: string | null;
+}
+
+function getTodayDate(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date());
+}
+
+export function WarehouseStockImportPanel({ shiftId, selectedDate }: WarehouseStockImportPanelProps) {
+  const uploadMutation = useUploadWarehouseStockExcel();
+  const publishMutation = usePublishWarehouseStockSnapshot();
+
+  const { data: snapshots = [], isLoading: isLoadingSnapshots } = useQuery(warehouseStockSnapshotsQueryOptions());
+
+  const [planningDate, setPlanningDate] = useState(selectedDate ?? getTodayDate());
+  const [preview, setPreview] = useState<WarehouseStockSnapshotPreview | null>(null);
+  const [uploadFileName, setUploadFileName] = useState<string | null>(null);
+  const [pivotFound, setPivotFound] = useState(false);
+  const [uploadErrorMessage, setUploadErrorMessage] = useState<string | null>(null);
+  const [publishErrorMessage, setPublishErrorMessage] = useState<string | null>(null);
+  const [publishResult, setPublishResult] = useState<{ id: string; rowCount: number } | null>(null);
+  const [expandedRows, setExpandedRows] = useState(false);
+  const [viewingSnapshotId, setViewingSnapshotId] = useState<string | null>(null);
+
+  const isBlocking = uploadMutation.isPending || publishMutation.isPending;
+  const canPublish = !!preview && !!planningDate && !isBlocking && !publishResult;
+
+  const existingCompletedSnapshots = snapshots.filter(
+    s => s.planningDate === planningDate && s.status === 'completed'
+  );
+  const hasDuplicateDate = existingCompletedSnapshots.length > 0;
+  const latestDuplicate = existingCompletedSnapshots[0] ?? null;
+
+  async function handleSelectFile(file: File | null) {
+    if (!file || isBlocking) return;
+    setUploadErrorMessage(null);
+    setPublishErrorMessage(null);
+    setPreview(null);
+    setUploadFileName(null);
+    setPivotFound(false);
+    setPublishResult(null);
+    try {
+      const response = await uploadMutation.mutateAsync(file);
+      setPreview(response.preview);
+      setUploadFileName(response.fileName);
+      setPivotFound(response.pivotSheetFound);
+    } catch (error) {
+      setUploadErrorMessage(translateBffError(error));
+    }
+  }
+
+  function handleFileInputChange(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0] ?? null;
+    void handleSelectFile(file);
+    input.value = '';
+  }
+
+  async function handlePublish() {
+    if (!preview || !planningDate || isBlocking) return;
+    setPublishErrorMessage(null);
+    try {
+      const result = await publishMutation.mutateAsync({
+        preview,
+        planningDate,
+        fileName: uploadFileName,
+        shiftId: shiftId ?? null
+      });
+      setPublishResult({ id: result.id, rowCount: result.rowCount });
+    } catch (error) {
+      setPublishErrorMessage(translateBffError(error));
+    }
+  }
+
+  function formatDateTime(iso: string): string {
+    try {
+      return new Intl.DateTimeFormat('he-IL', {
+        dateStyle: 'medium',
+        timeStyle: 'short'
+      }).format(new Date(iso));
+    } catch {
+      return iso;
+    }
+  }
+
+  const uploadErrorCode =
+    uploadMutation.error instanceof BffRequestError ? uploadMutation.error.code : null;
+  const publishErrorCode =
+    publishMutation.error instanceof BffRequestError ? publishMutation.error.code : null;
+
+  return (
+    <>
+      <div className="space-y-4">
+        <p className="text-sm text-gray-500">העלאת קובץ מלאי מחסן, בדיקת נתונים ופרסום לתאריך עבודה</p>
+
+        {uploadErrorMessage && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 whitespace-pre-line">
+            {uploadErrorMessage}
+          </div>
+        )}
+
+        {publishErrorMessage && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 whitespace-pre-line">
+            {publishErrorMessage}
+          </div>
+        )}
+
+        <div className="rounded-xl border border-gray-200 p-4 space-y-2">
+          <label htmlFor="ws-planning-date" className="font-medium text-gray-900">
+            תאריך עבודה
+          </label>
+          <p className="text-xs text-gray-500">יש לבחור לאיזה תאריך עבודה ה-Snapshot ישויך.</p>
+          <input
+            id="ws-planning-date"
+            type="date"
+            value={planningDate}
+            onChange={(event) => setPlanningDate(event.target.value)}
+            disabled={isBlocking}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 disabled:opacity-50"
+          />
+        </div>
+
+        <div className="rounded-xl border border-gray-200 p-4 space-y-2">
+          <p className="font-medium text-gray-900">בחר קובץ ‎.xlsx</p>
+          <p className="text-sm text-gray-500">גודל מרבי: 20MB</p>
+          <input
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            disabled={isBlocking}
+            aria-label="בחר קובץ מלאי מחסן"
+            onChange={handleFileInputChange}
+            className="w-full text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white disabled:opacity-50"
+          />
+        </div>
+
+        {uploadMutation.isPending && (
+          <div className="rounded-xl border border-gray-200 p-4 flex items-center gap-2 text-sm text-gray-700">
+            <Loader2 size={16} className="animate-spin" />
+            מעלה ומנתח את הקובץ...
+          </div>
+        )}
+
+        {hasDuplicateDate && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm space-y-1">
+            <p className="font-medium text-amber-900">
+              לתאריך עבודה זה כבר קיים Snapshot מלאי. פרסום חדש יהפוך לגרסה הפעילה לתאריך זה.
+            </p>
+            <p className="text-amber-700">
+              הגרסאות הקודמות יישארו בהיסטוריית הייבוא.
+            </p>
+            {latestDuplicate && (
+              <div className="mt-2 space-y-0.5 text-xs text-amber-800">
+                <p><span className="font-medium">קובץ קיים:</span> {latestDuplicate.fileName || '—'}</p>
+                <p><span className="font-medium">הועלה:</span> {formatDateTime(latestDuplicate.importedAt)}</p>
+                <p><span className="font-medium">שורות מקור:</span> {latestDuplicate.sourceRowCount}</p>
+                <p><span className="font-medium">SKU ייחודיים:</span> {latestDuplicate.uniqueSkuCount}</p>
+                <p><span className="font-medium">סטטוס:</span> {latestDuplicate.status}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {preview && (
+          <div className="space-y-3">
+            <div className="rounded-xl border border-gray-200 p-4 text-sm space-y-1">
+              <p><span className="font-medium">קובץ:</span> {uploadFileName}</p>
+              <p><span className="font-medium">גיליון מקור:</span> {preview.sourceSheetName}</p>
+              <p><span className="font-medium">שורות מקור:</span> {preview.rowCount}</p>
+              <p><span className="font-medium">SKU ייחודיים:</span> {preview.uniqueSkuCount}</p>
+              {preview.duplicateSkuRowsCount > 0 && (
+                <p><span className="font-medium">SKU כפולים:</span> {preview.duplicateSkuRowsCount}</p>
+              )}
+              {preview.missingSkuRowsCount > 0 && (
+                <p><span className="font-medium">שורות ללא SKU:</span> {preview.missingSkuRowsCount}</p>
+              )}
+              {preview.negativeStockRowsCount > 0 && (
+                <p><span className="font-medium">מלאי שלילי:</span> {preview.negativeStockRowsCount}</p>
+              )}
+              {preview.conflictingStockSkuCount > 0 && (
+                <p><span className="font-medium">מלאי סותר:</span> {preview.conflictingStockSkuCount}</p>
+              )}
+              {pivotFound && (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs p-2 mt-2">
+                  PIVOT! זוהה ונוטרל מהתצוגה
+                </div>
+              )}
+              {preview.diagnostics.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {preview.diagnostics.map((diag, index) => (
+                    <p key={index} className="text-xs text-amber-700">{diag.message}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-gray-200 overflow-hidden">
+              <button
+                type="button"
+                className="w-full p-3 flex items-center justify-between text-right text-sm font-medium text-gray-900"
+                onClick={() => setExpandedRows(!expandedRows)}
+              >
+                <span>תצוגה מקדימה של שורות</span>
+                {expandedRows ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+              </button>
+              {expandedRows && (
+                <div className="overflow-x-auto pb-3 px-3">
+                  <table className="w-full text-xs text-gray-700 border-collapse">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-right p-1 font-medium">פריט</th>
+                        <th className="text-right p-1 font-medium">תיאור</th>
+                        <th className="text-right p-1 font-medium">קטגוריה</th>
+                        <th className="text-right p-1 font-medium">כמות במחסן</th>
+                        <th className="text-right p-1 font-medium">זמין</th>
+                        <th className="text-right p-1 font-medium">דרישה</th>
+                        <th className="text-right p-1 font-medium">שורות</th>
+                        <th className="text-right p-1 font-medium">אבחון</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.rows.slice(0, 20).map((row, i) => (
+                        <tr key={i} className="border-b border-gray-100">
+                          <td className="p-1">{row.sku}</td>
+                          <td className="p-1 max-w-[120px] truncate">{row.description || '—'}</td>
+                          <td className="p-1 max-w-[100px] truncate">{row.category || '—'}</td>
+                          <td className="p-1">{row.warehouseQtyRaw}</td>
+                          <td className="p-1">{row.availableQty}</td>
+                          <td className="p-1">{row.sourceDemandQty ?? '—'}</td>
+                          <td className="p-1">{row.sourceRowCount}</td>
+                          <td className="p-1 max-w-[100px] truncate">
+                            {row.diagnostics.length > 0 ? row.diagnostics.join(', ') : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                      {preview.rows.length > 20 && (
+                        <tr>
+                          <td colSpan={8} className="p-2 text-center text-gray-400 text-xs">
+                            ועוד {preview.rows.length - 20} שורות...
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {publishResult && (
+          <div className="rounded-xl border border-green-200 bg-green-50 text-green-800 text-sm p-3 space-y-1">
+            <p><span className="font-medium">Snapshot ID:</span> {publishResult.id}</p>
+            <p><span className="font-medium">סטטוס:</span> completed</p>
+            <p><span className="font-medium">שורות:</span> {publishResult.rowCount}</p>
+          </div>
+        )}
+
+        <div className="rounded-xl border border-gray-200 p-4 space-y-2">
+          <h3 className="font-medium text-gray-900">Snapshots אחרונים</h3>
+          {isLoadingSnapshots ? (
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <Loader2 size={14} className="animate-spin" />
+              טוען...
+            </div>
+          ) : snapshots.length === 0 ? (
+            <p className="text-sm text-gray-500">אין Snapshots עדיין</p>
+          ) : (
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {snapshots.map((snapshot) => (
+                <div key={snapshot.id}>
+                  <button
+                    type="button"
+                    onClick={() => setViewingSnapshotId(viewingSnapshotId === snapshot.id ? null : snapshot.id)}
+                    className="w-full text-right p-2 rounded-lg hover:bg-gray-50 text-sm space-y-0.5"
+                  >
+                    <p><span className="font-medium">תאריך עבודה:</span> {snapshot.planningDate}</p>
+                    <p><span className="font-medium">קובץ:</span> {snapshot.fileName || '—'}</p>
+                    <p><span className="font-medium">הועלה:</span> {formatDateTime(snapshot.importedAt)}</p>
+                    <p><span className="font-medium">שורות מקור:</span> {snapshot.sourceRowCount}</p>
+                    <p><span className="font-medium">SKU:</span> {snapshot.uniqueSkuCount}</p>
+                    <p><span className="font-medium">סטטוס:</span> {snapshot.status}</p>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => void handlePublish()}
+          disabled={!canPublish}
+          className="w-full min-h-12 rounded-xl bg-gray-900 text-white font-medium disabled:opacity-40 flex items-center justify-center gap-2"
+        >
+          {publishMutation.isPending && <Loader2 size={16} className="animate-spin" />}
+          {publishMutation.isPending ? 'מפרסם...' : publishResult ? 'פורסם' : hasDuplicateDate ? 'פרסם כגרסה חדשה' : 'פרסם Snapshot מלאי לתאריך עבודה'}
+        </button>
+      </div>
+
+      {(uploadErrorCode || publishErrorCode) && <span className="hidden">{uploadErrorCode ?? publishErrorCode}</span>}
+    </>
+  );
+}

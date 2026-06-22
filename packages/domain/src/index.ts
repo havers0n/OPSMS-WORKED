@@ -63,4 +63,5 @@ export * from './operations/wave';
 export * from './operations/manual-shift-route-classification';
 export * from './operations/product-control';
 export * from './operations/bonded-snapshot';
+export * from './operations/warehouse-stock-snapshot';
 export * from './operations/manual-shift-print';
