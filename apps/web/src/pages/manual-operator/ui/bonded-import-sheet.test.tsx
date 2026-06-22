@@ -155,7 +155,7 @@ describe('BondedImportSheet', () => {
     });
   });
 
-  it('PIVOT detected/ignored warning renders if present', async () => {
+  it('pivot warning renders if present', async () => {
     uploadMutateAsync.mockResolvedValueOnce({ draft: draftPayload, fileName: 'bonded.xlsx', pivotSheetFound: true });
     renderWithQuery(<BondedImportSheet onClose={() => undefined} />);
 

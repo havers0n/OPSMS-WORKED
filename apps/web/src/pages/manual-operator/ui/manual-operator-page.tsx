@@ -19,9 +19,10 @@ import { CheckTab } from './check-tab';
 import { PeopleTab } from './people-tab';
 import { DayTab } from './day-tab';
 import { ProductControlTab } from './product-control-tab';
+import { ManualOperatorImportSection } from './manual-operator-import-section';
 import { ManualOperatorPlaceholder } from './manual-operator-placeholder';
 import { ManualOperatorWorkSection } from './manual-operator-work-section';
-import { LineSchemeBuilder } from './line-scheme-builder';
+import { SchemeBuilder } from './scheme-builder';
 import { manualOperatorSectionItems } from './manual-operator-navigation';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 
@@ -54,12 +55,18 @@ function ManualOperatorSectionContent({
   section,
   shift,
   lines,
-  isReadOnly
+  isReadOnly,
+  selectedDate,
+  canMonthlyImport,
+  hasExistingWork
 }: {
   section: ManualOperatorSection;
   shift: ManualShiftSession | null;
   lines: ManualShiftLineSummary[];
   isReadOnly: boolean;
+  selectedDate: string;
+  canMonthlyImport: boolean;
+  hasExistingWork: boolean;
 }) {
   if (section === 'summary') {
     return shift ? (
@@ -80,7 +87,18 @@ function ManualOperatorSectionContent({
   }
 
   if (section === 'lines') {
-    return shift ? <LineSchemeBuilder shiftId={shift.id} /> : null;
+    return shift ? <SchemeBuilder shiftId={shift.id} /> : null;
+  }
+
+  if (section === 'import') {
+    return (
+      <ManualOperatorImportSection
+        shift={shift}
+        selectedDate={selectedDate}
+        canMonthlyImport={canMonthlyImport}
+        hasExistingWork={hasExistingWork}
+      />
+    );
   }
 
   return (
@@ -156,7 +174,9 @@ function DesktopSectionFrame({
       </header>
 
       <main className="flex-1 overflow-y-auto bg-gray-50">
-        {shift ? children : <ShiftEmptyState onCreateShift={onCreateShift} isCreating={isCreatingShift} isToday={isToday} />}
+        {shift || section === 'import'
+          ? children
+          : <ShiftEmptyState onCreateShift={onCreateShift} isCreating={isCreatingShift} isToday={isToday} />}
       </main>
     </div>
   );
@@ -211,8 +231,12 @@ export function ManualOperatorPage() {
       shift={shift}
       lines={lines}
       isReadOnly={isReadOnly}
+      selectedDate={selectedDate}
+      canMonthlyImport={canMonthlyImport}
+      hasExistingWork={hasExistingWork}
     />
   ) : null;
+  const renderSectionWithoutShift = section === 'import';
 
   if (isDesktop && section === 'work') {
     return (
@@ -265,7 +289,7 @@ export function ManualOperatorPage() {
               <div className="flex items-center justify-center py-20">
                 <Loader2 size={32} className="animate-spin text-gray-400" />
               </div>
-            ) : !shift ? null : sectionContent}
+            ) : !shift && !renderSectionWithoutShift ? null : sectionContent}
           </div>
         </DesktopSectionFrame>
         {showDatePicker && (
@@ -327,7 +351,7 @@ export function ManualOperatorPage() {
           <div className="flex items-center justify-center py-20" dir="rtl">
             <Loader2 size={32} className="animate-spin text-gray-400" />
           </div>
-        ) : !shift ? (
+        ) : !shift && !renderSectionWithoutShift ? (
           <ShiftEmptyState onCreateShift={handleCreateShift} isCreating={createShift.isPending} isToday={isToday} />
         ) : (
           sectionContent

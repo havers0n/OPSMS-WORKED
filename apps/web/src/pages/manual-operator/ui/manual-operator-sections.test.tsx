@@ -590,7 +590,8 @@ describe('ManualOperatorPage URL sections', () => {
     routes.operatorManualWork,
     routes.operatorManualSummary,
     routes.operatorManualCheck,
-    routes.operatorManualPeople
+    routes.operatorManualPeople,
+    routes.operatorManualImport
   ])('renders %s content', async (path) => {
     mockWorkspaceData();
     renderAt(path);
@@ -636,6 +637,61 @@ describe('ManualOperatorPage URL sections', () => {
     ).toBe(false);
   });
 
+  it('renders the import route instead of the disconnected placeholder', async () => {
+    mockWorkspaceData();
+    renderAt(routes.operatorManualImport);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location').textContent).toBe(routes.operatorManualImport);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('manual-import-section')).toBeTruthy();
+    });
+
+    expect(screen.queryByText('המסך הזה עדיין לא מחובר')).toBeNull();
+    expect(screen.queryByTestId('manual-placeholder-import')).toBeNull();
+    expect(screen.getByText('ייבוא נתונים')).toBeTruthy();
+    expect(screen.getByText('טעינת קובץ בונדד')).toBeTruthy();
+    expect(screen.getAllByText(/קובץ הבונדד אינו כולל תאריך/).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'פתיחת ייבוא יומי' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /פתיחת (תצוגה|החלפה) חודשית/ })).toBeTruthy();
+  });
+
+  it('keeps the import section available even when no shift exists', async () => {
+    mockedBffRequest.mockImplementation((url: string) => {
+      const path = String(url);
+      if (path.includes('/api/manual-shifts/by-date')) return Promise.resolve({ shift: null, lines: [] });
+      return Promise.resolve([]);
+    });
+
+    renderAt(routes.operatorManualImport);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('manual-import-section')).toBeTruthy();
+    });
+
+    expect(screen.getByText('ייבוא נתונים')).toBeTruthy();
+    expect(screen.getByText('טעינת קובץ בונדד')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'פתיחת ייבוא יומי' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'פתיחת תצוגה חודשית' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('opens the bonded import sheet from the import route entry point', async () => {
+    mockWorkspaceData();
+    renderAt(routes.operatorManualImport);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('open-bonded-import-sheet')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByTestId('open-bonded-import-sheet'));
+
+    await waitFor(() => {
+      expect(screen.getAllByText('טעינת קובץ בונדד').length).toBeGreaterThan(1);
+    });
+  });
+
   it('still renders placeholders for other unimplemented sections', async () => {
     mockWorkspaceData();
     renderAt(routes.operatorManualAshlamot);
@@ -665,7 +721,8 @@ describe('ManualOperatorPage URL sections', () => {
     routes.operatorManualWork,
     routes.operatorManualSummary,
     routes.operatorManualCheck,
-    routes.operatorManualPeople
+    routes.operatorManualPeople,
+    routes.operatorManualImport
   ])('desktop renders %s safely', async (path) => {
     isDesktop = true;
     mockWorkspaceData();
