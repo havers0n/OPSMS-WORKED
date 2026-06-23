@@ -49,6 +49,30 @@ describe('bffRequestBlob', () => {
     expect(result.blob.type).toBe('application/pdf');
   });
 
+  it('sends Authorization bearer token from the Supabase session', async () => {
+    supabaseAuth.getSession.mockResolvedValue({
+      data: {
+        session: {
+          access_token: 'access-token-1'
+        }
+      }
+    });
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(new Blob(['pdf'], { type: 'application/pdf' }), {
+        status: 200,
+        headers: {
+          'content-type': 'application/pdf'
+        }
+      })
+    );
+
+    await bffRequestBlob('/api/manual-shifts/shift-1/print/picker-sheet.pdf?scope=line');
+
+    const init = vi.mocked(fetch).mock.calls[0][1];
+    expect(init?.headers).toBeInstanceOf(Headers);
+    expect((init?.headers as Headers).get('Authorization')).toBe('Bearer access-token-1');
+  });
+
   it('uses fallback filename when Content-Disposition is absent', async () => {
     const pdfBlob = new Blob(['fake-pdf-content'], { type: 'application/pdf' });
     vi.mocked(fetch).mockResolvedValue(

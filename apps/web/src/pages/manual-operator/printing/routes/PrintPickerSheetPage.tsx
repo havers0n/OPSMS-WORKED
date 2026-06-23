@@ -7,6 +7,10 @@ import { PrintToolbar } from '../components/PrintToolbar';
 import { PickerSheetPrintDocument } from '../components/PickerSheetPrintDocument';
 import { getDemoPickerSheetData } from '../types/printDtos';
 import type { PickerSheetScope, PickerSheetPrintData } from '../types/printDtos';
+import {
+  buildPickerSheetLinePdfUrl,
+  buildPickerSheetWorkGroupPdfUrl
+} from '../lib/picker-sheet-urls';
 import '../styles/print.css';
 
 const DEMO_SHIFT = 'demo-print-shift';
@@ -29,16 +33,15 @@ export function PrintPickerSheetPage() {
   const pdfUrl = useMemo<string | undefined>(() => {
     if (!shiftId || !distributionArea || !planningLineName) return undefined;
     const scope = scopeParam === 'line' ? 'line' : 'workGroup';
-    const params: Record<string, string> = {
+    const params = {
       shiftId,
-      scope,
       distributionArea,
       planningLineName,
+      workGroupName
     };
-    if (scope === 'workGroup' && workGroupName) {
-      params.workGroupName = workGroupName;
-    }
-    return `/api/manual-shifts/${shiftId}/print/picker-sheet.pdf?${new URLSearchParams(params).toString()}`;
+    return scope === 'line'
+      ? buildPickerSheetLinePdfUrl(params)
+      : buildPickerSheetWorkGroupPdfUrl(params);
   }, [shiftId, distributionArea, planningLineName, workGroupName, scopeParam]);
   const scope: PickerSheetScope = scopeParam === 'line' ? 'line' : scopeParam === 'workGroup' ? 'workGroup' : 'area';
 

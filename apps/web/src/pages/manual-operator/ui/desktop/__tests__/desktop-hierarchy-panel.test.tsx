@@ -1,6 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   AreaHierarchySummary,
   LineHierarchySummary,
@@ -9,7 +9,12 @@ import type {
   WorkBucketSummary
 } from '@/entities/manual-shift/model/shift-selectors';
 import { NO_DISTRIBUTION_AREA_KEY } from '@/entities/manual-shift/model/shift-selectors';
+import { bffRequestBlob } from '@/shared/api/bff/client';
 import { DesktopHierarchyPanel } from '../desktop-hierarchy-panel';
+
+vi.mock('@/shared/api/bff/client', () => ({
+  bffRequestBlob: vi.fn()
+}));
 
 const mockAreaSummaries: AreaHierarchySummary[] = [
   {
@@ -139,6 +144,15 @@ const mockWorkBucketSummaries: WorkBucketSummary[] = [
 
 describe('DesktopHierarchyPanel', () => {
   const noop = vi.fn();
+  const pdfBlob = new Blob(['pdf'], { type: 'application/pdf' });
+
+  beforeEach(() => {
+    vi.mocked(bffRequestBlob).mockReset();
+    vi.mocked(bffRequestBlob).mockResolvedValue({ blob: pdfBlob, filename: 'picker-sheet.pdf' });
+    vi.stubGlobal('open', vi.fn(() => ({ location: { href: '' }, close: vi.fn(), opener: window })));
+    URL.createObjectURL = vi.fn(() => 'blob:picker-sheet');
+    URL.revokeObjectURL = vi.fn();
+  });
 
   function renderPanel(overrides: Partial<Parameters<typeof DesktopHierarchyPanel>[0]> = {}) {
     return render(
@@ -1362,7 +1376,7 @@ describe('DesktopHierarchyPanel', () => {
       expect(screen.queryByTestId('print-picker-sheet-line')).toBeNull();
     });
 
-    it('line-level print URL contains scope=line and correct params', () => {
+    it('line-level PDF action calls blob helper with PDF endpoint and correct params', async () => {
       renderPanel({
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
@@ -1370,13 +1384,21 @@ describe('DesktopHierarchyPanel', () => {
         workBucketSummaries: mockWorkBucketSummaries,
         shiftId: 'shift-1'
       });
-      const link = screen.getByTestId('print-picker-sheet-line');
-      const href = link.getAttribute('href') ?? '';
-      expect(href).toContain('/operator/manual/print/picker-sheet');
-      const params = new URLSearchParams(href.split('?')[1]);
-      expect(params.get('shiftId')).toBe('shift-1');
+
+      fireEvent.click(screen.getByTestId('print-picker-sheet-line'));
+
+      await waitFor(() => {
+        expect(bffRequestBlob).toHaveBeenCalledOnce();
+      });
+      const pdfUrl = vi.mocked(bffRequestBlob).mock.calls[0][0];
+      expect(pdfUrl).toContain('/api/manual-shifts/shift-1/print/picker-sheet.pdf');
+      const params = new URLSearchParams(pdfUrl.split('?')[1]);
       expect(params.get('scope')).toBe('line');
+      expect(params.get('distributionArea')).toBe('צפון');
       expect(params.get('planningLineName')).toBe('Line South');
+      expect(params.has('workGroupName')).toBe(false);
+      expect(params.has('shiftId')).toBe(false);
+      expect(pdfUrl).not.toContain('access_token');
     });
 
     it('detail view shows print action link when bucket is selected with all params', () => {
@@ -1403,7 +1425,14 @@ describe('DesktopHierarchyPanel', () => {
       expect(screen.queryByTestId('print-picker-sheet-detail')).toBeNull();
     });
 
-    it('line-level print action opens in new tab', () => {
+    it('line-level PDF action shows loading state while request is pending', async () => {
+      let resolveRequest: ((value: { blob: Blob; filename: string }) => void) | undefined;
+      vi.mocked(bffRequestBlob).mockReturnValue(
+        new Promise((resolve) => {
+          resolveRequest = resolve;
+        })
+      );
+
       renderPanel({
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
@@ -1411,9 +1440,95 @@ describe('DesktopHierarchyPanel', () => {
         workBucketSummaries: mockWorkBucketSummaries,
         shiftId: 'shift-1'
       });
-      const link = screen.getByTestId('print-picker-sheet-line');
-      expect(link.getAttribute('target')).toBe('_blank');
-      expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+
+      fireEvent.click(screen.getByTestId('print-picker-sheet-line'));
+      expect(await screen.findByText('מכין PDF...')).toBeTruthy();
+
+      resolveRequest?.({ blob: pdfBlob, filename: 'picker-sheet.pdf' });
+      await waitFor(() => {
+        expect(screen.getByTestId('print-picker-sheet-line').textContent).toContain('פתח PDF דף ליקוט');
+      });
+    });
+
+    it('line-level PDF success opens a blank tab and navigates it to a blob URL', async () => {
+      const pdfWindow = { location: { href: '' }, close: vi.fn(), opener: window };
+      vi.mocked(window.open).mockReturnValue(pdfWindow as unknown as Window);
+
+      renderPanel({
+        selectedAreaKey: 'צפון',
+        selectedLineId: 'line-1',
+        lineHierarchySummaries: [mockLineHierarchySummaries[0]],
+        workBucketSummaries: mockWorkBucketSummaries,
+        shiftId: 'shift-1'
+      });
+
+      fireEvent.click(screen.getByTestId('print-picker-sheet-line'));
+
+      await waitFor(() => {
+        expect(URL.createObjectURL).toHaveBeenCalledWith(pdfBlob);
+        expect(pdfWindow.location.href).toBe('blob:picker-sheet');
+      });
+      expect(window.open).toHaveBeenCalledWith('', '_blank');
+      expect(pdfWindow.opener).toBeNull();
+    });
+
+    it('line-level PDF failure shows error and closes the blank tab', async () => {
+      const pdfWindow = { location: { href: '' }, close: vi.fn(), opener: window };
+      vi.mocked(window.open).mockReturnValue(pdfWindow as unknown as Window);
+      vi.mocked(bffRequestBlob).mockRejectedValue(new Error('PDF failed'));
+
+      renderPanel({
+        selectedAreaKey: 'צפון',
+        selectedLineId: 'line-1',
+        lineHierarchySummaries: [mockLineHierarchySummaries[0]],
+        workBucketSummaries: mockWorkBucketSummaries,
+        shiftId: 'shift-1'
+      });
+
+      fireEvent.click(screen.getByTestId('print-picker-sheet-line'));
+
+      expect((await screen.findByRole('alert')).textContent).toContain('PDF failed');
+      expect(pdfWindow.close).toHaveBeenCalledOnce();
+    });
+
+    it('detail PDF action calls blob helper with workGroup scope', async () => {
+      renderPanel({
+        selectedAreaKey: 'צפון',
+        selectedLineId: 'line-1',
+        lineHierarchySummaries: [mockLineHierarchySummaries[0]],
+        selectedWorkBucketName: 'Point A',
+        workBucketSummaries: mockWorkBucketSummaries,
+        shiftId: 'shift-1'
+      });
+
+      fireEvent.click(screen.getByTestId('print-picker-sheet-detail'));
+
+      await waitFor(() => {
+        expect(bffRequestBlob).toHaveBeenCalledOnce();
+      });
+      const pdfUrl = vi.mocked(bffRequestBlob).mock.calls[0][0];
+      expect(pdfUrl).toContain('/api/manual-shifts/shift-1/print/picker-sheet.pdf');
+      const params = new URLSearchParams(pdfUrl.split('?')[1]);
+      expect(params.get('scope')).toBe('workGroup');
+      expect(params.get('distributionArea')).toBe('צפון');
+      expect(params.get('planningLineName')).toBe('Line South');
+      expect(params.get('workGroupName')).toBe('Point A');
+      expect(params.has('shiftId')).toBe(false);
+    });
+
+    it('keeps HTML preview route as secondary action', () => {
+      renderPanel({
+        selectedAreaKey: 'צפון',
+        selectedLineId: 'line-1',
+        lineHierarchySummaries: [mockLineHierarchySummaries[0]],
+        workBucketSummaries: mockWorkBucketSummaries,
+        shiftId: 'shift-1'
+      });
+
+      const previewLink = screen.getByTestId('print-picker-sheet-line-preview');
+      const href = previewLink.getAttribute('href') ?? '';
+      expect(href).toContain('/operator/manual/print/picker-sheet');
+      expect(href).toContain('shiftId=shift-1');
     });
   });
 });

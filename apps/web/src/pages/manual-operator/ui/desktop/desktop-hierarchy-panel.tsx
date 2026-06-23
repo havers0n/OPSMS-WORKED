@@ -7,7 +7,13 @@ import type {
   WorkBucketSummary
 } from '@/entities/manual-shift/model/shift-selectors';
 import type { BucketProductRollupRow } from '@wos/domain';
-import { routes } from '@/shared/config/routes';
+import { useOpenPickerSheetPdf } from '@/pages/manual-operator/printing/hooks/use-open-picker-sheet-pdf';
+import {
+  buildPickerSheetLinePdfUrl,
+  buildPickerSheetLinePreviewUrl,
+  buildPickerSheetWorkGroupPdfUrl,
+  buildPickerSheetWorkGroupPreviewUrl
+} from '@/pages/manual-operator/printing/lib/picker-sheet-urls';
 import { DesktopAreaCard } from './desktop-area-card';
 import { DesktopLineSummaryCard } from './desktop-line-summary-card';
 import { DesktopRouteGroupCard } from './desktop-route-group-card';
@@ -46,38 +52,6 @@ interface DesktopHierarchyPanelProps {
   productRollupLoading: boolean;
   showProductRollupDeferred: boolean;
   onSetWorkBucketView: (view: 'products' | 'orders') => void;
-}
-
-function workGroupPickerSheetUrl(
-  shiftId: string | null,
-  distributionArea: string | null | undefined,
-  planningLineName: string | undefined,
-  workGroupName: string | undefined | null,
-): string | undefined {
-  if (!shiftId || !distributionArea || !planningLineName || !workGroupName) return undefined;
-  const params = new URLSearchParams({
-    shiftId,
-    distributionArea,
-    scope: 'workGroup',
-    planningLineName,
-    workGroupName,
-  });
-  return `${routes.operatorManualPrintPickerSheet}?${params.toString()}`;
-}
-
-function pickerSheetLineUrl(
-  shiftId: string | null,
-  distributionArea: string | null | undefined,
-  planningLineName: string | undefined,
-): string | undefined {
-  if (!shiftId || !distributionArea || !planningLineName) return undefined;
-  const params = new URLSearchParams({
-    shiftId,
-    distributionArea,
-    scope: 'line',
-    planningLineName,
-  });
-  return `${routes.operatorManualPrintPickerSheet}?${params.toString()}`;
 }
 
 function AreaBreadcrumb({ areaName, onClearArea }: { areaName: string; onClearArea: () => void }) {
@@ -132,6 +106,36 @@ export function DesktopHierarchyPanel({
   const effectiveSelectedAreaLineKey = selectedAreaLineKey ?? selectedLineId ?? null;
   const specialAreaKeySet = new Set(specialAreaSummaries.map((area) => area.areaKey));
   const normalAreaSummaries = areaSummaries.filter((area) => !specialAreaKeySet.has(area.areaKey));
+  const selectedArea = areaSummaries.find((a) => a.areaKey === selectedAreaKey);
+  const selectedLine = lineHierarchySummaries.find((l) => (l.areaLineKey ?? l.lineId) === effectiveSelectedAreaLineKey);
+  const selectedBucketLegacy = workBucketSummaries.find((p) => p.workBucketName === selectedWorkBucketName);
+  const detailWorkGroupName = hasRouteGroups && !!selectedRouteGroupKey
+    ? selectedRouteGroupWorkBucket?.workBucketName
+    : selectedBucketLegacy?.workBucketName;
+  const linePdfUrl = buildPickerSheetLinePdfUrl({
+    shiftId,
+    distributionArea: selectedLine?.distributionArea,
+    planningLineName: selectedLine?.lineName
+  });
+  const linePreviewUrl = buildPickerSheetLinePreviewUrl({
+    shiftId,
+    distributionArea: selectedLine?.distributionArea,
+    planningLineName: selectedLine?.lineName
+  });
+  const detailPdfUrl = buildPickerSheetWorkGroupPdfUrl({
+    shiftId,
+    distributionArea: selectedLine?.distributionArea,
+    planningLineName: selectedLine?.lineName,
+    workGroupName: detailWorkGroupName
+  });
+  const detailPreviewUrl = buildPickerSheetWorkGroupPreviewUrl({
+    shiftId,
+    distributionArea: selectedLine?.distributionArea,
+    planningLineName: selectedLine?.lineName,
+    workGroupName: detailWorkGroupName
+  });
+  const linePdf = useOpenPickerSheetPdf(linePdfUrl);
+  const detailPdf = useOpenPickerSheetPdf(detailPdfUrl);
 
   // ── State 1: No area selected → area cards ──────────────────────────────
   if (!selectedAreaKey) {
@@ -170,7 +174,6 @@ export function DesktopHierarchyPanel({
     );
   }
 
-  const selectedArea = areaSummaries.find((a) => a.areaKey === selectedAreaKey);
   const isAutoSkippedSingleLine = effectiveSelectedAreaLineKey !== null && areaLineSummaries.length === 1;
 
   // ── State 2: Area selected, no line → line cards ────────────────────────
@@ -198,8 +201,6 @@ export function DesktopHierarchyPanel({
       </div>
     );
   }
-
-  const selectedLine = lineHierarchySummaries.find((l) => (l.areaLineKey ?? l.lineId) === effectiveSelectedAreaLineKey);
 
   // ── State 3: Route group selected, but no work bucket yet ──────────────
   if (hasRouteGroups && selectedRouteGroupKey && !selectedWorkBucketKey && !selectedWorkBucketName) {
@@ -236,18 +237,36 @@ export function DesktopHierarchyPanel({
           <>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">קבוצות עבודה</h2>
-              {pickerSheetLineUrl(shiftId, selectedLine?.distributionArea, selectedLine?.lineName) && (
-                <Link
-                  to={pickerSheetLineUrl(shiftId, selectedLine?.distributionArea, selectedLine?.lineName)!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                  data-testid="print-picker-sheet-line"
-                >
-                  הדפס דף ליקוט לכל קבוצת החלוקה
-                </Link>
+              {linePdfUrl && (
+                <div className="flex items-center gap-3">
+                  {linePreviewUrl && (
+                    <Link
+                      to={linePreviewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-gray-500 hover:text-gray-700 font-medium"
+                      data-testid="print-picker-sheet-line-preview"
+                    >
+                      תצוגת הדפסה
+                    </Link>
+                  )}
+                  <button
+                    type="button"
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:text-gray-400"
+                    data-testid="print-picker-sheet-line"
+                    disabled={linePdf.isLoading}
+                    onClick={() => void linePdf.openPdf()}
+                  >
+                    {linePdf.isLoading ? 'מכין PDF...' : 'פתח PDF דף ליקוט'}
+                  </button>
+                </div>
               )}
             </div>
+            {linePdf.error && (
+              <p className="mb-3 text-xs text-red-600" role="alert">
+                {linePdf.error}
+              </p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {routeGroupWorkBucketSummaries.map((wb) => (
                 <DesktopWorkBucketCard
@@ -342,18 +361,36 @@ export function DesktopHierarchyPanel({
             )}
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">קבוצות עבודה</h2>
-              {pickerSheetLineUrl(shiftId, selectedLine?.distributionArea, selectedLine?.lineName) && (
-                <Link
-                  to={pickerSheetLineUrl(shiftId, selectedLine?.distributionArea, selectedLine?.lineName)!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                  data-testid="print-picker-sheet-line"
-                >
-                  הדפס דף ליקוט לכל קבוצת החלוקה
-                </Link>
+              {linePdfUrl && (
+                <div className="flex items-center gap-3">
+                  {linePreviewUrl && (
+                    <Link
+                      to={linePreviewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-gray-500 hover:text-gray-700 font-medium"
+                      data-testid="print-picker-sheet-line-preview"
+                    >
+                      תצוגת הדפסה
+                    </Link>
+                  )}
+                  <button
+                    type="button"
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:text-gray-400"
+                    data-testid="print-picker-sheet-line"
+                    disabled={linePdf.isLoading}
+                    onClick={() => void linePdf.openPdf()}
+                  >
+                    {linePdf.isLoading ? 'מכין PDF...' : 'פתח PDF דף ליקוט'}
+                  </button>
+                </div>
               )}
             </div>
+            {linePdf.error && (
+              <p className="mb-3 text-xs text-red-600" role="alert">
+                {linePdf.error}
+              </p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {workBucketSummaries.map((bucket) => (
                 <DesktopWorkBucketCard
@@ -376,8 +413,6 @@ export function DesktopHierarchyPanel({
   // and selectedWorkBucketKey.  Do not add a secondary find fallback here —
   // the Products tab pointName derivation and showProductRollupDeferred in the
   // parent depend on exactly the same bucket object.
-  const selectedBucketLegacy = workBucketSummaries.find((p) => p.workBucketName === selectedWorkBucketName);
-
   const isRouteGroupBucket = hasRouteGroups && !!selectedRouteGroupKey;
   const selectedRouteGroup = isRouteGroupBucket
     ? routeGroupSummaries.find((rg) => rg.routeGroupKey === selectedRouteGroupKey)
@@ -386,17 +421,6 @@ export function DesktopHierarchyPanel({
   const bucketOrders = isRouteGroupBucket
     ? (selectedRouteGroupWorkBucket?.orders ?? [])
     : (selectedBucketLegacy?.orders ?? []);
-
-  const detailWorkGroupName = isRouteGroupBucket
-    ? selectedRouteGroupWorkBucket?.workBucketName
-    : selectedBucketLegacy?.workBucketName;
-
-  const printDetailUrl = workGroupPickerSheetUrl(
-    shiftId,
-    selectedLine?.distributionArea,
-    selectedLine?.lineName,
-    detailWorkGroupName
-  );
 
   return (
     <div className="p-4">
@@ -490,18 +514,36 @@ export function DesktopHierarchyPanel({
           הזמנות
         </button>
         <div className="grow" />
-        {printDetailUrl && (
-          <Link
-            to={printDetailUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-            data-testid="print-picker-sheet-detail"
-          >
-            הדפס דף ליקוט
-          </Link>
+        {detailPdfUrl && (
+          <div className="flex items-center gap-3">
+            {detailPreviewUrl && (
+              <Link
+                to={detailPreviewUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-gray-500 hover:text-gray-700 font-medium"
+                data-testid="print-picker-sheet-detail-preview"
+              >
+                תצוגת הדפסה
+              </Link>
+            )}
+            <button
+              type="button"
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:text-gray-400"
+              data-testid="print-picker-sheet-detail"
+              disabled={detailPdf.isLoading}
+              onClick={() => void detailPdf.openPdf()}
+            >
+              {detailPdf.isLoading ? 'מכין PDF...' : 'פתח PDF דף ליקוט'}
+            </button>
+          </div>
         )}
       </div>
+      {detailPdf.error && (
+        <p className="mb-3 text-xs text-red-600" role="alert">
+          {detailPdf.error}
+        </p>
+      )}
 
       {workBucketView === 'products' ? (
         showProductRollupDeferred ? (

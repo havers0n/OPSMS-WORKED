@@ -1,7 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { bffRequestBlob } from '@/shared/api/bff/client';
 import { PrintToolbar } from './PrintToolbar';
+
+vi.mock('@/shared/api/bff/client', () => ({
+  bffRequestBlob: vi.fn()
+}));
 
 function renderToolbar(pdfUrl?: string) {
   return render(
@@ -12,6 +17,17 @@ function renderToolbar(pdfUrl?: string) {
 }
 
 describe('PrintToolbar', () => {
+  beforeEach(() => {
+    vi.mocked(bffRequestBlob).mockReset();
+    vi.mocked(bffRequestBlob).mockResolvedValue({
+      blob: new Blob(['pdf'], { type: 'application/pdf' }),
+      filename: 'picker-sheet.pdf'
+    });
+    vi.stubGlobal('open', vi.fn(() => ({ location: { href: '' }, close: vi.fn(), opener: window })));
+    URL.createObjectURL = vi.fn(() => 'blob:picker-sheet');
+    URL.revokeObjectURL = vi.fn();
+  });
+
   it('renders הדפס button that calls window.print()', () => {
     const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {});
     renderToolbar();
@@ -21,11 +37,9 @@ describe('PrintToolbar', () => {
     printSpy.mockRestore();
   });
 
-  it('renders פתח PDF link when pdfUrl is provided', () => {
+  it('renders פתח PDF button when pdfUrl is provided', () => {
     renderToolbar('/api/manual-shifts/123/print/picker-sheet.pdf?scope=line');
-    const pdfLink = screen.getByText('פתח PDF');
-    expect(pdfLink).toBeDefined();
-    expect(pdfLink.getAttribute('href')).toBe('/api/manual-shifts/123/print/picker-sheet.pdf?scope=line');
+    expect(screen.getByRole('button', { name: 'פתח PDF' })).toBeDefined();
   });
 
   it('does not render פתח PDF when pdfUrl is undefined', () => {
@@ -33,11 +47,16 @@ describe('PrintToolbar', () => {
     expect(screen.queryByText('פתח PDF')).toBeNull();
   });
 
-  it('opens PDF link in new tab with noopener', () => {
+  it('uses authenticated blob fetch instead of a protected href', async () => {
     renderToolbar('/api/manual-shifts/123/print/picker-sheet.pdf?scope=line');
-    const pdfLink = screen.getByText('פתח PDF');
-    expect(pdfLink.getAttribute('target')).toBe('_blank');
-    expect(pdfLink.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(document.querySelector('a[href*="picker-sheet.pdf"]')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'פתח PDF' }));
+
+    await waitFor(() => {
+      expect(bffRequestBlob).toHaveBeenCalledWith('/api/manual-shifts/123/print/picker-sheet.pdf?scope=line');
+      expect(URL.createObjectURL).toHaveBeenCalled();
+    });
   });
 
   it('renders חזור להדפסות link to printing page', () => {
