@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { ProductControlTab } from './product-control-tab';
@@ -216,6 +216,15 @@ function renderTab() {
   );
 }
 
+function clickFilter(filterLabelPattern: RegExp) {
+  const btn = screen.getByRole('button', { name: filterLabelPattern });
+  fireEvent.click(btn);
+}
+
+function showAllRows() {
+  clickFilter(/^הכל/);
+}
+
 describe('CoverageStatusBadge', () => {
   const cases: { status: ProductControlStatus; expected: string }[] = [
     { status: 'ok', expected: 'תקין' },
@@ -236,6 +245,8 @@ describe('CoverageStatusBadge', () => {
 describe('ProductControlTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
+    cleanup();
   });
 
   it('renders loading state while fetching', () => {
@@ -299,9 +310,13 @@ describe('ProductControlTab', () => {
     expect(screen.getByText('2')).toBeTruthy();
   });
 
-  it('renders product rows with SKU and description', async () => {
+  it('renders product rows with SKU and description across all filters', async () => {
     mockedBffRequest.mockResolvedValueOnce(mockResponse);
     renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+    });
+    showAllRows();
     await waitFor(() => {
       expect(screen.getByText('100001')).toBeTruthy();
       expect(screen.getByText('מחברת A4 100 דפים')).toBeTruthy();
@@ -312,9 +327,13 @@ describe('ProductControlTab', () => {
     });
   });
 
-  it('renders status badges for all fixture rows', async () => {
+  it('renders status badges for all fixture rows when filtering by all', async () => {
     mockedBffRequest.mockResolvedValueOnce(mockResponse);
     renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+    });
+    showAllRows();
     await waitFor(() => {
       expect(screen.getByText('תקין')).toBeTruthy();
       expect(screen.getByText('מכוסה בבונדד')).toBeTruthy();
@@ -324,9 +343,13 @@ describe('ProductControlTab', () => {
     expect(screen.getAllByText('בעיית נתונים').length).toBeGreaterThanOrEqual(2);
   });
 
-  it('highlights data_issue row distinctly', async () => {
+  it('highlights data_issue row when filtering by data issues', async () => {
     mockedBffRequest.mockResolvedValueOnce(mockResponse);
     renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+    });
+    clickFilter(/^בעיות נתונים/);
     await waitFor(() => {
       expect(screen.getByText('999999')).toBeTruthy();
       expect(screen.getByText('?!? נתונים לא תקינים')).toBeTruthy();
@@ -402,9 +425,13 @@ describe('ProductControlTab', () => {
     expect(screen.queryByText('פריט נבחר')).toBeNull();
   });
 
-  it('opens drawer for data_issue row when it has bonded coverage', async () => {
+  it('opens drawer for data_issue row with bonded coverage', async () => {
     mockedBffRequest.mockResolvedValueOnce(mockResponse);
     renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+    });
+    showAllRows();
     await waitFor(() => {
       expect(screen.getByText('100005')).toBeTruthy();
     });
@@ -416,6 +443,10 @@ describe('ProductControlTab', () => {
   it('opens drawer for data_issue row even without bonded coverage', async () => {
     mockedBffRequest.mockResolvedValueOnce(mockResponse);
     renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+    });
+    showAllRows();
     await waitFor(() => {
       expect(screen.getByText('999999')).toBeTruthy();
     });
@@ -439,14 +470,14 @@ describe('ProductControlTab', () => {
     mockedBffRequest.mockResolvedValueOnce(mockResponse);
     renderTab();
     await waitFor(() => {
-      expect(screen.getByText('100001')).toBeTruthy();
+      expect(screen.getByText('100002')).toBeTruthy();
     });
     expect(mockedBffRequest).toHaveBeenCalledWith(
       `/api/manual-shifts/${SHIFT_ID}/product-control`
     );
   });
 
-  // === NEW: Bonded snapshot banner tests ===
+  // === Bonded snapshot banner tests ===
 
   it('shows active bonded snapshot metadata banner', async () => {
     mockedBffRequest.mockResolvedValueOnce(mockResponse);
@@ -473,7 +504,7 @@ describe('ProductControlTab', () => {
     });
   });
 
-  // === NEW: Table bonded coverage display tests ===
+  // === Table bonded coverage display tests ===
 
   it('table row shows bondedCoverQty and finalMissingQty', async () => {
     mockedBffRequest.mockResolvedValueOnce(mockResponse);
@@ -489,6 +520,10 @@ describe('ProductControlTab', () => {
     mockedBffRequest.mockResolvedValueOnce(mockResponse);
     renderTab();
     await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+    });
+    showAllRows();
+    await waitFor(() => {
       expect(screen.getByText('100005')).toBeTruthy();
     });
     expect(screen.getByText('כיסוי בונדד: 564 מתוך 564')).toBeTruthy();
@@ -498,6 +533,10 @@ describe('ProductControlTab', () => {
     mockedBffRequest.mockResolvedValueOnce(mockResponse);
     renderTab();
     await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+    });
+    showAllRows();
+    await waitFor(() => {
       expect(screen.getByText('100005')).toBeTruthy();
     });
     const five64s = screen.getAllByText('564');
@@ -505,11 +544,15 @@ describe('ProductControlTab', () => {
     expect(screen.getByText('2979')).toBeTruthy();
   });
 
-  // === NEW: Data issue explanation tests ===
+  // === Data issue explanation tests ===
 
   it('unknown_sku renders explanation text', async () => {
     mockedBffRequest.mockResolvedValueOnce(mockResponse);
     renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+    });
+    showAllRows();
     await waitFor(() => {
       const explanations = screen.getAllByText('מק"ט לא נמצא בקטלוג המוצרים');
       expect(explanations.length).toBeGreaterThanOrEqual(2);
@@ -528,6 +571,10 @@ describe('ProductControlTab', () => {
     mockedBffRequest.mockResolvedValueOnce(dupResponse);
     renderTab();
     await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+    });
+    showAllRows();
+    await waitFor(() => {
       expect(screen.getByText('100005')).toBeTruthy();
     });
     fireEvent.click(screen.getByText('100005'));
@@ -537,7 +584,7 @@ describe('ProductControlTab', () => {
     });
   });
 
-  // === NEW: Detail panel bondedCandidates tests ===
+  // === Detail panel bondedCandidates tests ===
 
   it('detail panel displays bondedCandidates with block and quantities', async () => {
     mockedBffRequest.mockResolvedValueOnce(mockResponse);
@@ -591,6 +638,10 @@ describe('ProductControlTab', () => {
     mockedBffRequest.mockResolvedValueOnce(mockNoCandidates);
     renderTab();
     await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+    });
+    showAllRows();
+    await waitFor(() => {
       expect(screen.getByText('100001')).toBeTruthy();
     });
     fireEvent.click(screen.getByText('100001'));
@@ -603,6 +654,10 @@ describe('ProductControlTab', () => {
     mockedBffRequest.mockResolvedValueOnce(mockResponse);
     renderTab();
     await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+    });
+    showAllRows();
+    await waitFor(() => {
       expect(screen.getByText('100005')).toBeTruthy();
     });
     fireEvent.click(screen.getByText('100005'));
@@ -613,7 +668,7 @@ describe('ProductControlTab', () => {
     });
   });
 
-  // === NEW: Warehouse stock snapshot banner tests ===
+  // === Warehouse stock snapshot banner tests ===
 
   it('shows active warehouse stock snapshot metadata banner', async () => {
     const wsnapResponse = {
@@ -664,6 +719,10 @@ describe('ProductControlTab', () => {
     mockedBffRequest.mockResolvedValueOnce(dataIssueResponse);
     renderTab();
     await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+    });
+    showAllRows();
+    await waitFor(() => {
       expect(screen.getByText('100005')).toBeTruthy();
     });
     const explanations = screen.getAllByText('המק"ט לא נמצא ב-Snapshot מלאי המחסן');
@@ -688,6 +747,10 @@ describe('ProductControlTab', () => {
     mockedBffRequest.mockResolvedValueOnce(mockResponse);
     renderTab();
     await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+    });
+    showAllRows();
+    await waitFor(() => {
       expect(screen.getByText('100004')).toBeTruthy();
     });
     fireEvent.click(screen.getByText('100004'));
@@ -709,6 +772,10 @@ describe('ProductControlTab', () => {
   it('does not show bonded request create card for data_issue row even with bonded coverage', async () => {
     mockedBffRequest.mockResolvedValueOnce(mockResponse);
     renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+    });
+    showAllRows();
     await waitFor(() => {
       expect(screen.getByText('100005')).toBeTruthy();
     });
@@ -755,5 +822,178 @@ describe('ProductControlTab', () => {
     await waitFor(() => {
       expect(screen.getByText('סה״כ מק״טים')).toBeTruthy();
     });
+  });
+
+  // === New: Filter behavior tests ===
+
+  it('default filter shows only bonded-coverable non-data-issue shortages', async () => {
+    mockedBffRequest.mockResolvedValueOnce(mockResponse);
+    renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+      expect(screen.getByText('100003')).toBeTruthy();
+    });
+    expect(screen.queryByText('100001')).toBeNull();
+    expect(screen.queryByText('100004')).toBeNull();
+    expect(screen.queryByText('999999')).toBeNull();
+    expect(screen.queryByText('100005')).toBeNull();
+  });
+
+  it('data_issue with bonded quantity is excluded from default queue', async () => {
+    mockedBffRequest.mockResolvedValueOnce(mockResponse);
+    renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+    });
+    expect(screen.queryByText('100005')).toBeNull();
+  });
+
+  it('uncovered filter shows only shortages without bonded cover', async () => {
+    mockedBffRequest.mockResolvedValueOnce(mockResponse);
+    renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+    });
+    clickFilter(/^חסר ללא כיסוי/);
+    await waitFor(() => {
+      expect(screen.getByText('100004')).toBeTruthy();
+    });
+    expect(screen.queryByText('100002')).toBeNull();
+    expect(screen.queryByText('100003')).toBeNull();
+  });
+
+  it('search composes with active filter', async () => {
+    mockedBffRequest.mockResolvedValueOnce(mockResponse);
+    renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+      expect(screen.getByText('100003')).toBeTruthy();
+    });
+
+    const searchInput = screen.getByPlaceholderText('חיפוש מקט או תיאור...');
+    fireEvent.change(searchInput, { target: { value: '100003' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('100003')).toBeTruthy();
+    });
+    expect(screen.queryByText('100002')).toBeNull();
+  });
+
+  it('changing filter does not clear search', async () => {
+    mockedBffRequest.mockResolvedValueOnce(mockResponse);
+    renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+    });
+
+    const searchInput = screen.getByPlaceholderText('חיפוש מקט או תיאור...');
+    fireEvent.change(searchInput, { target: { value: '100003' } });
+    await waitFor(() => {
+      expect(screen.getByText('100003')).toBeTruthy();
+    });
+
+    clickFilter(/^הכל/);
+    await waitFor(() => {
+      expect(screen.getByText('100003')).toBeTruthy();
+    });
+    expect(screen.queryByText('100002')).toBeNull();
+  });
+
+  it('changing search does not reset active filter', async () => {
+    mockedBffRequest.mockResolvedValueOnce(mockResponse);
+    renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+    });
+
+    clickFilter(/^חסר ללא כיסוי/);
+    await waitFor(() => {
+      expect(screen.getByText('100004')).toBeTruthy();
+    });
+
+    const searchInput = screen.getByPlaceholderText('חיפוש מקט או תיאור...');
+    fireEvent.change(searchInput, { target: { value: '100004' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('100004')).toBeTruthy();
+    });
+    expect(screen.queryByText('100002')).toBeNull();
+    expect(screen.queryByText('100003')).toBeNull();
+  });
+
+  // === New: Snapshot dismissal tests ===
+
+  it('dismissed bonded snapshot banner persists in localStorage', async () => {
+    mockedBffRequest.mockResolvedValueOnce(mockResponse);
+    renderTab();
+    await waitFor(() => {
+      expect(screen.getByText(/Snapshot בונדד פעיל/)).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByTestId('dismiss-bonded-snapshot'));
+    await waitFor(() => {
+      expect(screen.queryByText(/Snapshot בונדד פעיל/)).toBeNull();
+    });
+
+    const storedKey = Object.keys(localStorage).find((k) =>
+      k.includes('wos:pc:banner:bonded')
+    );
+    expect(storedKey).toBeTruthy();
+    expect(localStorage.getItem(storedKey!)).toBe('1');
+    expect(storedKey).toContain('468');
+  });
+
+  it('changed bonded snapshot key shows banner again after dismissal', async () => {
+    mockedBffRequest.mockResolvedValueOnce(mockResponse);
+    renderTab();
+    await waitFor(() => {
+      expect(screen.getByText(/Snapshot בונדד פעיל/)).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByTestId('dismiss-bonded-snapshot'));
+    await waitFor(() => {
+      expect(screen.queryByText(/Snapshot בונדד פעיל/)).toBeNull();
+    });
+
+    const changedResponse = {
+      ...mockResponse,
+      bondedSnapshot: { ...mockSnapshot, rowCount: 999 },
+    };
+    cleanup();
+    mockedBffRequest.mockResolvedValueOnce(changedResponse);
+    render(
+      <QueryClientProvider client={makeQueryClient()}>
+        <ProductControlTab shiftId={SHIFT_ID} />
+      </QueryClientProvider>
+    );
+    await waitFor(() => {
+      expect(screen.getByText(/Snapshot בונדד פעיל/)).toBeTruthy();
+    });
+  });
+
+  it('dismissed warning banner persists in localStorage', async () => {
+    const noSnapshotResponse = {
+      ...mockResponse,
+      bondedSnapshot: null,
+      warnings: ['no_bonded_snapshot_for_planning_date'],
+    };
+    mockedBffRequest.mockResolvedValueOnce(noSnapshotResponse);
+    renderTab();
+    await waitFor(() => {
+      expect(
+        screen.getByText(/לא נמצא Snapshot בונדד/)
+      ).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByTestId('dismiss-bonded-warning'));
+    await waitFor(() => {
+      expect(screen.queryByText(/לא נמצא Snapshot בונדד/)).toBeNull();
+    });
+
+    const storedKey = Object.keys(localStorage).find((k) =>
+      k.includes('wos:pc:banner:bonded:missing')
+    );
+    expect(storedKey).toBeTruthy();
+    expect(localStorage.getItem(storedKey!)).toBe('1');
   });
 });
