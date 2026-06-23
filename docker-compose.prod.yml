@@ -7,6 +7,7 @@ services:
       NODE_ENV: production
       BFF_HOST: 0.0.0.0
       BFF_PORT: 8787
+      PRINT_RENDER_FRONTEND_URL: ${PRINT_RENDER_FRONTEND_URL:-http://web}
     expose:
       - "8787"
     restart: unless-stopped

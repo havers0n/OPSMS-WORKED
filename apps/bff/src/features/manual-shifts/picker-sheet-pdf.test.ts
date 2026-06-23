@@ -215,4 +215,103 @@ describe('generatePickerSheetPdf', () => {
     const gotoUrl = getPage().goto.mock.calls[0][0] as string;
     expect(gotoUrl).toContain(env.printRenderFrontendUrl.replace(/\/+$/, ''));
   });
+
+  it('does not include access token in the generated frontend URL', async () => {
+    await generatePickerSheetPdf(mockAuthContext, {
+      shiftId: 'shift-1',
+      scope: 'line',
+      distributionArea: 'גליל',
+      planningLineName: 'קו 1',
+    });
+
+    const gotoUrl = getPage().goto.mock.calls[0][0] as string;
+    const urlObj = new URL(gotoUrl);
+    // Token may be in localStorage init script but never in the URL itself
+    expect(gotoUrl).not.toContain(mockAuthContext.accessToken);
+    expect(urlObj.searchParams.has('access_token')).toBe(false);
+    expect(urlObj.searchParams.has('token')).toBe(false);
+  });
+
+  describe('error mapping', () => {
+    it('maps chromium.launch failure to PDF_BROWSER_LAUNCH_FAILED', async () => {
+      const page = getPage();
+      // Make launch reject
+      const { chromium } = await import('playwright');
+      (chromium.launch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('browser not found'));
+
+      await expect(generatePickerSheetPdf(mockAuthContext, {
+        shiftId: 'shift-1',
+        scope: 'line',
+        distributionArea: 'גליל',
+        planningLineName: 'קו 1',
+      })).rejects.toMatchObject({
+        statusCode: 502,
+        code: 'PDF_BROWSER_LAUNCH_FAILED',
+      });
+
+      // cleanup: no page or context created, but browser launch was attempted
+      expect(page.close).not.toHaveBeenCalled();
+    });
+
+    it('maps page.goto failure to PDF_FRONTEND_UNREACHABLE', async () => {
+      const page = getPage();
+      page.goto.mockRejectedValueOnce(new Error('net::ERR_NAME_NOT_RESOLVED'));
+
+      await expect(generatePickerSheetPdf(mockAuthContext, {
+        shiftId: 'shift-1',
+        scope: 'line',
+        distributionArea: 'גליל',
+        planningLineName: 'קו 1',
+      })).rejects.toMatchObject({
+        statusCode: 502,
+        code: 'PDF_FRONTEND_UNREACHABLE',
+      });
+    });
+
+    it('maps waitForSelector timeout to PDF_PRINT_DOCUMENT_TIMEOUT', async () => {
+      const page = getPage();
+      page.waitForSelector.mockRejectedValueOnce(new Error('timeout'));
+
+      await expect(generatePickerSheetPdf(mockAuthContext, {
+        shiftId: 'shift-1',
+        scope: 'line',
+        distributionArea: 'גליל',
+        planningLineName: 'קו 1',
+      })).rejects.toMatchObject({
+        statusCode: 504,
+        code: 'PDF_PRINT_DOCUMENT_TIMEOUT',
+      });
+    });
+
+    it('maps page.pdf failure to PDF_RENDER_FAILED', async () => {
+      const page = getPage();
+      page.pdf.mockRejectedValueOnce(new Error('pdf buffer error'));
+
+      await expect(generatePickerSheetPdf(mockAuthContext, {
+        shiftId: 'shift-1',
+        scope: 'line',
+        distributionArea: 'גליל',
+        planningLineName: 'קו 1',
+      })).rejects.toMatchObject({
+        statusCode: 500,
+        code: 'PDF_RENDER_FAILED',
+      });
+    });
+
+    it('runs cleanup after PDF_RENDER_FAILED', async () => {
+      const page = getPage();
+      page.pdf.mockRejectedValueOnce(new Error('boom'));
+
+      await expect(generatePickerSheetPdf(mockAuthContext, {
+        shiftId: 'shift-1',
+        scope: 'line',
+        distributionArea: 'גליל',
+        planningLineName: 'קו 1',
+      })).rejects.toThrow();
+
+      expect(page.close).toHaveBeenCalledOnce();
+      expect(mockHolder.browser._context.close).toHaveBeenCalledOnce();
+      expect(mockHolder.browser.close).toHaveBeenCalledOnce();
+    });
+  });
 });

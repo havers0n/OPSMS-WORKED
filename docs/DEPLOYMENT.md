@@ -113,6 +113,7 @@ SUPABASE_ANON_KEY=YOUR_PUBLIC_ANON_KEY
 BFF_HOST=0.0.0.0
 BFF_PORT=8787
 BFF_CORS_ORIGIN=https://YOUR_DOMAIN
+PRINT_RENDER_FRONTEND_URL=http://web
 ```
 
 Rules:
@@ -122,6 +123,7 @@ Rules:
 - `VITE_BFF_URL=/api` assumes the web container proxies `/api/*` to BFF
 - `BFF_CORS_ORIGIN` must match the final public origin exactly, including scheme
 - BFF port `8787` must not be published directly to the host
+- `PRINT_RENDER_FRONTEND_URL` must be reachable from the BFF container and serve both frontend routes and the `/api` proxy
 - `/api/ready` requires Supabase connectivity and the `public.healthcheck()` RPC from migration `0109_ready_healthcheck_rpc.sql`
 
 ## 5. Build And Run Commands

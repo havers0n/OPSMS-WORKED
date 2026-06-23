@@ -1,4 +1,4 @@
-FROM node:22-alpine AS deps
+FROM node:22-bookworm-slim AS deps
 
 WORKDIR /app
 
@@ -19,11 +19,19 @@ COPY packages/domain packages/domain
 RUN npm run build --workspace @wos/domain \
   && npm run build --workspace @wos/bff
 
-FROM node:22-alpine AS runtime
+FROM node:22-bookworm-slim AS runtime
 
 ENV NODE_ENV=production
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 WORKDIR /app/apps/bff
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      fonts-noto-core \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npx playwright install --with-deps chromium
 
 COPY package.json package-lock.json /app/
 COPY --from=build /app/node_modules /app/node_modules

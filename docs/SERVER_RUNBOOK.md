@@ -90,6 +90,7 @@ Confirm these values are production-correct:
 - [ ] `BFF_HOST=0.0.0.0`
 - [ ] `BFF_PORT=8787`
 - [ ] `BFF_CORS_ORIGIN` exactly matches the final browser origin
+- [ ] `PRINT_RENDER_FRONTEND_URL=http://web` is set (or overridden for the correct internal web origin)
 
 ## 6. Migration And Backup Gate
 

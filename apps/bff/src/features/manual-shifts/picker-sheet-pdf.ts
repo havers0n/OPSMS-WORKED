@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 import type { Browser, BrowserContext, Page } from 'playwright';
 import { env } from '../../env.js';
+import { ApiError } from '../../errors.js';
 import type { AuthenticatedRequestContext } from '../../auth.js';
 
 export const SUPABASE_STORAGE_KEY = 'supabase.auth.token';
@@ -80,21 +81,49 @@ export async function generatePickerSheetPdf(
   let page: Page | null = null;
 
   try {
-    browser = await chromium.launch();
+    browser = await chromium
+      .launch({ args: ['--no-sandbox'] })
+      .catch((err: unknown) => {
+        throw new ApiError(
+          502,
+          'PDF_BROWSER_LAUNCH_FAILED',
+          `Failed to launch Chromium: ${err instanceof Error ? err.message : String(err)}`
+        );
+      });
     context = await browser.newContext();
     page = await context.newPage();
 
     await page.addInitScript(initScript);
 
-    await page.goto(frontendUrl, { waitUntil: 'networkidle' });
-
-    await page.waitForSelector('.print-table', { timeout: 15000 });
-
-    const pdf = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      preferCSSPageSize: true,
+    await page.goto(frontendUrl, { waitUntil: 'networkidle' }).catch((err: unknown) => {
+      throw new ApiError(
+        502,
+        'PDF_FRONTEND_UNREACHABLE',
+        `Frontend page did not load: ${err instanceof Error ? err.message : String(err)}`
+      );
     });
+
+    await page.waitForSelector('.print-table', { timeout: 15000 }).catch((err: unknown) => {
+      throw new ApiError(
+        504,
+        'PDF_PRINT_DOCUMENT_TIMEOUT',
+        `Print document table did not appear: ${err instanceof Error ? err.message : String(err)}`
+      );
+    });
+
+    const pdf = await page
+      .pdf({
+        format: 'A4',
+        printBackground: true,
+        preferCSSPageSize: true,
+      })
+      .catch((err: unknown) => {
+        throw new ApiError(
+          500,
+          'PDF_RENDER_FAILED',
+          `PDF rendering failed: ${err instanceof Error ? err.message : String(err)}`
+        );
+      });
 
     return Buffer.from(pdf);
   } finally {
