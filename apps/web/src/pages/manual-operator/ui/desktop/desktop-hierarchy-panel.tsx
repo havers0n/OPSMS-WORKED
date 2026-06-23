@@ -151,11 +151,27 @@ export function DesktopHierarchyPanel({
     return (
       <div className="p-4">
         {specialAreaSummaries.length > 0 && (
-          <section className="mb-6" data-testid="special-areas-section">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">ערוצי משלוח מיוחדים</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <section className="mb-3" data-testid="special-areas-section">
+            <div className="flex flex-wrap gap-2">
               {specialAreaSummaries.map((area) => (
-                <DesktopAreaCard key={area.areaKey} area={area} isSpecialChannel onClick={onSelectArea} />
+                <button
+                  key={area.areaKey}
+                  type="button"
+                  onClick={() => onSelectArea(area.areaKey)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-xs font-medium text-amber-900 hover:bg-amber-100 hover:border-amber-300 transition-colors cursor-pointer"
+                  data-testid={`special-area-chip-${area.areaKey}`}
+                  aria-label={`ערוץ מיוחד ${area.displayName}`}
+                >
+                  <span className="font-semibold">{area.displayName}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{area.totalLines} קווים</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{area.totalBuckets} קבוצות</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{area.totalOrders} הזמנות</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{area.totalQuantity} יח׳</span>
+                </button>
               ))}
             </div>
           </section>

@@ -954,9 +954,9 @@ describe('ManualOperatorPage URL sections', () => {
     renderAt(routes.operatorManualWork);
 
     await waitFor(() => {
-      expect(screen.getByTestId("area-card-צ'יטה")).toBeTruthy();
+      expect(screen.getByTestId("special-area-chip-צ'יטה")).toBeTruthy();
     });
-    fireEvent.click(screen.getByTestId("area-card-צ'יטה"));
+    fireEvent.click(screen.getByTestId("special-area-chip-צ'יטה"));
 
     await waitFor(() => {
       expect(screen.getByTestId('work-bucket-card-דרום')).toBeTruthy();
@@ -981,19 +981,18 @@ describe('ManualOperatorPage URL sections', () => {
       expect(screen.getByTestId('normal-areas-section')).toBeTruthy();
     });
 
-    expect(screen.getByText('ערוצי משלוח מיוחדים')).toBeTruthy();
     expect(screen.getByText('אזורי הפצה')).toBeTruthy();
-    expect(screen.getByTestId("area-card-צ'יטה")).toBeTruthy();
-    expect(screen.getByText('ערוץ מיוחד')).toBeTruthy();
+    expect(screen.getByTestId("special-area-chip-צ'יטה")).toBeTruthy();
+    const chips = screen.getAllByText('צ\'יטה');
+    expect(chips.length).toBeGreaterThanOrEqual(1);
     expect(screen.getByTestId('area-card-south')).toBeTruthy();
-    expect(within(screen.getByTestId('special-areas-section')).getByTestId("area-card-צ'יטה")).toBeTruthy();
-    expect(within(screen.getByTestId('normal-areas-section')).queryByTestId("area-card-צ'יטה")).toBeNull();
+    expect(within(screen.getByTestId('special-areas-section')).getByTestId("special-area-chip-צ'יטה")).toBeTruthy();
+    expect(within(screen.getByTestId('normal-areas-section')).queryByTestId("special-area-chip-צ'יטה")).toBeNull();
 
     const headings = screen.getAllByRole('heading', { level: 2 });
-    expect(headings[0].textContent).toBe('ערוצי משלוח מיוחדים');
-    expect(headings[1].textContent).toBe('אזורי הפצה');
+    expect(headings[0].textContent).toBe('אזורי הפצה');
 
-    fireEvent.click(screen.getByTestId("area-card-צ'יטה"));
+    fireEvent.click(screen.getByTestId("special-area-chip-צ'יטה"));
     await waitFor(() => {
       expect(screen.getByTestId('work-bucket-card-Point A')).toBeTruthy();
     });

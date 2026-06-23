@@ -4,46 +4,45 @@ interface DesktopKpiRowProps {
   summary: ShiftSummary;
 }
 
-interface KpiChipProps {
-  label: string;
-  value: number;
-  numClass: string;
-  bgClass: string;
-}
-
-function KpiChip({ label, value, numClass, bgClass }: KpiChipProps) {
+function KpiChip({ label, value, muted }: { label: string; value: number; muted?: boolean }) {
   return (
-    <div className={`flex flex-col items-center px-4 py-2.5 rounded-lg min-w-[64px] ${bgClass}`}>
-      <span className={`font-bold text-3xl leading-none tabular-nums ${numClass}`}>{value}</span>
-      <span className="text-xs text-gray-500 mt-1 whitespace-nowrap">{label}</span>
-    </div>
+    <span className={`inline-flex items-baseline gap-1 whitespace-nowrap ${muted ? 'opacity-40' : ''}`}>
+      <span className="font-bold text-sm tabular-nums text-slate-900">{value}</span>
+      <span className="text-xs text-slate-500">{label}</span>
+    </span>
   );
 }
 
-function Divider() {
-  return <div className="w-px h-10 bg-gray-200 shrink-0" aria-hidden="true" />;
+function Separator() {
+  return <span className="text-slate-300 mx-1 select-none" aria-hidden="true">|</span>;
 }
 
 export function DesktopKpiRow({ summary }: DesktopKpiRowProps) {
+  const activeCount = summary.picking + summary.waitingCheck;
+
   return (
-    <div className="flex items-center gap-2 overflow-x-auto" role="region" aria-label="סיכום משמרת">
-      <KpiChip label="סה״כ" value={summary.totalOrders} numClass="text-gray-900" bgClass="bg-gray-50" />
-      <Divider />
-      <KpiChip label="בתור" value={summary.queued} numClass="text-gray-600" bgClass="bg-gray-50" />
-      <KpiChip label="בליקוט" value={summary.picking} numClass="text-blue-700" bgClass="bg-blue-50" />
-      <Divider />
-      <KpiChip
-        label="בדיקה"
-        value={summary.waitingCheck}
-        numClass="text-amber-700"
-        bgClass="bg-amber-50"
-      />
-      <KpiChip label="הוחזר" value={summary.returned} numClass="text-red-700" bgClass="bg-red-50" />
-      <Divider />
-      <KpiChip label="הסתיימו" value={summary.done} numClass="text-green-700" bgClass="bg-green-50" />
-      <KpiChip label="תקלות" value={summary.errorsCount} numClass="text-rose-700" bgClass="bg-rose-50" />
-      <Divider />
-      <KpiChip label="משטחים" value={summary.totalPalletCount} numClass="text-gray-900" bgClass="bg-gray-50" />
+    <div className="flex items-center gap-0 overflow-x-auto" role="region" aria-label="סיכום משמרת">
+      <KpiChip label="סה״כ" value={summary.totalOrders} />
+      <Separator />
+      <KpiChip label="בתור" value={summary.queued} />
+      <Separator />
+      <KpiChip label="פעיל" value={activeCount} />
+      {summary.returned > 0 && (
+        <>
+          <Separator />
+          <KpiChip label="הוחזר" value={summary.returned} />
+        </>
+      )}
+      <Separator />
+      <KpiChip label="הסתיימו" value={summary.done} muted={summary.done === 0} />
+      <Separator />
+      <KpiChip label="תקלות" value={summary.errorsCount} muted={summary.errorsCount === 0} />
+      {summary.totalPalletCount > 0 && (
+        <>
+          <Separator />
+          <KpiChip label="משטחים" value={summary.totalPalletCount} />
+        </>
+      )}
     </div>
   );
 }

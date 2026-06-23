@@ -369,9 +369,9 @@ describe('ProductControlTab', () => {
     expect(screen.getAllByText('קלסר טבעות 5 ס"מ כחול').length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText('100003').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('במחסן')).toBeTruthy();
-    expect(screen.getByText('כמות חסרה להיום')).toBeTruthy();
-    expect(screen.getByText('כרגע בבונדד')).toBeTruthy();
-    expect(screen.getAllByText('כיסוי בונדד').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('חסר היום')).toBeTruthy();
+    expect(screen.getAllByText('בונדד').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('כיסוי').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('נותר חסר').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('מועמדי בונדד')).toBeTruthy();
     expect(screen.getByText('השפעה על הפצה')).toBeTruthy();
@@ -385,7 +385,7 @@ describe('ProductControlTab', () => {
     });
     fireEvent.click(screen.getByText('100002'));
     expect(screen.getByText('פריט נבחר')).toBeTruthy();
-    fireEvent.click(screen.getByLabelText('סגור פרטי מוצר'));
+    fireEvent.click(screen.getByTestId('detail-panel-close'));
     expect(screen.queryByText('פריט נבחר')).toBeNull();
   });
 
@@ -423,7 +423,7 @@ describe('ProductControlTab', () => {
     expect(screen.getByText('פריט נבחר')).toBeTruthy();
   });
 
-  it('closes drawer with בטל וסגור button', async () => {
+  it('closes drawer with header close button', async () => {
     mockedBffRequest.mockResolvedValueOnce(mockResponse);
     renderTab();
     await waitFor(() => {
@@ -431,7 +431,7 @@ describe('ProductControlTab', () => {
     });
     fireEvent.click(screen.getByText('100002'));
     expect(screen.getByText('פריט נבחר')).toBeTruthy();
-    fireEvent.click(screen.getByText('בטל וסגור'));
+    fireEvent.click(screen.getByTestId('detail-panel-close'));
     expect(screen.queryByText('פריט נבחר')).toBeNull();
   });
 

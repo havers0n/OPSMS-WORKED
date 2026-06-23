@@ -207,8 +207,8 @@ export function ProductControlTab({ shiftId, planningDate: planningDateProp }: P
                 onClick={handleCloseDetail}
               />
               <div
-                className="relative z-10 w-full max-w-7xl mx-auto bg-white shadow-xl rounded-b-2xl border-b border-gray-200 overflow-hidden flex flex-col"
-                style={{ maxHeight: '80vh' }}
+                className="relative z-10 bg-white shadow-2xl rounded-2xl border border-gray-200 overflow-hidden flex flex-col"
+                style={{ width: 'min(1180px, calc(100vw - 48px))', maxHeight: 'calc(100vh - 48px)' }}
               >
                 <ProductControlDetailPanel
                   row={selectedRow}
