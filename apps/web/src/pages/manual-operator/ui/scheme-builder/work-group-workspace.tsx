@@ -26,7 +26,7 @@ export function WorkGroupWorkspace({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-2">
         <h2 className="text-sm font-bold text-gray-900">קווי עבודה</h2>
         <button
           type="button"
@@ -39,8 +39,8 @@ export function WorkGroupWorkspace({
       </div>
 
       {areaLines.length === 0 ? (
-        <div className="bg-white border border-dashed border-gray-300 rounded-lg p-6 text-center">
-          <p className="text-sm text-gray-500 mb-3">
+        <div className="bg-white border border-dashed border-gray-300 rounded-lg p-4 text-center">
+          <p className="text-sm text-gray-500 mb-2">
             יש ליצור קווי עבודה ולשייך אליהן קבוצות עבודה ושורות מוצר.
           </p>
           <button

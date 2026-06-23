@@ -1,10 +1,10 @@
 ﻿import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import { workHierarchyQueryOptions, orderItemsQueryOptions } from '@/entities/manual-shift/api/queries';
 import { useSchemeBuilderStore } from './scheme-store';
 import { adaptWorkHierarchyToSource, adaptOrderItemsToSource } from './source-data-adapter';
-import type { SourceOrderItem } from './scheme-types';
+import type { SourceOrderItem, OrderBadgeStatus } from './scheme-types';
 import { AreaOverview } from './area-overview';
 import { WorkGroupWorkspace } from './work-group-workspace';
 import { ItemsDrawerV2 } from './items-drawer-v2';
@@ -12,12 +12,15 @@ import { AssignModalV2 } from './assign-modal-v2';
 import { QuantityAllocationModal } from './quantity-allocation-modal';
 import { ProblemQueue } from './problem-queue';
 import { PublishSummary } from './publish-summary';
+import { filterOrdersBySearch, filterOrdersByStatus } from './order-list-utils';
+import { OrderCard } from './order-card';
 
 export function SchemeBuilder({ shiftId }: { shiftId: string }) {
   const { data: hierarchy, isLoading, error } = useQuery(workHierarchyQueryOptions(shiftId));
 
   const selectedAreaName = useSchemeBuilderStore((s) => s.selectedAreaName);
   const setSelectedArea = useSchemeBuilderStore((s) => s.setSelectedArea);
+  const itemAllocations = useSchemeBuilderStore((s) => s.itemAllocations);
   const allocateItemQty = useSchemeBuilderStore((s) => s.allocateItemQty);
   const allocateItemRows = useSchemeBuilderStore((s) => s.allocateItemRows);
   const targetWorkGroupId = useSchemeBuilderStore((s) => s.targetWorkGroupId);
@@ -37,6 +40,8 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
   const [isWholeOrderAssign, setIsWholeOrderAssign] = useState(false);
 
   const [showOrders, setShowOrders] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | OrderBadgeStatus>('all');
 
   const source = useMemo(() => {
     if (!hierarchy) return null;
@@ -70,6 +75,14 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
     if (!source || !selectedAreaName) return [];
     return source.orders.filter((o) => o.areaName === selectedAreaName);
   }, [source, selectedAreaName]);
+
+  const searchFilteredOrders = useMemo(() => {
+    return filterOrdersBySearch(areaOrders, searchQuery, orderItemMap);
+  }, [areaOrders, searchQuery, orderItemMap]);
+
+  const statusFilteredOrders = useMemo(() => {
+    return filterOrdersByStatus(searchFilteredOrders, statusFilter, orderItemMap, itemAllocations);
+  }, [searchFilteredOrders, statusFilter, orderItemMap, itemAllocations]);
 
   const targetWg = useMemo(() => {
     return targetWorkGroupId ? getWorkGroup(targetWorkGroupId) : undefined;
@@ -192,7 +205,7 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
     <div className="flex-1 flex flex-col bg-gray-50" dir="rtl">
 
       {/* Compact toolbar — area selector pills */}
-      <div className="shrink-0 border-b border-gray-200 bg-white px-4 py-2">
+      <div className="shrink-0 border-b border-gray-200 bg-white px-3 py-1.5">
         <AreaOverview
           areas={source.areas}
           selectedAreaName={selectedAreaName}
@@ -203,7 +216,7 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
       {/* Main board area */}
       <main className="flex-1 flex overflow-hidden">
         {/* Left rail (appears on the right in RTL) */}
-        <aside className="w-64 shrink-0 border-e border-gray-200 bg-gray-50 p-3 flex flex-col gap-3 overflow-y-auto">
+        <aside className="w-64 shrink-0 border-e border-gray-200 bg-gray-50 p-2 flex flex-col gap-2 overflow-y-auto">
           <PublishSummary
             orders={source.orders}
             orderItemMap={orderItemMap}
@@ -218,7 +231,7 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
         {/* Center board */}
         <div className="flex-1 flex flex-col min-h-0">
           {targetWg && (
-            <div className="shrink-0 flex items-center gap-2 bg-blue-50 border-b border-blue-200 px-4 py-2.5 text-sm">
+            <div className="shrink-0 flex items-center gap-2 bg-blue-50 border-b border-blue-200 px-3 py-1.5 text-sm">
               <span className="font-bold text-blue-800">קבוצת יעד: {targetWg.name}</span>
               <span className="text-blue-600">— בחר הזמנה ושורות לשיוך</span>
               <div className="flex-1" />
@@ -233,7 +246,7 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto p-3">
             {selectedAreaName ? (
               <WorkGroupWorkspace
                 selectedAreaName={selectedAreaName}
@@ -241,8 +254,8 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
                 onStartAssign={handleStartAssign}
               />
             ) : (
-              <div className="bg-white border border-dashed border-gray-300 rounded-lg p-8 text-center">
-                <h2 className="text-base font-bold text-gray-800 mb-1">בחר איזור הפצה</h2>
+              <div className="bg-white border border-dashed border-gray-300 rounded-lg p-6 text-center">
+                <h2 className="text-sm font-bold text-gray-800 mb-1">בחר איזור הפצה</h2>
                 <p className="text-xs text-gray-500">
                   בחר איזור הפצה מהרשימה כדי להתחיל בתכנון קבוצות עבודה
                 </p>
@@ -256,34 +269,68 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
               <button
                 type="button"
                 onClick={() => setShowOrders((v) => !v)}
-                className="flex items-center gap-2 w-full px-4 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-2 w-full px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
               >
-                {showOrders ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                {showOrders ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
                 הזמנות באיזור ({areaOrders.length})
               </button>
 
               {showOrders && (
-                <div className="h-44 flex overflow-x-auto gap-3 px-4 pb-3">
-                  {areaOrders.map((order) => (
-                    <div
-                      key={order.orderId}
-                      className="shrink-0 w-52 bg-white border border-gray-200 rounded-lg p-3 shadow-sm hover:border-blue-400 transition-colors cursor-pointer flex flex-col"
-                      onClick={() => handleOpenItemsDrawer(order.orderId)}
-                    >
-                      <div className="font-mono text-[11px] text-gray-500 font-bold">{order.orderNumber}</div>
-                      <div className="font-semibold text-gray-900 text-xs truncate mt-0.5" title={order.customerName ?? ''}>
-                        {order.customerName}
-                      </div>
-                      <div className="text-[11px] text-gray-500 mt-1">
-                        כמות {order.totalQuantity} &middot; {order.itemLinesCount} שורות
-                      </div>
-                      {order.hasAshlama && <span className="text-[11px] text-amber-700 font-bold">אשלמה </span>}
-                      {order.hasCheckUnits && <span className="text-[11px] text-amber-700 font-bold">יחידות בדיקה</span>}
-                      <div className="text-[11px] text-gray-400 mt-auto pt-1">
-                        {order.sourceDeliveryLine?.lineGroupName ?? '—'}
-                      </div>
+                <div>
+                  <div className="px-3 pb-1.5">
+                    <div className="relative">
+                      <Search size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="חיפוש הזמנה / לקוח / מק״ט"
+                        className="w-full pr-7 pl-2 py-1 text-xs border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none bg-gray-50 placeholder-gray-400"
+                        dir="rtl"
+                      />
                     </div>
-                  ))}
+                  </div>
+
+                  <div className="px-3 pb-1.5 flex flex-wrap gap-1">
+                    {(['all', 'not_loaded', 'unassigned', 'partial', 'split', 'assigned'] as const).map((f) => {
+                      const labels: Record<string, string> = {
+                        all: 'הכל', not_loaded: 'לא נטען', unassigned: 'לא שויך',
+                        partial: 'חלקי', split: 'מפוצל', assigned: 'שויך',
+                      };
+                      return (
+                        <button
+                          key={f}
+                          type="button"
+                          onClick={() => setStatusFilter(f)}
+                          className={`text-[11px] rounded-full px-2 py-0.5 font-medium transition-colors ${
+                            statusFilter === f
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {labels[f]}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="h-40 flex overflow-x-auto gap-2 px-3 pb-2">
+                    {statusFilteredOrders.length === 0 ? (
+                      <div className="flex items-center justify-center w-full text-xs text-gray-400">
+                        לא נמצאו הזמנות
+                      </div>
+                    ) : (
+                      statusFilteredOrders.map((order) => (
+                        <OrderCard
+                          key={order.orderId}
+                          order={order}
+                          orderItemMap={orderItemMap}
+                          itemAllocations={itemAllocations}
+                          onClick={() => handleOpenItemsDrawer(order.orderId)}
+                        />
+                      ))
+                    )}
+                  </div>
                 </div>
               )}
             </div>

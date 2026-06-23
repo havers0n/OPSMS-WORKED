@@ -55,7 +55,7 @@ export function PlanningLineSection({
 
   return (
     <div className="border border-gray-200 rounded-lg">
-      <div className="bg-gray-100 px-3 py-2 border-b border-gray-200 flex justify-between items-center">
+      <div className="bg-gray-100 px-2 py-1.5 border-b border-gray-200 flex justify-between items-center">
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-2 h-2 rounded-full bg-indigo-500 block shrink-0" />
           {isRenaming ? (
@@ -99,9 +99,9 @@ export function PlanningLineSection({
         </div>
       </div>
 
-      <div className="p-3">
+      <div className="p-2">
         {lineGroups.length === 0 ? (
-          <div className="text-center py-4">
+          <div className="text-center py-2">
             <p className="text-xs text-gray-500 mb-2">אין קבוצות עבודה בקו זה</p>
             <button
               type="button"
@@ -113,7 +113,7 @@ export function PlanningLineSection({
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5">
             {lineGroups.map((wg) => (
               <WorkGroupCard
                 key={wg.id}

@@ -77,3 +77,5 @@ export type AllocateResult =
   | { ok: false; reason: 'invalid_qty' | 'exceeds_remaining' | 'fully_allocated' | 'missing_item_qty' };
 
 export type OrderSplitStatus = 'unassigned' | 'assigned' | 'partial' | 'split';
+
+export type OrderBadgeStatus = 'not_loaded' | 'unassigned' | 'assigned' | 'partial' | 'split';

@@ -28,7 +28,7 @@ export function WorkGroupCard({
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-      <div className="bg-gray-100 px-3 py-2 border-b border-gray-200 flex justify-between items-center">
+      <div className="bg-gray-100 px-2 py-1.5 border-b border-gray-200 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-blue-500 block shrink-0" />
           <h3 className="text-sm font-bold text-gray-900">{workGroup.name}</h3>
@@ -52,7 +52,7 @@ export function WorkGroupCard({
         </button>
       </div>
 
-      <div className="px-3 py-2 space-y-1">
+      <div className="px-2 py-1.5 space-y-0.5">
         <div className="text-xs text-gray-500">
           שורות <span className="font-semibold text-gray-700">{itemCount}</span>
           &ensp;·&ensp;כמות <span className="font-semibold text-gray-700">{totalQty}</span>
