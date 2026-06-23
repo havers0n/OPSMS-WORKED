@@ -37,10 +37,45 @@ export function PrintPickerSheetPage() {
       return;
     }
 
-    if (scope === 'area' || scope === 'line') {
-      setError('הדפסה בטווח זה אינה זמינה עדיין עבור משמרת אמיתית. נא לבחור טווח קבוצת עבודה.');
+    if (scope === 'area') {
+      setError('הדפסה בטווח אזור אינה זמינה עדיין עבור משמרת אמיתית. נא לבחור טווח קו או קבוצת עבודה.');
       setLoading(false);
       setRealData(null);
+      return;
+    }
+
+    if (scope === 'line') {
+      if (!distributionArea || !planningLineName) {
+        setError('חסרים פרמטרים להדפסה: distributionArea, planningLineName.');
+        setLoading(false);
+        setRealData(null);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+      setRealData(null);
+
+      const params = new URLSearchParams({
+        scope: 'line',
+        distributionArea,
+        planningLineName,
+      });
+
+      bffRequest<PickerSheetPrintData>(
+        `/api/manual-shifts/${shiftId}/print/picker-sheet?${params.toString()}`
+      )
+        .then((data) => {
+          setRealData(data);
+          setLoading(false);
+        })
+        .catch((err: unknown) => {
+          const message = err instanceof BffRequestError
+            ? `שגיאה: ${err.message} (קוד ${err.status})`
+            : 'שגיאה לא צפויה בטעינת נתוני הדפסה';
+          setError(message);
+          setLoading(false);
+        });
       return;
     }
 

@@ -1272,15 +1272,34 @@ export function registerManualShiftsRoutes(
       const planningLineName = query.planningLineName;
       const workGroupName = query.workGroupName;
 
+      if (scope === 'line') {
+        if (!distributionArea || !planningLineName) {
+          throw new ApiError(
+            400,
+            'MISSING_PARAMS',
+            'Query params distributionArea and planningLineName are required for scope=line.'
+          );
+        }
+
+        const data = await getManualShiftsService(auth).getPickerSheetLine({
+          tenantId,
+          shiftId,
+          distributionArea,
+          planningLineName,
+        });
+
+        return parseOrThrow(pickerSheetPrintDataSchema, data);
+      }
+
       if (scope !== 'workGroup') {
-        throw new ApiError(400, 'INVALID_SCOPE', 'Only scope=workGroup is supported for this endpoint.');
+        throw new ApiError(400, 'INVALID_SCOPE', 'Only scope=line and scope=workGroup are supported for this endpoint.');
       }
 
       if (!distributionArea || !planningLineName || !workGroupName) {
         throw new ApiError(
           400,
           'MISSING_PARAMS',
-          'Query params distributionArea, planningLineName, and workGroupName are required.'
+          'Query params distributionArea, planningLineName, and workGroupName are required for scope=workGroup.'
         );
       }
 

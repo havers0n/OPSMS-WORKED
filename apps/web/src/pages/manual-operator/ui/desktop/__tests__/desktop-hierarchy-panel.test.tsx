@@ -1327,8 +1327,8 @@ describe('DesktopHierarchyPanel', () => {
     });
   });
 
-  describe('print action — work group picker sheet', () => {
-    it('shows print link on bucket cards when all required params exist', () => {
+  describe('print action — line-level and detail', () => {
+    it('shows line-level print action when all required params exist', () => {
       renderPanel({
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
@@ -1336,11 +1336,10 @@ describe('DesktopHierarchyPanel', () => {
         workBucketSummaries: mockWorkBucketSummaries,
         shiftId: 'shift-1'
       });
-      const printLinks = screen.getAllByTestId('print-picker-sheet-link');
-      expect(printLinks.length).toBeGreaterThan(0);
+      expect(screen.getByTestId('print-picker-sheet-line')).toBeTruthy();
     });
 
-    it('hides print link on bucket cards when shiftId is null', () => {
+    it('hides line-level print action when shiftId is null', () => {
       renderPanel({
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
@@ -1348,10 +1347,10 @@ describe('DesktopHierarchyPanel', () => {
         workBucketSummaries: mockWorkBucketSummaries,
         shiftId: null
       });
-      expect(screen.queryByTestId('print-picker-sheet-link')).toBeNull();
+      expect(screen.queryByTestId('print-picker-sheet-line')).toBeNull();
     });
 
-    it('hides print link when distributionArea is missing on the line', () => {
+    it('hides line-level print action when distributionArea is missing on the line', () => {
       renderPanel({
         selectedAreaKey: 'דרום',
         selectedLineId: 'line-2',
@@ -1360,7 +1359,24 @@ describe('DesktopHierarchyPanel', () => {
         workBucketSummaries: mockWorkBucketSummaries,
         shiftId: 'shift-1'
       });
-      expect(screen.queryByTestId('print-picker-sheet-link')).toBeNull();
+      expect(screen.queryByTestId('print-picker-sheet-line')).toBeNull();
+    });
+
+    it('line-level print URL contains scope=line and correct params', () => {
+      renderPanel({
+        selectedAreaKey: 'צפון',
+        selectedLineId: 'line-1',
+        lineHierarchySummaries: [mockLineHierarchySummaries[0]],
+        workBucketSummaries: mockWorkBucketSummaries,
+        shiftId: 'shift-1'
+      });
+      const link = screen.getByTestId('print-picker-sheet-line');
+      const href = link.getAttribute('href') ?? '';
+      expect(href).toContain('/operator/manual/print/picker-sheet');
+      const params = new URLSearchParams(href.split('?')[1]);
+      expect(params.get('shiftId')).toBe('shift-1');
+      expect(params.get('scope')).toBe('line');
+      expect(params.get('planningLineName')).toBe('Line South');
     });
 
     it('detail view shows print action link when bucket is selected with all params', () => {
@@ -1387,7 +1403,7 @@ describe('DesktopHierarchyPanel', () => {
       expect(screen.queryByTestId('print-picker-sheet-detail')).toBeNull();
     });
 
-    it('print link contains correct encoded route and required params', () => {
+    it('line-level print action opens in new tab', () => {
       renderPanel({
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
@@ -1395,26 +1411,9 @@ describe('DesktopHierarchyPanel', () => {
         workBucketSummaries: mockWorkBucketSummaries,
         shiftId: 'shift-1'
       });
-      const link = screen.getAllByTestId('print-picker-sheet-link')[0];
-      const href = link.getAttribute('href') ?? '';
-      expect(href).toContain('/operator/manual/print/picker-sheet');
-      const params = new URLSearchParams(href.split('?')[1]);
-      expect(params.get('shiftId')).toBe('shift-1');
-      expect(params.get('scope')).toBe('workGroup');
-    });
-
-    it('does not break existing bucket card click behavior when print is present', () => {
-      const onSelectBucket = vi.fn();
-      renderPanel({
-        selectedAreaKey: 'צפון',
-        selectedLineId: 'line-1',
-        lineHierarchySummaries: [mockLineHierarchySummaries[0]],
-        workBucketSummaries: mockWorkBucketSummaries,
-        onSelectBucket,
-        shiftId: 'shift-1'
-      });
-      fireEvent.click(screen.getByText('Point A'));
-      expect(onSelectBucket).toHaveBeenCalledWith('Point A');
+      const link = screen.getByTestId('print-picker-sheet-line');
+      expect(link.getAttribute('target')).toBe('_blank');
+      expect(link.getAttribute('rel')).toBe('noopener noreferrer');
     });
   });
 });

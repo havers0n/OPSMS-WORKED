@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import type {
   RouteGroupWorkBucketSummary,
   WorkBucketSummary
@@ -11,7 +10,6 @@ interface DesktopWorkBucketCardProps {
   lineName?: string;
   routeGroupName?: string;
   onClick?: (workBucketIdentifier: string) => void;
-  printUrl?: string;
 }
 
 function getWorkBucketIdentifier(bucket: BucketForCard): string {
@@ -45,7 +43,7 @@ function bucketDisplayName(workBucketName: string, lineName?: string, routeGroup
   return workBucketName;
 }
 
-export function DesktopWorkBucketCard({ bucket, lineName, routeGroupName, onClick, printUrl }: DesktopWorkBucketCardProps) {
+export function DesktopWorkBucketCard({ bucket, lineName, routeGroupName, onClick }: DesktopWorkBucketCardProps) {
   const rawName = getWorkBucketIdentifier(bucket);
   const displayName = bucketDisplayName(getWorkBucketDisplayName(bucket), lineName, routeGroupName);
   const sb = bucket.statusBreakdown;
@@ -56,7 +54,7 @@ export function DesktopWorkBucketCard({ bucket, lineName, routeGroupName, onClic
     <div className="bg-white border border-gray-200 rounded-lg w-full">
       <button
         type="button"
-        className="w-full text-right p-4 hover:bg-gray-50 hover:border-gray-300 transition-colors rounded-t-lg"
+        className="w-full text-right p-4 hover:bg-gray-50 hover:border-gray-300 transition-colors rounded-lg"
         onClick={() => onClick?.(rawName)}
         data-testid={`work-bucket-card-${rawName}`}
         aria-label={`קבוצת עבודה ${displayName}`}
@@ -75,19 +73,6 @@ export function DesktopWorkBucketCard({ bucket, lineName, routeGroupName, onClic
           {sb.done > 0 && <span className="text-green-700">{sb.done} הושלם</span>}
         </div>
       </button>
-      {printUrl && (
-        <div className="px-4 pb-3 pt-2 border-t border-gray-100" data-testid="print-picker-sheet-link-container">
-          <Link
-            to={printUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-600 hover:text-blue-800"
-            data-testid="print-picker-sheet-link"
-          >
-            הדפס דף ליקוט
-          </Link>
-        </div>
-      )}
     </div>
   );
 }

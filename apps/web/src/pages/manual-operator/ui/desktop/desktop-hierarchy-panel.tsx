@@ -65,6 +65,21 @@ function workGroupPickerSheetUrl(
   return `${routes.operatorManualPrintPickerSheet}?${params.toString()}`;
 }
 
+function pickerSheetLineUrl(
+  shiftId: string | null,
+  distributionArea: string | null | undefined,
+  planningLineName: string | undefined,
+): string | undefined {
+  if (!shiftId || !distributionArea || !planningLineName) return undefined;
+  const params = new URLSearchParams({
+    shiftId,
+    distributionArea,
+    scope: 'line',
+    planningLineName,
+  });
+  return `${routes.operatorManualPrintPickerSheet}?${params.toString()}`;
+}
+
 function AreaBreadcrumb({ areaName, onClearArea }: { areaName: string; onClearArea: () => void }) {
   return (
     <div className="flex items-center gap-2 mb-3">
@@ -219,7 +234,20 @@ export function DesktopHierarchyPanel({
           </div>
         ) : (
           <>
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">קבוצות עבודה</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">קבוצות עבודה</h2>
+              {pickerSheetLineUrl(shiftId, selectedLine?.distributionArea, selectedLine?.lineName) && (
+                <Link
+                  to={pickerSheetLineUrl(shiftId, selectedLine?.distributionArea, selectedLine?.lineName)!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                  data-testid="print-picker-sheet-line"
+                >
+                  הדפס דף ליקוט לכל קבוצת החלוקה
+                </Link>
+              )}
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {routeGroupWorkBucketSummaries.map((wb) => (
                 <DesktopWorkBucketCard
@@ -227,12 +255,6 @@ export function DesktopHierarchyPanel({
                   bucket={wb}
                   routeGroupName={selectedRouteGroup?.routeGroupName}
                   onClick={onSelectBucket}
-                  printUrl={workGroupPickerSheetUrl(
-                    shiftId,
-                    selectedLine?.distributionArea,
-                    selectedLine?.lineName,
-                    wb.workBucketName
-                  )}
                 />
               ))}
             </div>
@@ -316,9 +338,22 @@ export function DesktopHierarchyPanel({
             {isAutoSkippedSingleLine && !!selectedLine && (
               <>
                 <p className="text-xs text-gray-500 mb-1">{selectedLine.lineKind === 'delivery_channel' ? 'ערוץ משלוח: ' : 'קו הפצה: '}{selectedLine.lineName}</p>
-                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">קבוצות עבודה</h2>
               </>
             )}
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">קבוצות עבודה</h2>
+              {pickerSheetLineUrl(shiftId, selectedLine?.distributionArea, selectedLine?.lineName) && (
+                <Link
+                  to={pickerSheetLineUrl(shiftId, selectedLine?.distributionArea, selectedLine?.lineName)!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                  data-testid="print-picker-sheet-line"
+                >
+                  הדפס דף ליקוט לכל קבוצת החלוקה
+                </Link>
+              )}
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {workBucketSummaries.map((bucket) => (
                 <DesktopWorkBucketCard
@@ -326,12 +361,6 @@ export function DesktopHierarchyPanel({
                   bucket={bucket}
                   lineName={selectedLine?.lineName}
                   onClick={onSelectBucket}
-                  printUrl={workGroupPickerSheetUrl(
-                    shiftId,
-                    selectedLine?.distributionArea,
-                    selectedLine?.lineName,
-                    bucket.workBucketName
-                  )}
                 />
               ))}
             </div>
