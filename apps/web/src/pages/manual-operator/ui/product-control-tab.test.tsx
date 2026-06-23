@@ -669,4 +669,50 @@ describe('ProductControlTab', () => {
     const explanations = screen.getAllByText('המק"ט לא נמצא ב-Snapshot מלאי המחסן');
     expect(explanations.length).toBeGreaterThanOrEqual(1);
   });
+
+  // === Bonded request create card in drawer ===
+
+  it('shows bonded request create card for covered_by_bonded row', async () => {
+    mockedBffRequest.mockResolvedValueOnce(mockResponse);
+    renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('100002')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText('100002'));
+    await waitFor(() => {
+      expect(screen.getByText('בקשת כיסוי בונדד')).toBeTruthy();
+    });
+  });
+
+  it('does not show bonded request create card for unresolved row', async () => {
+    mockedBffRequest.mockResolvedValueOnce(mockResponse);
+    renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('100004')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText('100004'));
+    expect(screen.queryByText('בקשת כיסוי בונדד')).toBeNull();
+  });
+
+  it('shows bonded request create card for partial_bonded row', async () => {
+    mockedBffRequest.mockResolvedValueOnce(mockResponse);
+    renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('100003')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText('100003'));
+    await waitFor(() => {
+      expect(screen.getByText('בקשת כיסוי בונדד')).toBeTruthy();
+    });
+  });
+
+  it('does not show bonded request create card for data_issue row even with bonded coverage', async () => {
+    mockedBffRequest.mockResolvedValueOnce(mockResponse);
+    renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('100005')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText('100005'));
+    expect(screen.queryByText('בקשת כיסוי בונדד')).toBeNull();
+  });
 });

@@ -9,6 +9,7 @@ import type { ProductControlRow } from '@/entities/product-control/product-contr
 
 type ProductControlTabProps = {
   shiftId: string;
+  planningDate?: string;
 };
 
 function formatDateTime(iso: string): string {
@@ -25,9 +26,13 @@ function formatDateTime(iso: string): string {
   }
 }
 
-export function ProductControlTab({ shiftId }: ProductControlTabProps) {
+export function ProductControlTab({ shiftId, planningDate: planningDateProp }: ProductControlTabProps) {
   const { data, isLoading, error } = useQuery(productControlQueryOptions(shiftId));
   const [selectedRow, setSelectedRow] = useState<ProductControlRow | null>(null);
+
+  const planningDate = planningDateProp ?? data?.bondedSnapshot?.planningDate ?? '';
+  const bondedSnapshotId = data?.bondedSnapshot?.id;
+  const warehouseStockSnapshotId = data?.warehouseStockSnapshot?.id;
 
   const handleSelectRow = (row: ProductControlRow) => {
     setSelectedRow((prev) => (prev?.sku === row.sku ? null : row));
@@ -173,7 +178,14 @@ export function ProductControlTab({ shiftId }: ProductControlTabProps) {
             className="relative z-10 w-full max-w-7xl mx-auto bg-white shadow-xl rounded-b-2xl border-b border-gray-200 overflow-hidden flex flex-col"
             style={{ maxHeight: '80vh' }}
           >
-            <ProductControlDetailPanel row={selectedRow} onClose={handleCloseDetail} />
+            <ProductControlDetailPanel
+              row={selectedRow}
+              onClose={handleCloseDetail}
+              shiftId={shiftId}
+              planningDate={planningDate}
+              bondedSnapshotId={bondedSnapshotId}
+              warehouseStockSnapshotId={warehouseStockSnapshotId}
+            />
           </div>
         </div>
       )}

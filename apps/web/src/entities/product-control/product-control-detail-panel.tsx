@@ -1,13 +1,25 @@
 import { X, Truck, PackageOpen, AlertTriangle, Info } from 'lucide-react';
 import { CoverageStatusBadge } from './coverage-status-badge';
+import { BondedRequestCreateCard } from '@/entities/bonded-requests/components/bonded-request-create-card';
 import type { ProductControlRow } from './product-control-types';
 
 type DetailPanelProps = {
   row: ProductControlRow;
   onClose: () => void;
+  shiftId: string;
+  planningDate: string;
+  bondedSnapshotId?: string | null;
+  warehouseStockSnapshotId?: string | null;
 };
 
-export function ProductControlDetailPanel({ row, onClose }: DetailPanelProps) {
+export function ProductControlDetailPanel({
+  row,
+  onClose,
+  shiftId,
+  planningDate,
+  bondedSnapshotId,
+  warehouseStockSnapshotId,
+}: DetailPanelProps) {
   const candidates = row.bondedCandidates ?? [];
   const workLines = row.workLines ?? [];
   const isDataIssue = row.status === 'data_issue';
@@ -71,8 +83,22 @@ export function ProductControlDetailPanel({ row, onClose }: DetailPanelProps) {
         </div>
       </div>
 
-      {/* 3-column body */}
+      {/* Scrollable body */}
       <div className="flex-1 overflow-y-auto p-5">
+        {/* Bonded request create card — shown when row has bonded coverage */}
+        {row.bondedCoverQty > 0 &&
+          (row.status === 'covered_by_bonded' || row.status === 'partial_bonded') && (
+            <div className="mb-6 max-w-2xl">
+              <BondedRequestCreateCard
+                shiftId={shiftId}
+                row={row}
+                planningDate={planningDate}
+                bondedSnapshotId={bondedSnapshotId}
+                warehouseStockSnapshotId={warehouseStockSnapshotId}
+              />
+            </div>
+          )}
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 max-w-7xl mx-auto">
           {/* Right column (RTL): Impact */}
           <div className="lg:col-span-3 space-y-4">

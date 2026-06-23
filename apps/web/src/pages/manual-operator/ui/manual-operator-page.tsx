@@ -90,7 +90,7 @@ function ManualOperatorSectionContent({
   }
 
   if (section === 'products') {
-    return shift ? <ProductControlTab shiftId={shift.id} /> : null;
+    return shift ? <ProductControlTab shiftId={shift.id} planningDate={selectedDate} /> : null;
   }
 
   if (section === 'lines') {
