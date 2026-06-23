@@ -44,6 +44,7 @@ export * from './warehouse/floor-aisle-topology';
 export * from './warehouse/floor-workspace';
 export * from './warehouse/warehouse-labels';
 export * from './warehouse/setup-state';
+export * from './supabase/supabase-auth-storage-key';
 export * from './contracts/readiness';
 export * from './operations/order';
 export * from './operations/manual-shift-control';

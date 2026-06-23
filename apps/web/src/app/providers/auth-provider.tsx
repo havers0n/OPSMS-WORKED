@@ -87,7 +87,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   if (startupError) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--surface-secondary)] px-6">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--surface-secondary)] px-6" data-testid="auth-startup-error">
         <div className="w-full max-w-lg rounded-[22px] border border-red-200 bg-white p-8 text-center shadow-[var(--shadow-soft)]">
           <div className="text-sm font-semibold uppercase tracking-[0.24em] text-red-600">{t('auth.startup.eyebrow')}</div>
           <div className="mt-3 text-2xl font-semibold text-[var(--text-primary)]">{t('auth.startup.errorTitle')}</div>
@@ -99,7 +99,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   if (!state.isReady) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--surface-secondary)] px-6">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--surface-secondary)] px-6" data-testid="auth-startup-loading">
         <div className="w-full max-w-lg rounded-[22px] border border-[var(--border-muted)] bg-white p-8 text-center shadow-[var(--shadow-soft)]">
           <div className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">{t('auth.startup.eyebrow')}</div>
           <div className="mt-3 text-2xl font-semibold text-[var(--text-primary)]">{t('auth.startup.loadingTitle')}</div>

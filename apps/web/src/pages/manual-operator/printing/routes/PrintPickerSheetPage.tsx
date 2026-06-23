@@ -43,6 +43,7 @@ export function PrintPickerSheetPage() {
       ? buildPickerSheetLinePdfUrl(params)
       : buildPickerSheetWorkGroupPdfUrl(params);
   }, [shiftId, distributionArea, planningLineName, workGroupName, scopeParam]);
+
   const scope: PickerSheetScope = scopeParam === 'line' ? 'line' : scopeParam === 'workGroup' ? 'workGroup' : 'area';
 
   useEffect(() => {
@@ -57,7 +58,7 @@ export function PrintPickerSheetPage() {
     }
 
     if (scope === 'area') {
-      setError('הדפסה בטווח אזור אינה זמינה עדיין עבור משמרת אמיתית. נא לבחור טווח קו או קבוצת עבודה.');
+      setError('Unable to load printable picker-sheet data.');
       setLoading(false);
       setRealData(null);
       return;
@@ -65,7 +66,7 @@ export function PrintPickerSheetPage() {
 
     if (scope === 'line') {
       if (!distributionArea || !planningLineName) {
-        setError('חסרים פרמטרים להדפסה: distributionArea, planningLineName.');
+        setError('Missing print parameters: distributionArea, planningLineName.');
         setLoading(false);
         setRealData(null);
         return;
@@ -78,20 +79,18 @@ export function PrintPickerSheetPage() {
       const params = new URLSearchParams({
         scope: 'line',
         distributionArea,
-        planningLineName,
+        planningLineName
       });
 
-      bffRequest<PickerSheetPrintData>(
-        `/api/manual-shifts/${shiftId}/print/picker-sheet?${params.toString()}`
-      )
+      bffRequest<PickerSheetPrintData>(`/api/manual-shifts/${shiftId}/print/picker-sheet?${params.toString()}`)
         .then((data) => {
           setRealData(data);
           setLoading(false);
         })
         .catch((err: unknown) => {
           const message = err instanceof BffRequestError
-            ? `שגיאה: ${err.message} (קוד ${err.status})`
-            : 'שגיאה לא צפויה בטעינת נתוני הדפסה';
+            ? `Request failed: ${err.message} (status ${err.status})`
+            : 'Unable to load printable picker-sheet data.';
           setError(message);
           setLoading(false);
         });
@@ -99,7 +98,7 @@ export function PrintPickerSheetPage() {
     }
 
     if (!distributionArea || !planningLineName || !workGroupName) {
-      setError('חסרים פרמטרים להדפסה: distributionArea, planningLineName, workGroupName.');
+      setError('Missing print parameters: distributionArea, planningLineName, workGroupName.');
       setLoading(false);
       setRealData(null);
       return;
@@ -113,20 +112,18 @@ export function PrintPickerSheetPage() {
       scope: 'workGroup',
       distributionArea,
       planningLineName,
-      workGroupName,
+      workGroupName
     });
 
-    bffRequest<PickerSheetPrintData>(
-      `/api/manual-shifts/${shiftId}/print/picker-sheet?${params.toString()}`
-    )
+    bffRequest<PickerSheetPrintData>(`/api/manual-shifts/${shiftId}/print/picker-sheet?${params.toString()}`)
       .then((data) => {
         setRealData(data);
         setLoading(false);
       })
       .catch((err: unknown) => {
         const message = err instanceof BffRequestError
-          ? `שגיאה: ${err.message} (קוד ${err.status})`
-          : 'שגיאה לא צפויה בטעינת נתוני הדפסה';
+          ? `Request failed: ${err.message} (status ${err.status})`
+          : 'Unable to load printable picker-sheet data.';
         setError(message);
         setLoading(false);
       });
@@ -134,14 +131,14 @@ export function PrintPickerSheetPage() {
 
   if (!shiftId || !distributionArea) {
     return (
-      <div dir="rtl" style={{ padding: 40, textAlign: 'center' }}>
-        <h1 style={{ fontSize: 22, color: '#10243e' }}>לא נבחרה משמרת להדפסה</h1>
-        <p style={{ color: '#5f7084', marginTop: 8 }}>נדרשים פרמטרי shiftId, distributionArea ו-scope.</p>
+      <div dir="rtl" style={{ padding: 40, textAlign: 'center' }} data-testid="print-picker-sheet-error">
+        <h1 style={{ fontSize: 22, color: '#10243e' }}>Missing print parameters</h1>
+        <p style={{ color: '#5f7084', marginTop: 8 }}>Provide shiftId, distributionArea, and scope.</p>
         <Link
           to={routes.operatorManualPrinting}
           style={{ display: 'inline-block', marginTop: 16, padding: '8px 20px', background: '#0f6a8e', color: '#fff', borderRadius: 6, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}
         >
-          חזור להדפסות
+          Back to printing
         </Link>
       </div>
     );
@@ -152,29 +149,31 @@ export function PrintPickerSheetPage() {
       {!pdfRender && <PrintToolbar pdfUrl={pdfUrl} />}
       <PrintPage>
         {loading && (
-          <div dir="rtl" style={{ padding: 40, textAlign: 'center' }}>
-            <p style={{ color: '#5f7084', fontSize: 16 }}>טוען נתוני הדפסה...</p>
+          <div dir="rtl" style={{ padding: 40, textAlign: 'center' }} data-testid="print-picker-sheet-loading">
+            <p style={{ color: '#5f7084', fontSize: 16 }}>Loading printable picker-sheet data...</p>
           </div>
         )}
         {error && !loading && (
-          <div dir="rtl" style={{ padding: 40, textAlign: 'center' }}>
-            <h1 style={{ fontSize: 22, color: '#b91c1c' }}>שגיאה</h1>
+          <div dir="rtl" style={{ padding: 40, textAlign: 'center' }} data-testid="print-picker-sheet-error">
+            <h1 style={{ fontSize: 22, color: '#b91c1c' }}>Error</h1>
             <p style={{ color: '#5f7084', marginTop: 8 }}>{error}</p>
             <Link
               to={routes.operatorManualPrinting}
               style={{ display: 'inline-block', marginTop: 16, padding: '8px 20px', background: '#0f6a8e', color: '#fff', borderRadius: 6, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}
             >
-              חזור להדפסות
+              Back to printing
             </Link>
           </div>
         )}
         {!loading && !error && realData && realData.planningLines.length === 0 && (
-          <div dir="rtl" style={{ padding: 40, textAlign: 'center' }}>
-            <p style={{ color: '#5f7084', fontSize: 16 }}>לא נמצאו פריטים להדפסה.</p>
+          <div dir="rtl" style={{ padding: 40, textAlign: 'center' }} data-testid="print-picker-sheet-empty">
+            <p style={{ color: '#5f7084', fontSize: 16 }}>No planning lines were found for this picker-sheet.</p>
           </div>
         )}
         {!loading && !error && realData && realData.planningLines.length > 0 && (
-          <PickerSheetPrintDocument data={realData} />
+          <div data-testid="print-picker-sheet-document">
+            <PickerSheetPrintDocument data={realData} />
+          </div>
         )}
       </PrintPage>
     </>

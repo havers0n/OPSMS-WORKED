@@ -27,7 +27,7 @@ export function useCreateBondedRequest() {
       ),
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({
-        queryKey: bondedRequestsKeys.list(variables.shiftId),
+        queryKey: [...bondedRequestsKeys.all, 'list', variables.shiftId],
       });
     },
   });
@@ -100,7 +100,7 @@ export function useCloseBondedRequest() {
       });
       if (variables.shiftId) {
         void queryClient.invalidateQueries({
-          queryKey: bondedRequestsKeys.list(variables.shiftId),
+          queryKey: [...bondedRequestsKeys.all, 'list', variables.shiftId],
         });
       }
     },
@@ -128,7 +128,7 @@ export function useCancelBondedRequest() {
       });
       if (variables.shiftId) {
         void queryClient.invalidateQueries({
-          queryKey: bondedRequestsKeys.list(variables.shiftId),
+          queryKey: [...bondedRequestsKeys.all, 'list', variables.shiftId],
         });
       }
     },
