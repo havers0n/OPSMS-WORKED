@@ -38,6 +38,8 @@ jobs:
           context: .
           file: apps/web/Dockerfile
           push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: |
             ${{ env.IMAGE_PREFIX }}/web:latest
           build-args: |
@@ -52,6 +54,8 @@ jobs:
           context: .
           file: apps/bff/Dockerfile
           push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: |
             ${{ env.IMAGE_PREFIX }}/bff:latest
 
