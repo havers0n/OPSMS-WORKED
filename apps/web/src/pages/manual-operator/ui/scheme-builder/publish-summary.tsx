@@ -1,4 +1,4 @@
-import { AlertCircle, Clock } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import type { SourceOrder, SourceOrderItem } from './scheme-types';
 import { useSchemeBuilderStore } from './scheme-store';
 
@@ -52,11 +52,6 @@ export function PublishSummary({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 text-sm rounded p-2.5 bg-amber-50 text-amber-800">
-        <AlertCircle size={18} />
-        טיוטה מקומית — השיוך מבוסס על שורות שנטענו
-      </div>
-
       <button
         type="button"
         disabled
@@ -67,9 +62,6 @@ export function PublishSummary({
         פרסום יגיע בשלב הבא
       </button>
 
-      <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 font-medium">
-        טיוטה מקומית בלבד — שמירה תגיע בשלב הבא
-      </div>
     </div>
   );
 }

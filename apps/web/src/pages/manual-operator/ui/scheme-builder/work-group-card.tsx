@@ -21,12 +21,17 @@ export function WorkGroupCard({
   const orderIds = getWorkGroupOrderIds(workGroup.id, orderItemMap);
   const uniqueOrdersCount = orderIds.size;
 
+  function formatOrderId(oid: string): string {
+    if (oid.length === 36 && oid.includes('-')) return oid.slice(0, 13) + '…';
+    return oid;
+  }
+
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-      <div className="bg-gray-100 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-gray-100 px-3 py-2 border-b border-gray-200 flex justify-between items-center">
         <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-full bg-blue-500 block shrink-0" />
-          <h3 className="text-base font-bold text-gray-900">{workGroup.name}</h3>
+          <span className="w-2 h-2 rounded-full bg-blue-500 block shrink-0" />
+          <h3 className="text-sm font-bold text-gray-900">{workGroup.name}</h3>
         </div>
         <button
           type="button"
@@ -43,45 +48,39 @@ export function WorkGroupCard({
           className="text-gray-400 hover:text-red-600 transition-colors p-1"
           title="מחק קבוצה"
         >
-          <Trash2 size={16} />
+          <Trash2 size={14} />
         </button>
       </div>
 
-      <div className="px-4 py-3 space-y-1.5">
-        <div className="text-sm text-gray-600">
-          <span className="font-semibold">{itemCount}</span> שורות משויכות
-        </div>
-        <div className="text-sm text-gray-600">
-          כמות כוללת: <span className="font-semibold">{totalQty}</span>
-        </div>
-        <div className="text-sm text-gray-600">
-          <span className="font-semibold">{uniqueOrdersCount}</span> הזמנות
+      <div className="px-3 py-2 space-y-1">
+        <div className="text-xs text-gray-500">
+          שורות <span className="font-semibold text-gray-700">{itemCount}</span>
+          &ensp;·&ensp;כמות <span className="font-semibold text-gray-700">{totalQty}</span>
+          &ensp;·&ensp;הזמנות <span className="font-semibold text-gray-700">{uniqueOrdersCount}</span>
         </div>
 
         {itemCount > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {Array.from(orderIds).slice(0, 5).map((oid) => (
-              <span key={oid} className="text-xs bg-blue-50 text-blue-700 rounded px-1.5 py-0.5 truncate max-w-[130px]">
-                {oid.slice(0, 8)}...
+          <div className="flex flex-wrap gap-1 pt-1">
+            {Array.from(orderIds).slice(0, 4).map((oid) => (
+              <span key={oid} className="text-[10px] bg-blue-50 text-blue-700 rounded px-1.5 py-0.5 truncate max-w-[110px]">
+                {formatOrderId(oid)}
               </span>
             ))}
-            {orderIds.size > 5 && (
-              <span className="text-xs text-gray-500">+{orderIds.size - 5}</span>
+            {orderIds.size > 4 && (
+              <span className="text-[10px] text-gray-500">+{orderIds.size - 4}</span>
             )}
           </div>
         )}
 
         {itemCount === 0 && (
-          <div className="mt-2">
-            <button
-              type="button"
-              onClick={() => onStartAssign(workGroup.id)}
-              className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors"
-            >
-              <Plus size={14} />
-              שייך שורות לקבוצה
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => onStartAssign(workGroup.id)}
+            className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors pt-1"
+          >
+            <Plus size={12} />
+            שייך שורות לקבוצה
+          </button>
         )}
       </div>
     </div>

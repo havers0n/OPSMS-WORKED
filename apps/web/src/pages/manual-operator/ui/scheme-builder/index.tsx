@@ -1,6 +1,6 @@
 ﻿import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, X } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { workHierarchyQueryOptions, orderItemsQueryOptions } from '@/entities/manual-shift/api/queries';
 import { useSchemeBuilderStore } from './scheme-store';
 import { adaptWorkHierarchyToSource, adaptOrderItemsToSource } from './source-data-adapter';
@@ -35,6 +35,8 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
   } | null>(null);
 
   const [isWholeOrderAssign, setIsWholeOrderAssign] = useState(false);
+
+  const [showOrders, setShowOrders] = useState(false);
 
   const source = useMemo(() => {
     if (!hierarchy) return null;
@@ -187,43 +189,36 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50" dir="rtl">
-      <header className="bg-white border-b border-gray-200 px-6 py-4 shrink-0 shadow-sm sticky top-0 z-30">
-        <div className="flex justify-between items-start mb-4">
-          <h1 className="text-xl font-bold text-gray-900">תכנון קווי עבודה</h1>
-          <span className="text-xs text-amber-700 bg-amber-50 px-3 py-1 rounded font-medium border border-amber-200">
-            טיוטה מקומית בלבד — שמירה תגיע בשלב הבא
-          </span>
-        </div>
+    <div className="flex-1 flex flex-col bg-gray-50" dir="rtl">
 
-        <div className="flex items-center gap-2 text-amber-700 bg-amber-50 px-4 py-2 rounded font-medium border border-amber-100 text-sm">
-          <AlertCircle size={18} />
-          טיוטה מקומית — השיוך מבוסס על שורות שנטענו
-        </div>
-      </header>
+      {/* Compact toolbar — area selector pills */}
+      <div className="shrink-0 border-b border-gray-200 bg-white px-4 py-2">
+        <AreaOverview
+          areas={source.areas}
+          selectedAreaName={selectedAreaName}
+          onSelectArea={setSelectedArea}
+        />
+      </div>
 
-      <main className="flex-1 p-6 flex flex-col lg:flex-row gap-6">
-        <div className="w-full lg:w-80 shrink-0 flex flex-col gap-4">
-          <AreaOverview
-            areas={source.areas}
-            selectedAreaName={selectedAreaName}
-            onSelectArea={setSelectedArea}
+      {/* Main board area */}
+      <main className="flex-1 flex overflow-hidden">
+        {/* Left rail (appears on the right in RTL) */}
+        <aside className="w-64 shrink-0 border-e border-gray-200 bg-gray-50 p-3 flex flex-col gap-3 overflow-y-auto">
+          <PublishSummary
+            orders={source.orders}
+            orderItemMap={orderItemMap}
           />
 
           <ProblemQueue
             orders={areaOrders.length > 0 ? areaOrders : source.orders}
             orderItemMap={orderItemMap}
           />
+        </aside>
 
-          <PublishSummary
-            orders={source.orders}
-            orderItemMap={orderItemMap}
-          />
-        </div>
-
+        {/* Center board */}
         <div className="flex-1 flex flex-col min-h-0">
           {targetWg && (
-            <div className="mb-4 flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm">
+            <div className="shrink-0 flex items-center gap-2 bg-blue-50 border-b border-blue-200 px-4 py-2.5 text-sm">
               <span className="font-bold text-blue-800">קבוצת יעד: {targetWg.name}</span>
               <span className="text-blue-600">— בחר הזמנה ושורות לשיוך</span>
               <div className="flex-1" />
@@ -238,46 +233,59 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
             </div>
           )}
 
-          {selectedAreaName ? (
-            <WorkGroupWorkspace
-              selectedAreaName={selectedAreaName}
-              orderItemMap={orderItemMap}
-              onStartAssign={handleStartAssign}
-            />
-          ) : (
-            <div className="bg-white border border-dashed border-gray-300 rounded-lg p-12 text-center">
-              <h2 className="text-xl font-bold text-gray-800 mb-2">בחר איזור הפצה</h2>
-              <p className="text-sm text-gray-500">
-                בחר איזור הפצה מהרשימה כדי להתחיל בתכנון קבוצות עבודה
-              </p>
-            </div>
-          )}
-
-          {selectedAreaName && (
-            <div className="mt-6">
-              <h3 className="text-sm font-bold text-gray-700 mb-3">הזמנות באיזור ({areaOrders.length})</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {areaOrders.map((order) => (
-                  <div
-                    key={order.orderId}
-                    className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm hover:border-blue-400 transition-colors cursor-pointer"
-                    onClick={() => handleOpenItemsDrawer(order.orderId)}
-                  >
-                    <div className="font-mono text-xs text-gray-500 font-bold">{order.orderNumber}</div>
-                    <div className="font-semibold text-gray-900 text-sm truncate mt-0.5" title={order.customerName ?? ''}>
-                      {order.customerName}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      כמות {order.totalQuantity} &middot; {order.itemLinesCount} שורות
-                    </div>
-                    {order.hasAshlama && <span className="text-xs text-amber-700 font-bold">אשלמה </span>}
-                    {order.hasCheckUnits && <span className="text-xs text-amber-700 font-bold mr-1">יחידות בדיקה</span>}
-                    <div className="text-xs text-gray-400 mt-1">
-                      קו הפצה מקורי: {order.sourceDeliveryLine?.lineGroupName ?? '—'}
-                    </div>
-                  </div>
-                ))}
+          <div className="flex-1 overflow-y-auto p-4">
+            {selectedAreaName ? (
+              <WorkGroupWorkspace
+                selectedAreaName={selectedAreaName}
+                orderItemMap={orderItemMap}
+                onStartAssign={handleStartAssign}
+              />
+            ) : (
+              <div className="bg-white border border-dashed border-gray-300 rounded-lg p-8 text-center">
+                <h2 className="text-base font-bold text-gray-800 mb-1">בחר איזור הפצה</h2>
+                <p className="text-xs text-gray-500">
+                  בחר איזור הפצה מהרשימה כדי להתחיל בתכנון קבוצות עבודה
+                </p>
               </div>
+            )}
+          </div>
+
+          {/* Collapsible orders ribbon */}
+          {selectedAreaName && (
+            <div className="shrink-0 border-t border-gray-200 bg-white">
+              <button
+                type="button"
+                onClick={() => setShowOrders((v) => !v)}
+                className="flex items-center gap-2 w-full px-4 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                {showOrders ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                הזמנות באיזור ({areaOrders.length})
+              </button>
+
+              {showOrders && (
+                <div className="h-44 flex overflow-x-auto gap-3 px-4 pb-3">
+                  {areaOrders.map((order) => (
+                    <div
+                      key={order.orderId}
+                      className="shrink-0 w-52 bg-white border border-gray-200 rounded-lg p-3 shadow-sm hover:border-blue-400 transition-colors cursor-pointer flex flex-col"
+                      onClick={() => handleOpenItemsDrawer(order.orderId)}
+                    >
+                      <div className="font-mono text-[11px] text-gray-500 font-bold">{order.orderNumber}</div>
+                      <div className="font-semibold text-gray-900 text-xs truncate mt-0.5" title={order.customerName ?? ''}>
+                        {order.customerName}
+                      </div>
+                      <div className="text-[11px] text-gray-500 mt-1">
+                        כמות {order.totalQuantity} &middot; {order.itemLinesCount} שורות
+                      </div>
+                      {order.hasAshlama && <span className="text-[11px] text-amber-700 font-bold">אשלמה </span>}
+                      {order.hasCheckUnits && <span className="text-[11px] text-amber-700 font-bold">יחידות בדיקה</span>}
+                      <div className="text-[11px] text-gray-400 mt-auto pt-1">
+                        {order.sourceDeliveryLine?.lineGroupName ?? '—'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

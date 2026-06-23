@@ -164,7 +164,12 @@ function DesktopSectionFrame({
             );
           })}
         </nav>
-        <div className="ml-auto flex items-center gap-2">
+        {section === 'lines' && (
+          <span className="text-xs text-amber-700 bg-amber-50 px-3 py-1 rounded font-medium border border-amber-200">
+            טיוטה מקומית בלבד — שמירה תגיע בשלב הבא
+          </span>
+        )}
+        <div className="flex items-center gap-2" style={{ marginInlineStart: 'auto' }}>
           {!isToday && (
             <button
               type="button"
@@ -178,9 +183,13 @@ function DesktopSectionFrame({
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto bg-gray-50">
+      <main className={`flex-1 bg-gray-50 ${section === 'lines' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}>
           {shift || section === 'import' || section === 'printing'
-            ? children
+            ? section === 'lines' ? children : (
+              <div className="mx-auto max-w-4xl px-4 py-6">
+                {children}
+              </div>
+            )
             : <ShiftEmptyState onCreateShift={onCreateShift} isCreating={isCreatingShift} isToday={isToday} />}
       </main>
     </div>
@@ -290,13 +299,11 @@ export function ManualOperatorPage() {
           onCreateShift={handleCreateShift}
           isCreatingShift={createShift.isPending}
         >
-          <div className="mx-auto max-w-4xl px-4 py-6">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 size={32} className="animate-spin text-gray-400" />
-              </div>
-            ) : !shift && !renderSectionWithoutShift ? null : sectionContent}
-          </div>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 size={32} className="animate-spin text-gray-400" />
+            </div>
+          ) : !shift && !renderSectionWithoutShift ? null : sectionContent}
         </DesktopSectionFrame>
         {showDatePicker && (
           <ShiftDatePicker
