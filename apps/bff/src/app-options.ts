@@ -17,6 +17,7 @@ import type { StoragePresetsService } from './features/storage-presets/service.j
 import type { ManualShiftsService } from './features/manual-shifts/service.js';
 import type { WarehouseLabelsService } from './features/warehouse-labels/service.js';
 import type { BondedService } from './features/bonded/bonded-service.js';
+import type { BondedCoverageService } from './features/bonded/bonded-coverage-service.js';
 import type { WarehouseStockService } from './features/warehouse-stock/warehouse-stock-service.js';
 import type { requireAuth } from './auth.js';
 
@@ -42,6 +43,7 @@ export type StoragePresetsServiceFactory = (context: AuthenticatedRequestContext
 export type ManualShiftsServiceFactory = (context: AuthenticatedRequestContext) => ManualShiftsService;
 export type WarehouseLabelsServiceFactory = (context: AuthenticatedRequestContext) => WarehouseLabelsService;
 export type BondedServiceFactory = (context: AuthenticatedRequestContext) => BondedService;
+export type BondedCoverageServiceFactory = (context: AuthenticatedRequestContext) => BondedCoverageService;
 export type WarehouseStockServiceFactory = (context: AuthenticatedRequestContext) => WarehouseStockService;
 
 export type BuildAppOptions = {
@@ -65,5 +67,6 @@ export type BuildAppOptions = {
   getPickingPlanningPreviewService?: PickingPlanningPreviewServiceFactory;
   getFloorRoutingService?: FloorRoutingServiceFactory;
   getBondedService?: BondedServiceFactory;
+  getBondedCoverageService?: BondedCoverageServiceFactory;
   getWarehouseStockService?: WarehouseStockServiceFactory;
 };

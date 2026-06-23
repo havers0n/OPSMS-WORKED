@@ -65,3 +65,4 @@ export * from './operations/product-control';
 export * from './operations/bonded-snapshot';
 export * from './operations/warehouse-stock-snapshot';
 export * from './operations/manual-shift-print';
+export * from './operations/bonded-coverage-request';

@@ -19,6 +19,7 @@ import { createFloorRoutingService } from './features/floor-routing/service.js';
 import { createManualShiftsService } from './features/manual-shifts/service.js';
 import { createWarehouseLabelsService } from './features/warehouse-labels/service.js';
 import { createBondedService } from './features/bonded/bonded-service.js';
+import { createBondedCoverageService } from './features/bonded/bonded-coverage-service.js';
 import { createWarehouseStockService } from './features/warehouse-stock/warehouse-stock-service.js';
 import type { BuildAppOptions } from './app-options.js';
 import { ApiError } from './errors.js';
@@ -50,6 +51,8 @@ export function createRouteDeps(options: BuildAppOptions = {}): RouteDeps {
     options.getStoragePresetsService ?? ((context) => createStoragePresetsService(getUserSupabase(context)));
   const getBondedService =
     options.getBondedService ?? ((context) => createBondedService(getUserSupabase(context)));
+  const getBondedCoverageService =
+    options.getBondedCoverageService ?? ((context) => createBondedCoverageService(getUserSupabase(context)));
   const getWarehouseStockService =
     options.getWarehouseStockService ?? ((context) => createWarehouseStockService(getUserSupabase(context)));
   const getManualShiftsService =
@@ -93,6 +96,7 @@ export function createRouteDeps(options: BuildAppOptions = {}): RouteDeps {
     getPickingPlanningPreviewService,
     getFloorRoutingService,
     getBondedService,
+    getBondedCoverageService,
     getWarehouseStockService
   };
 }
