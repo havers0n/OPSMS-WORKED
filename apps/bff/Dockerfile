@@ -31,10 +31,13 @@ RUN apt-get update && \
       fonts-noto-core \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npx playwright install --with-deps chromium
-
 COPY package.json package-lock.json /app/
 COPY --from=build /app/node_modules /app/node_modules
+
+RUN npx playwright install --with-deps chromium
+
+RUN ls -la /ms-playwright && \
+    node -e "const { chromium } = require('playwright'); console.log('Chromium executablePath:', chromium.executablePath());"
 COPY --from=build /app/apps/bff/package.json /app/apps/bff/package.json
 COPY --from=build /app/apps/bff/dist /app/apps/bff/dist
 COPY --from=build /app/packages/domain/package.json /app/packages/domain/package.json
