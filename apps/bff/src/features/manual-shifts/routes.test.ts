@@ -1448,6 +1448,7 @@ describe('manual shifts routes', () => {
           pointFallbackRows: 0,
           pickupNoteRows: 2,
           ashlamaNoteRows: 1,
+          specialFlowRowCount: 3,
           invalidDistributionDateRows: [],
           missingRequiredFields: []
         },
@@ -1492,6 +1493,12 @@ describe('manual shifts routes', () => {
             code: 'NON_SO_ORDER_ROWS',
             message: 'Order values not starting with SO are present in the preview.',
             count: 1
+          },
+          {
+            severity: 'info',
+            code: 'SPECIAL_FLOW_ROWS_DETECTED',
+            message: '3 special-flow row(s) detected (collection/pickup/return/ashlama). These will be excluded from normal distribution import.',
+            count: 3
           }
         ]
       }
@@ -1838,11 +1845,11 @@ describe('manual shifts routes', () => {
     expect(response.json()).toMatchObject({
       shiftId: ids.shift,
       selectedDate: '2026-06-14',
-      linesCreated: 1,
-      ordersCreated: 1,
-      orderItemsCreated: 1,
-      appliedGroups: 1,
-      skippedGroups: 1,
+      linesCreated: 0,
+      ordersCreated: 0,
+      orderItemsCreated: 0,
+      appliedGroups: 0,
+      skippedGroups: 2,
       skippedNegativeQuantityRows: 1,
       skippedZeroQuantityRows: 0
     });
@@ -1855,27 +1862,12 @@ describe('manual shifts routes', () => {
       selectedDate: '2026-06-14'
     });
     expect(call?.[0].plan).toMatchObject({
-      appliedGroups: 1,
-      skippedGroups: 1,
+      appliedGroups: 0,
+      skippedGroups: 2,
       skippedNegativeQuantityRows: 1,
       skippedZeroQuantityRows: 0
     });
-    expect(call?.[0].plan.lines).toHaveLength(1);
-    expect(call?.[0].plan.lines[0]).toMatchObject({
-      orders: [
-        expect.objectContaining({
-          orderNumber: 'SO-1',
-          totalQuantity: 5,
-          items: [
-            expect.objectContaining({
-              sku: '1001',
-              quantity: 5,
-              sourceRows: [2, 3]
-            })
-          ]
-        })
-      ]
-    });
+    expect(call?.[0].plan.lines).toHaveLength(0);
 
     await app.close();
   });

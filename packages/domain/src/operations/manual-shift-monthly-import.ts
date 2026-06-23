@@ -99,6 +99,7 @@ export const manualShiftMonthlyPreviewSchema = z.object({
     pointFallbackRows: z.number().int().min(0),
     pickupNoteRows: z.number().int().min(0),
     ashlamaNoteRows: z.number().int().min(0),
+    specialFlowRowCount: z.number().int().min(0),
     invalidDistributionDateRows: z.array(z.number().int().min(1)),
     invalidDateDetails: z.array(manualShiftMonthlyInvalidDateDetailSchema).optional(),
     missingRequiredFields: z.array(manualShiftMonthlyMissingFieldSchema)
@@ -159,7 +160,7 @@ export const manualShiftMonthlyAggregatedGroupSchema = z.object({
   lineRawName: z.string().nullable(),
   lineGroupName: z.string().nullable(),
   lineBucketName: z.string().nullable(),
-  isPickupRow: z.boolean(),
+  isNonDistributionRow: z.boolean(),
   customerName: z.string().nullable().optional(),
   rawRouteLine: z.string().nullable(),
   routeBase: z.string().nullable(),
@@ -377,6 +378,33 @@ function parseQuantity(value: string | number | null | undefined): number | null
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+export const SPECIAL_FLOW_PATTERNS = [
+  'איסוף', 'איסופים', 'איסוף מלקוח',
+  'החזרה', 'החזרות',
+  'זיכוי', 'זיכויים',
+  'השלמה', 'אשלמה',
+  'לא להפצה', 'לא משויך',
+  'pickup', 'collection', 'return',
+  'сбор',
+] as const;
+
+export function matchesSpecialFlowNotes(notes: string | null | undefined): boolean {
+  if (!notes) return false;
+  const lower = notes.toLowerCase();
+  return SPECIAL_FLOW_PATTERNS.some(pattern => lower.includes(pattern.toLowerCase()));
+}
+
+export function findSpecialFlowPattern(notes: string | null | undefined): string | null {
+  if (!notes) return null;
+  const lower = notes.toLowerCase();
+  for (const pattern of SPECIAL_FLOW_PATTERNS) {
+    if (lower.includes(pattern.toLowerCase())) {
+      return pattern;
+    }
+  }
+  return null;
+}
+
 function compareStrings(a: string, b: string): number {
   return a.localeCompare(b, 'he');
 }
@@ -419,7 +447,7 @@ type WorkingRow = {
   lineRawName: string | null;
   lineGroupName: string | null;
   lineBucketName: string | null;
-  isPickupRow: boolean;
+  flowType: 'normal_distribution' | 'special_flow';
   customerName: string | null;
   rawRouteLine: string | null;
   routeBase: string | null;
@@ -493,7 +521,7 @@ function buildWorkingRow(row: ManualShiftMonthlyParsedRow): WorkingRow {
     lineRawName: rawDistributionValue,
     lineGroupName,
     lineBucketName,
-    isPickupRow: (normalizeTrimmedString(row.notes)?.includes('איסוף')) ?? false,
+    flowType: matchesSpecialFlowNotes(row.notes) ? 'special_flow' : 'normal_distribution',
     customerName,
     rawRouteLine,
     routeBase,
@@ -538,6 +566,7 @@ export function parseManualShiftMonthlyPreview(
   let pointFallbackRows = 0;
   let pickupNoteRows = 0;
   let ashlamaNoteRows = 0;
+  let specialFlowRowCount = 0;
   let rawTotalQuantity = 0;
   let positiveTotalQuantity = 0;
   let negativeTotalQuantity = 0;
@@ -616,6 +645,9 @@ export function parseManualShiftMonthlyPreview(
     if (row.notes?.includes('השלמה')) {
       ashlamaNoteRows += 1;
     }
+    if (row.flowType === 'special_flow') {
+      specialFlowRowCount += 1;
+    }
     if (row.quantity !== null) {
       rawTotalQuantity += row.quantity;
       if (row.quantity > 0) {
@@ -655,6 +687,7 @@ export function parseManualShiftMonthlyPreview(
         existingGroup.notes.push(row.notes);
       }
       existingGroup.hasNegativeQuantity = existingGroup.hasNegativeQuantity || row.quantity < 0;
+      existingGroup.isNonDistributionRow = existingGroup.isNonDistributionRow || row.flowType === 'special_flow';
     } else {
       groups.set(groupKey, {
         normalizedDate: row.normalizedDate,
@@ -677,7 +710,7 @@ export function parseManualShiftMonthlyPreview(
         lineRawName: row.lineRawName,
         lineGroupName: row.lineGroupName,
         lineBucketName: row.lineBucketName,
-        isPickupRow: row.isPickupRow,
+        isNonDistributionRow: row.flowType === 'special_flow',
         customerName: row.customerName,
         rawRouteLine: row.rawRouteLine,
         routeBase: row.routeBase,
@@ -783,6 +816,15 @@ export function parseManualShiftMonthlyPreview(
     });
   }
 
+  if (specialFlowRowCount > 0) {
+    topWarnings.push({
+      severity: 'info',
+      code: 'SPECIAL_FLOW_ROWS_DETECTED',
+      message: `${specialFlowRowCount} special-flow row(s) detected (collection/pickup/return/ashlama). These will be excluded from normal distribution import.`,
+      count: specialFlowRowCount
+    });
+  }
+
   const lineSummaries = Array.from(lines.entries())
     .map(([lineName, entry]) => {
       const warnings: ManualShiftMonthlyWarning[] = [];
@@ -870,6 +912,7 @@ export function parseManualShiftMonthlyPreview(
         pointFallbackRows,
         pickupNoteRows,
         ashlamaNoteRows,
+        specialFlowRowCount,
         invalidDistributionDateRows: invalidDistributionDateRows.sort((a, b) => a - b),
         invalidDateDetails,
         missingRequiredFields
@@ -908,21 +951,45 @@ export function planManualShiftMonthlyImportApply(
   let appliedItemLines = 0;
   let skusWithDuplicateRows = 0;
   let customerNameConflicts = 0;
+  const excludedSpecialFlowRows: Array<{
+    rowIndex: number;
+    quantity: number;
+    notes: string | null;
+    orderNumber: string;
+    customerName: string | null;
+    sku: string;
+    matchedMarker: string | null;
+  }> = [];
 
   for (const group of parsed.groups) {
-    const positiveRows = group.rows.filter((row) => row.quantity > 0);
     const negativeRows = group.rows.filter((row) => row.quantity < 0);
     const zeroRows = group.rows.filter((row) => row.quantity === 0);
+    const allPositiveRows = group.rows.filter((row) => row.quantity > 0);
 
     skippedNegativeQuantityRows += negativeRows.length;
     skippedZeroQuantityRows += zeroRows.length;
 
-    if (positiveRows.length === 0) {
+    const specialFlowPositiveRows = allPositiveRows.filter(row => matchesSpecialFlowNotes(row.notes));
+    const normalPositiveRows = allPositiveRows.filter(row => !matchesSpecialFlowNotes(row.notes));
+
+    for (const sfRow of specialFlowPositiveRows) {
+      excludedSpecialFlowRows.push({
+        rowIndex: sfRow.rowIndex,
+        quantity: sfRow.quantity,
+        notes: sfRow.notes,
+        orderNumber: group.orderNumber,
+        customerName: group.customerName ?? null,
+        sku: group.sku,
+        matchedMarker: findSpecialFlowPattern(sfRow.notes)
+      });
+    }
+
+    if (normalPositiveRows.length === 0) {
       skippedGroups += 1;
       continue;
     }
 
-    if (positiveRows.length > 1) {
+    if (normalPositiveRows.length > 1) {
       skusWithDuplicateRows += 1;
     }
 
@@ -946,11 +1013,11 @@ export function planManualShiftMonthlyImportApply(
       group.orderNumber
     ].join('\u0001');
     const existingOrder = lineOrders.get(orderKey);
-    const sourceRows = positiveRows.map((row) => row.rowIndex).sort((a, b) => a - b);
+    const sourceRows = normalPositiveRows.map((row) => row.rowIndex).sort((a, b) => a - b);
     const itemNotes = Array.from(
-      new Set(positiveRows.flatMap((row) => (row.notes ? [row.notes] : [])))
+      new Set(normalPositiveRows.flatMap((row) => (row.notes ? [row.notes] : [])))
     );
-    const itemQuantity = positiveRows.reduce((sum, row) => sum + row.quantity, 0);
+    const itemQuantity = normalPositiveRows.reduce((sum, row) => sum + row.quantity, 0);
     appliedTotalQuantity += itemQuantity;
     appliedItemLines += 1;
     const item = {
@@ -1062,6 +1129,18 @@ export function planManualShiftMonthlyImportApply(
       code: 'DUPLICATE_SKU_ROWS_AGGREGATED',
       message: `${skusWithDuplicateRows} SKU(s) had duplicate rows that were aggregated into single item lines.`,
       count: skusWithDuplicateRows
+    });
+    warningSummary.info += 1;
+  }
+
+  if (excludedSpecialFlowRows.length > 0) {
+    const affectedOrders = [...new Set(excludedSpecialFlowRows.map(r => r.orderNumber))];
+    parsed.preview.warnings.push({
+      severity: 'info',
+      code: 'SPECIAL_FLOW_ROW_EXCLUDED_FROM_DISTRIBUTION_IMPORT',
+      message: `${excludedSpecialFlowRows.length} special-flow row(s) excluded from normal distribution import. Affected orders: ${affectedOrders.join(', ')}. These rows contain collection/pickup/return/ashlama markers and will not create manual shift orders. Source rows: ${excludedSpecialFlowRows.map(r => `#${r.rowIndex} (order ${r.orderNumber}, SKU ${r.sku}, qty ${r.quantity}, marker: ${r.matchedMarker ?? 'unknown'})`).join('; ')}.`,
+      count: excludedSpecialFlowRows.length,
+      rows: excludedSpecialFlowRows.map(r => r.rowIndex).sort((a, b) => a - b)
     });
     warningSummary.info += 1;
   }

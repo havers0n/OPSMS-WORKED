@@ -242,7 +242,8 @@ describe('manual shift monthly import parser', () => {
     });
     expect(result.preview.warnings.map((warning) => warning.code)).toEqual([
       'NEGATIVE_QUANTITY_ROWS',
-      'NON_SO_ORDER_ROWS'
+      'NON_SO_ORDER_ROWS',
+      'SPECIAL_FLOW_ROWS_DETECTED'
     ]);
   });
 
@@ -431,7 +432,7 @@ describe('manual shift monthly import parser', () => {
     expect(result.groups[0].customerName).toBe('לקוח fallback');
   });
 
-  it('sets isPickupRow true when notes contain איסוף', () => {
+  it('sets isNonDistributionRow true when notes contain איסוף', () => {
     const result = parseManualShiftMonthlyPreview(buildInput([
       {
         rowIndex: 2,
@@ -446,10 +447,10 @@ describe('manual shift monthly import parser', () => {
       }
     ]));
 
-    expect(result.groups[0].isPickupRow).toBe(true);
+    expect(result.groups[0].isNonDistributionRow).toBe(true);
   });
 
-  it('sets isPickupRow false when notes lack איסוף', () => {
+  it('sets isNonDistributionRow false when notes lack איסוף', () => {
     const result = parseManualShiftMonthlyPreview(buildInput([
       {
         rowIndex: 2,
@@ -463,7 +464,7 @@ describe('manual shift monthly import parser', () => {
       }
     ]));
 
-    expect(result.groups[0].isPickupRow).toBe(false);
+    expect(result.groups[0].isNonDistributionRow).toBe(false);
   });
 
   it('includes distributionArea and lineGroupName in preview lines', () => {
@@ -1756,5 +1757,237 @@ describe('manual shift monthly import parser', () => {
         workBucketType: 'unknown'
       })
     ]);
+  });
+
+  // ── Special-flow exclusion tests ───────────────────────────────────────────
+
+  it('excludes pure special-flow SO (איסוף) from normal import, group skipped', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 5,
+        notes: 'איסוף'
+      }
+    ]));
+    const plan = planManualShiftMonthlyImportApply(result);
+
+    expect(plan.appliedGroups).toBe(0);
+    expect(plan.skippedGroups).toBe(1);
+    expect(plan.lines).toHaveLength(0);
+    expect(result.preview.anomalies.specialFlowRowCount).toBe(1);
+
+    const warningCodes = plan.preview.warnings.map((w) => w.code);
+    expect(warningCodes).toContain('SPECIAL_FLOW_ROW_EXCLUDED_FROM_DISTRIBUTION_IMPORT');
+  });
+
+  it('excludes pure special-flow SO (сбор, Russian) from normal import', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח ר',
+        orderNumber: 'SO-5',
+        sku: '2001',
+        quantity: 3,
+        notes: 'сбор'
+      }
+    ]));
+    const plan = planManualShiftMonthlyImportApply(result);
+
+    expect(plan.appliedGroups).toBe(0);
+    expect(plan.skippedGroups).toBe(1);
+
+    const warningCodes = plan.preview.warnings.map((w) => w.code);
+    expect(warningCodes).toContain('SPECIAL_FLOW_ROW_EXCLUDED_FROM_DISTRIBUTION_IMPORT');
+  });
+
+  it('excludes pure special-flow SO (החזרה / return) from normal import', () => {
+    const resultHebrew = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח',
+        orderNumber: 'SO-R1',
+        sku: '3001',
+        quantity: 2,
+        notes: 'החזרה'
+      }
+    ]));
+    const planHebrew = planManualShiftMonthlyImportApply(resultHebrew);
+    expect(planHebrew.appliedGroups).toBe(0);
+
+    const resultEnglish = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 3,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'Customer',
+        orderNumber: 'SO-R2',
+        sku: '3002',
+        quantity: 4,
+        notes: 'return'
+      }
+    ]));
+    const planEnglish = planManualShiftMonthlyImportApply(resultEnglish);
+    expect(planEnglish.appliedGroups).toBe(0);
+
+    const warningCodes = planHebrew.preview.warnings.map((w) => w.code);
+    expect(warningCodes).toContain('SPECIAL_FLOW_ROW_EXCLUDED_FROM_DISTRIBUTION_IMPORT');
+  });
+
+  it('excludes pure special-flow SO (השלמה / אשלמה) from normal distribution import', () => {
+    const resultAshlama = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח',
+        orderNumber: 'SO-A1',
+        sku: '4001',
+        quantity: 1,
+        notes: 'השלמה'
+      }
+    ]));
+    const planAshlama = planManualShiftMonthlyImportApply(resultAshlama);
+    expect(planAshlama.appliedGroups).toBe(0);
+
+    const resultEshlama = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 3,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח',
+        orderNumber: 'SO-A2',
+        sku: '4002',
+        quantity: 2,
+        notes: 'אשלמה'
+      }
+    ]));
+    const planEshlama = planManualShiftMonthlyImportApply(resultEshlama);
+    expect(planEshlama.appliedGroups).toBe(0);
+  });
+
+  it('positive quantity special-flow rows do not create manual_shift_order_items', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'עמקים/נקודה א',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 5,
+        notes: 'איסוף'
+      }
+    ]));
+    const plan = planManualShiftMonthlyImportApply(result);
+
+    expect(plan.appliedGroups).toBe(0);
+    expect(plan.lines).toHaveLength(0);
+    expect(plan.appliedItemLines).toBe(0);
+  });
+
+  it('normal rows without special-flow markers still import correctly', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'עמקים/נקודה א',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 5
+      }
+    ]));
+    const plan = planManualShiftMonthlyImportApply(result);
+
+    expect(plan.appliedGroups).toBe(1);
+    expect(plan.lines[0].orders[0].items[0].quantity).toBe(5);
+    expect(plan.appliedItemLines).toBe(1);
+    expect(result.preview.anomalies.specialFlowRowCount).toBe(0);
+
+    const warningCodes = plan.preview.warnings.map((w) => w.code);
+    expect(warningCodes).not.toContain('SPECIAL_FLOW_ROW_EXCLUDED_FROM_DISTRIBUTION_IMPORT');
+  });
+
+  it('mixed SO: normal rows import, special-flow rows excluded', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'עמקים/נקודה א',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 5,
+        notes: 'normal item'
+      },
+      {
+        rowIndex: 3,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'עמקים/נקודה א',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1002',
+        quantity: 3,
+        notes: 'איסוף מלקוח'
+      },
+      {
+        rowIndex: 4,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'עמקים/נקודה א',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1003',
+        quantity: 2,
+        notes: 'collection'
+      }
+    ]));
+    const plan = planManualShiftMonthlyImportApply(result);
+
+    expect(plan.appliedGroups).toBe(1);
+    expect(plan.skippedGroups).toBe(2);
+    expect(plan.lines[0].orders).toHaveLength(1);
+    expect(plan.lines[0].orders[0].items).toHaveLength(1);
+    expect(plan.lines[0].orders[0].items[0].sku).toBe('1001');
+    expect(plan.lines[0].orders[0].items[0].quantity).toBe(5);
+    expect(plan.appliedTotalQuantity).toBe(5);
+
+    const warningCodes = plan.preview.warnings.map((w) => w.code);
+    expect(warningCodes).toContain('SPECIAL_FLOW_ROW_EXCLUDED_FROM_DISTRIBUTION_IMPORT');
+  });
+
+  it('warning for excluded special-flow rows includes useful audit context', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'עמקים/נקודה א',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-42',
+        sku: '1001',
+        quantity: 7,
+        notes: 'איסוף'
+      }
+    ]));
+    const plan = planManualShiftMonthlyImportApply(result);
+
+    const warning = plan.preview.warnings.find(
+      (w) => w.code === 'SPECIAL_FLOW_ROW_EXCLUDED_FROM_DISTRIBUTION_IMPORT'
+    );
+    expect(warning).toBeDefined();
+    expect(warning!.count).toBe(1);
+    expect(warning!.rows).toEqual([2]);
+    expect(warning!.message).toContain('SO-42');
+    expect(warning!.message).toContain('1001');
+    expect(warning!.message).toContain('7');
+    expect(warning!.message).toContain('איסוף');
   });
 });

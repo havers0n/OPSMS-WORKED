@@ -213,6 +213,7 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
         pointFallbackRows: 0,
         pickupNoteRows: 0,
         ashlamaNoteRows: 0,
+        specialFlowRowCount: 0,
         invalidDistributionDateRows: [],
         missingRequiredFields: []
       }
