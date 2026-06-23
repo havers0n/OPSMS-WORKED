@@ -591,7 +591,11 @@ describe('ManualOperatorPage URL sections', () => {
     routes.operatorManualSummary,
     routes.operatorManualCheck,
     routes.operatorManualPeople,
-    routes.operatorManualImport
+    routes.operatorManualProducts,
+    routes.operatorManualAshlamot,
+    routes.operatorManualPrinting,
+    routes.operatorManualImport,
+    routes.operatorManualLines
   ])('renders %s content', async (path) => {
     mockWorkspaceData();
     renderAt(path);
@@ -599,9 +603,22 @@ describe('ManualOperatorPage URL sections', () => {
     await waitFor(() => {
       expect(screen.getByTestId('location').textContent).toBe(path);
     });
+
+    expect(screen.getByTestId('manual-section-switcher-trigger')).toBeTruthy();
   });
 
-  it('mobile bottom nav switches the URL and active section', async () => {
+  it('shows the current section label in the switcher trigger', async () => {
+    mockWorkspaceData();
+    renderAt(routes.operatorManualImport);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location').textContent).toBe(routes.operatorManualImport);
+    });
+
+    expect(screen.getByTestId('manual-section-switcher-trigger').textContent).toContain('ייבוא');
+  });
+
+  it('opens the grouped switcher panel, highlights the active section, and navigates', async () => {
     mockWorkspaceData();
     renderAt(routes.operatorManualWork);
 
@@ -609,14 +626,112 @@ describe('ManualOperatorPage URL sections', () => {
       expect(screen.getByTestId('location').textContent).toBe(routes.operatorManualWork);
     });
 
-    fireEvent.click(screen.getByTestId('manual-section-check'));
+    fireEvent.click(screen.getByTestId('manual-section-switcher-trigger'));
+
+    expect(screen.getByTestId('manual-section-switcher-panel')).toBeTruthy();
+    expect(screen.getByText('תהליך עבודה')).toBeTruthy();
+    expect(screen.getByText('ניהול ובקרה')).toBeTruthy();
+    expect(screen.getByText('נתונים ותכנון')).toBeTruthy();
+    expect(screen.getByTestId('manual-section-work').getAttribute('aria-current')).toBe('page');
+
+    fireEvent.click(screen.getByTestId('manual-section-import'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('location').textContent).toBe(routes.operatorManualCheck);
+      expect(screen.getByTestId('location').textContent).toBe(routes.operatorManualImport);
     });
 
-    expect(screen.getByTestId('manual-section-check').className).toContain('text-blue-600');
-    expect(screen.getByTestId('manual-section-work').className).toContain('text-gray-500');
+    expect(screen.queryByTestId('manual-section-switcher-panel')).toBeNull();
+  });
+
+  it('navigates to printing from the switcher', async () => {
+    mockWorkspaceData();
+    renderAt(routes.operatorManualWork);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location').textContent).toBe(routes.operatorManualWork);
+    });
+
+    fireEvent.click(screen.getByTestId('manual-section-switcher-trigger'));
+    fireEvent.click(screen.getByTestId('manual-section-printing'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location').textContent).toBe(routes.operatorManualPrinting);
+    });
+  });
+
+  it('closes the switcher on Escape and outside click', async () => {
+    isDesktop = true;
+    mockWorkspaceData();
+    renderAt(routes.operatorManualWork);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('manual-section-switcher-trigger')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByTestId('manual-section-switcher-trigger'));
+    expect(screen.getByTestId('manual-section-switcher-panel')).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByTestId('manual-section-switcher-panel')).toBeNull();
+    });
+
+    fireEvent.click(screen.getByTestId('manual-section-switcher-trigger'));
+    expect(screen.getByTestId('manual-section-switcher-panel')).toBeTruthy();
+
+    fireEvent.mouseDown(document.body);
+    await waitFor(() => {
+      expect(screen.queryByTestId('manual-section-switcher-panel')).toBeNull();
+    });
+  });
+
+  it('shows work distribution filters only on the work section', async () => {
+    isDesktop = true;
+    mockWorkspaceData({
+      workHierarchyData: {
+        shiftId: shift.id,
+        areas: [
+          {
+            areaName: 'galil',
+            displayName: 'גליל',
+            totalLines: 1,
+            totalBuckets: 1,
+            totalOrders: 1,
+            totalQuantity: 5,
+            statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            lines: []
+          },
+          {
+            areaName: 'jerusalem-2',
+            displayName: 'ירושלים 2',
+            totalLines: 1,
+            totalBuckets: 1,
+            totalOrders: 1,
+            totalQuantity: 5,
+            statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            lines: []
+          }
+        ]
+      }
+    });
+    const renderResult = renderAt(routes.operatorManualWork);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('manual-work-filters')).toBeTruthy();
+    });
+
+    expect(screen.getByTestId('manual-work-filter-galil')).toBeTruthy();
+    expect(screen.getByTestId('manual-work-filter-jerusalem-2')).toBeTruthy();
+
+    renderResult.unmount();
+    mockWorkspaceData();
+    renderAt(routes.operatorManualImport);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location').textContent).toBe(routes.operatorManualImport);
+    });
+
+    expect(screen.queryByTestId('manual-work-filters')).toBeNull();
   });
 
   it('renders product control for products section without mutating data', async () => {

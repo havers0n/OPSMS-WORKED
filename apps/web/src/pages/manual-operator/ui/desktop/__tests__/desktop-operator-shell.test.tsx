@@ -21,18 +21,18 @@ import {
 
 const mockedBffRequest = vi.mocked(bffRequest);
 
-const defaultProps = {
+const defaultProps: DesktopOperatorShellProps = {
   shift: mockShift,
   isLoading: false,
   kpi: mockKpi,
   orderDetail: null,
-  selectedDetailType: null as 'order' | null,
-  selectedAreaKey: null as string | null,
-  selectedLineId: null as string | null,
-  selectedRouteGroupKey: null as string | null,
-  selectedWorkBucketKey: null as string | null,
+  selectedDetailType: null,
+  selectedAreaKey: null,
+  selectedLineId: null,
+  selectedRouteGroupKey: null,
+  selectedWorkBucketKey: null,
   selectedRouteGroupWorkBucket: undefined,
-  selectedWorkBucketName: null as string | null,
+  selectedWorkBucketName: null,
   areaSummaries: mockAreaSummaries,
   specialAreaSummaries: [],
   lineHierarchySummaries: mockLineHierarchySummaries,
@@ -52,16 +52,12 @@ const defaultProps = {
   onClearHierarchyLine: vi.fn(),
   onClearHierarchyRouteGroup: vi.fn(),
   onClearHierarchyBucket: vi.fn(),
-  workBucketView: 'products' as const,
+  workBucketView: 'products',
   productRollup: undefined,
   productRollupLoading: false,
   onSetWorkBucketView: vi.fn(),
   onCreateShift: vi.fn(),
-  isCreatingShift: false,
-  selectedDate: '2026-05-28',
-  todayDate: '2026-05-29',
-  onChangeDate: vi.fn(),
-  onOpenDatePicker: vi.fn()
+  isCreatingShift: false
 };
 
 function makeQueryClient() {
@@ -142,22 +138,10 @@ describe('DesktopOperatorShell', () => {
     expect(onCloseDetail).toHaveBeenCalledOnce();
   });
 
-  it('date navigation buttons call onChangeDate', () => {
-    const onChangeDate = vi.fn();
-    renderShell({ onChangeDate });
-    fireEvent.click(screen.getByRole('button', { name: 'תאריך קודם' }));
-    fireEvent.click(screen.getByRole('button', { name: 'תאריך הבא' }));
-    fireEvent.click(screen.getByRole('button', { name: 'היום' }));
-    expect(onChangeDate).toHaveBeenCalledWith('2026-05-27');
-    expect(onChangeDate).toHaveBeenCalledWith('2026-05-29');
-    expect(onChangeDate).toHaveBeenCalledTimes(3);
-  });
-
-  it('clicking date label calls onOpenDatePicker', () => {
-    const onOpenDatePicker = vi.fn();
-    renderShell({ onOpenDatePicker });
-    fireEvent.click(screen.getByRole('button', { name: 'פתח לוח שנה' }));
-    expect(onOpenDatePicker).toHaveBeenCalledOnce();
+  it('does not render the extracted shared header controls', () => {
+    renderShell();
+    expect(screen.queryByRole('button', { name: 'תאריך קודם' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'פתח לוח שנה' })).toBeNull();
   });
 
   it('does not render DesktopPickerPanel side panel', () => {

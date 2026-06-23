@@ -3,13 +3,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-// Mock bffRequest before importing the page
 vi.mock('@/shared/api/bff/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/shared/api/bff/client')>();
   return { ...actual, bffRequest: vi.fn() };
 });
 
-// Mock useMediaQuery so tests control viewport
 vi.mock('@/shared/hooks/use-media-query', () => ({
   useMediaQuery: vi.fn()
 }));
@@ -73,15 +71,14 @@ describe('ManualOperatorPage responsive rendering', () => {
   });
 
   describe('mobile path (isDesktop=false)', () => {
-    it('renders mobile shell with bottom nav when viewport is narrow', async () => {
+    it('renders the compact mobile shell with the section switcher', async () => {
       mockUseMediaQuery.mockReturnValue(false);
       mockedBffRequest.mockResolvedValue({ shift: null, lines: [] });
 
       renderPage(makeQC());
 
-      // Mobile shell bottom nav is always present
-      expect(screen.getByRole('button', { name: 'עבודה' })).toBeTruthy();
-      expect(screen.getByRole('button', { name: 'בדיקה' })).toBeTruthy();
+      expect(screen.getByTestId('manual-section-switcher-trigger')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'בדיקה' })).toBeNull();
     });
 
     it('does not render desktop hierarchy panel on mobile', async () => {
@@ -90,7 +87,6 @@ describe('ManualOperatorPage responsive rendering', () => {
 
       renderPage(makeQC());
 
-      // Desktop hierarchy panel content should not appear on mobile
       expect(screen.queryByText('קווים')).toBeNull();
     });
 
@@ -119,14 +115,12 @@ describe('ManualOperatorPage responsive rendering', () => {
       renderPage(makeQC());
 
       await waitFor(() => {
-        // Shift name always appears in desktop header
         expect(screen.getByText('משמרת בוקר')).toBeTruthy();
-        // Hierarchy panel renders desktop content (no areas in empty hierarchy)
         expect(screen.getByText('אין אזורים פעילים')).toBeTruthy();
       });
     });
 
-    it('does not render mobile bottom nav on desktop', async () => {
+    it('does not render mobile-only shell chrome on desktop', async () => {
       mockUseMediaQuery.mockReturnValue(true);
       mockedBffRequest.mockImplementation((url: string) => {
         if (url.includes('/day-summary')) return Promise.resolve(emptyDaySummary);
@@ -138,11 +132,10 @@ describe('ManualOperatorPage responsive rendering', () => {
       renderPage(makeQC());
 
       await waitFor(() => {
-        // Desktop hierarchy panel renders — confirms desktop shell is mounted
         expect(screen.getByText('אין אזורים פעילים')).toBeTruthy();
       });
 
-      expect(screen.queryByRole('button', { name: 'תור' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'בחר תאריך' })).toBeNull();
     });
 
     it('renders desktop empty state when shift is null on desktop', async () => {
@@ -153,7 +146,6 @@ describe('ManualOperatorPage responsive rendering', () => {
 
       await waitFor(() => {
         expect(screen.getAllByText('אין משמרת פעילה').length).toBeGreaterThan(0);
-        // Desktop empty state has subtitle text
         expect(screen.getByText('פתח משמרת כדי להתחיל לעקוב אחר ההזמנות')).toBeTruthy();
       });
     });

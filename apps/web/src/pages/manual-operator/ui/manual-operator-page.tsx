@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import type { ManualShiftLineSummary, ManualShiftSession } from '@wos/domain';
@@ -12,7 +12,6 @@ import {
   type ManualOperatorSection,
   routes
 } from '@/shared/config/routes';
-import { MobileOperatorShell } from './mobile-operator-shell';
 import { ShiftEmptyState } from './shift-empty-state';
 import { ShiftDatePicker } from './shift-date-picker';
 import { CheckTab } from './check-tab';
@@ -21,11 +20,13 @@ import { DayTab } from './day-tab';
 import { ProductControlTab } from './product-control-tab';
 import { ManualOperatorImportSection } from './manual-operator-import-section';
 import { ManualOperatorPlaceholder } from './manual-operator-placeholder';
+import { ManualOperatorShell } from './manual-operator-shell';
 import { ManualOperatorWorkSection } from './manual-operator-work-section';
 import { SchemeBuilder } from './scheme-builder';
 import { PrintingHomePage } from '../printing/routes/PrintingHomePage';
-import { manualOperatorSectionItems } from './manual-operator-navigation';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+
+const LAST_SECTION_PATH_PREFIX = 'manual-operator:last-section:';
 
 function getTodayDateIsrael(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -50,6 +51,11 @@ function getSectionFromPathname(pathname: string): ManualOperatorSection | null 
   if (!pathname.startsWith(`${routes.operatorManual}/`)) return null;
   const section = pathname.slice(routes.operatorManual.length + 1).split('/')[0];
   return isManualOperatorSection(section) ? section : null;
+}
+
+function getStoredSectionPath(section: ManualOperatorSection) {
+  if (typeof window === 'undefined') return null;
+  return window.sessionStorage.getItem(`${LAST_SECTION_PATH_PREFIX}${section}`);
 }
 
 function ManualOperatorSectionContent({
@@ -115,93 +121,11 @@ function ManualOperatorSectionContent({
   );
 }
 
-function DesktopSectionFrame({
-  section,
-  shift,
-  selectedDate,
-  onChangeSection,
-  onOpenDatePicker,
-  children,
-  isToday,
-  onCreateShift,
-  isCreatingShift
-}: {
-  section: ManualOperatorSection;
-  shift: ManualShiftSession | null;
-  selectedDate: string;
-  onChangeSection: (section: ManualOperatorSection) => void;
-  onOpenDatePicker: () => void;
-  children: ReactNode;
-  isToday: boolean;
-  onCreateShift: () => void;
-  isCreatingShift: boolean;
-}) {
-  return (
-    <div className="flex min-h-screen flex-col bg-gray-100" dir="rtl">
-      <header className="flex items-center gap-4 border-b border-gray-200 bg-white px-4 h-14 shrink-0">
-        <button
-          type="button"
-          onClick={onOpenDatePicker}
-          className="shrink-0 rounded-md px-1 py-0.5 text-right hover:bg-gray-50"
-          aria-label="פתח לוח שנה"
-        >
-          <p className="text-sm font-bold leading-tight text-gray-900">{shift?.name ?? 'אין משמרת פעילה'}</p>
-          <p className="text-xs text-gray-500">{selectedDate}{isToday ? '' : ' • עבר'}</p>
-        </button>
-        <div className="h-8 w-px shrink-0 bg-gray-200" />
-        <nav className="flex items-center gap-2 overflow-x-auto">
-          {manualOperatorSectionItems.map((item) => {
-            const isActive = item.section === section;
-            return (
-              <button
-                key={item.section}
-                type="button"
-                onClick={() => onChangeSection(item.section)}
-                className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </nav>
-        {section === 'lines' && (
-          <span className="text-xs text-amber-700 bg-amber-50 px-3 py-1 rounded font-medium border border-amber-200">
-            טיוטה מקומית בלבד — שמירה תגיע בשלב הבא
-          </span>
-        )}
-        <div className="flex items-center gap-2" style={{ marginInlineStart: 'auto' }}>
-          {!isToday && (
-            <button
-              type="button"
-              onClick={onCreateShift}
-              disabled={isCreatingShift}
-              className="rounded-md border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            >
-              היום
-            </button>
-          )}
-        </div>
-      </header>
-
-      <main className={`flex-1 bg-gray-50 ${section === 'lines' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}>
-          {shift || section === 'import' || section === 'printing'
-            ? section === 'lines' ? children : (
-              <div className="mx-auto max-w-4xl px-4 py-6">
-                {children}
-              </div>
-            )
-            : <ShiftEmptyState onCreateShift={onCreateShift} isCreating={isCreatingShift} isToday={isToday} />}
-      </main>
-    </div>
-  );
-}
-
 export function ManualOperatorPage() {
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const { currentTenantId, memberships } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-
   const section = getSectionFromPathname(location.pathname);
 
   const todayDate = getTodayDateIsrael();
@@ -224,6 +148,14 @@ export function ManualOperatorPage() {
   const canMonthlyImport = !!shift && shift.status === 'active' && canImportExcelByRole;
   const hasExistingWork = lines.length > 0;
 
+  useEffect(() => {
+    if (!section || typeof window === 'undefined') return;
+    window.sessionStorage.setItem(
+      `${LAST_SECTION_PATH_PREFIX}${section}`,
+      `${location.pathname}${location.search}`
+    );
+  }, [location.pathname, location.search, section]);
+
   function handleCreateShift() {
     createShift.mutate({ name: generateShiftName(), date: selectedDate });
   }
@@ -233,14 +165,14 @@ export function ManualOperatorPage() {
   }
 
   function handleChangeSection(nextSection: ManualOperatorSection) {
-    navigate(manualOperatorSectionPath(nextSection, selectedDate));
+    navigate(getStoredSectionPath(nextSection) ?? manualOperatorSectionPath(nextSection, selectedDate));
   }
 
   if (section === null) {
     return <Navigate to={routes.operatorManualWork} replace />;
   }
 
-  const sectionContent = section ? (
+  const sectionContent = (
     <ManualOperatorSectionContent
       section={section}
       shift={shift}
@@ -250,72 +182,8 @@ export function ManualOperatorPage() {
       canMonthlyImport={canMonthlyImport}
       hasExistingWork={hasExistingWork}
     />
-  ) : null;
+  );
   const renderSectionWithoutShift = section === 'import' || section === 'printing';
-
-  if (isDesktop && section === 'work') {
-    return (
-      <>
-        <ManualOperatorWorkSection
-          key={selectedDate}
-          shift={shift}
-          lines={lines}
-          isLoading={isLoading}
-          isReadOnly={isReadOnly}
-          isToday={isToday}
-          canMonthlyImport={canMonthlyImport}
-          hasExistingWork={hasExistingWork}
-          isDesktop={isDesktop}
-          selectedDate={selectedDate}
-          todayDate={todayDate}
-          onChangeDate={handleSelectDate}
-          onOpenDatePicker={() => setShowDatePicker(true)}
-          onCreateShift={handleCreateShift}
-          isCreatingShift={createShift.isPending}
-          onChangeSection={handleChangeSection}
-        />
-        {showDatePicker && (
-          <ShiftDatePicker
-            selectedDate={selectedDate}
-            todayDate={todayDate}
-            onSelect={handleSelectDate}
-            onClose={() => setShowDatePicker(false)}
-          />
-        )}
-      </>
-    );
-  }
-
-  if (isDesktop && section && section !== 'work') {
-    return (
-      <>
-        <DesktopSectionFrame
-          section={section}
-          shift={shift}
-          selectedDate={selectedDate}
-          onChangeSection={handleChangeSection}
-          onOpenDatePicker={() => setShowDatePicker(true)}
-          isToday={isToday}
-          onCreateShift={handleCreateShift}
-          isCreatingShift={createShift.isPending}
-        >
-          {isLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 size={32} className="animate-spin text-gray-400" />
-            </div>
-          ) : !shift && !renderSectionWithoutShift ? null : sectionContent}
-        </DesktopSectionFrame>
-        {showDatePicker && (
-          <ShiftDatePicker
-            selectedDate={selectedDate}
-            todayDate={todayDate}
-            onSelect={handleSelectDate}
-            onClose={() => setShowDatePicker(false)}
-          />
-        )}
-      </>
-    );
-  }
 
   if (section === 'work') {
     return (
@@ -352,13 +220,22 @@ export function ManualOperatorPage() {
 
   return (
     <>
-      <MobileOperatorShell
+      <ManualOperatorShell
         activeSection={section}
         onChangeSection={handleChangeSection}
         shift={shift}
         selectedDate={selectedDate}
         todayDate={todayDate}
         onOpenDatePicker={() => setShowDatePicker(true)}
+        isDesktop={isDesktop}
+        contentClassName={isDesktop && section === 'lines' ? 'overflow-hidden' : undefined}
+        headerActions={
+          isDesktop && section === 'lines' ? (
+            <span className="rounded border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+              טיוטה מקומית בלבד
+            </span>
+          ) : undefined
+        }
       >
         {isLoading ? (
           <div className="flex items-center justify-center py-20" dir="rtl">
@@ -366,10 +243,14 @@ export function ManualOperatorPage() {
           </div>
         ) : !shift && !renderSectionWithoutShift ? (
           <ShiftEmptyState onCreateShift={handleCreateShift} isCreating={createShift.isPending} isToday={isToday} />
+        ) : isDesktop && section !== 'lines' ? (
+          <div className="mx-auto max-w-4xl px-4 py-6">
+            {sectionContent}
+          </div>
         ) : (
           sectionContent
         )}
-      </MobileOperatorShell>
+      </ManualOperatorShell>
       {showDatePicker && (
         <ShiftDatePicker
           selectedDate={selectedDate}

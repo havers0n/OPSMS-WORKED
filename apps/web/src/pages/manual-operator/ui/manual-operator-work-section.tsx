@@ -24,7 +24,9 @@ import {
 import type { RouteGroupWorkBucketSummary } from '@/entities/manual-shift/model/shift-selectors';
 import type { ManualOperatorSection } from '@/shared/config/routes';
 import { DesktopOperatorShell } from './desktop/desktop-operator-shell';
-import { MobileOperatorShell } from './mobile-operator-shell';
+import { DesktopKpiRow } from './desktop/desktop-kpi-row';
+import { ManualOperatorShell } from './manual-operator-shell';
+import { ManualWorkAreaFilters } from './manual-work-area-filters';
 import { ShiftEmptyState } from './shift-empty-state';
 import { LineList } from './line-list';
 import { LineDetail } from './line-detail';
@@ -359,49 +361,86 @@ export function ManualOperatorWorkSection({
   if (isDesktop) {
     return (
       <>
-        <DesktopOperatorShell
+        <ManualOperatorShell
+          activeSection="work"
+          onChangeSection={onChangeSection}
           shift={shift}
-          isLoading={isLoading || (!!shift && isDaySummaryLoading)}
-          kpi={kpi}
-          orderDetail={orderDetail}
-          selectedDetailType={selectedOrderId ? 'order' : null}
-          selectedAreaKey={selectedAreaKey}
-          selectedAreaLineKey={selectedAreaLineKey}
-          selectedRouteGroupKey={selectedRouteGroupKey}
-          selectedWorkBucketKey={selectedWorkBucketKey}
-          selectedRouteGroupWorkBucket={selectedRouteGroupWorkBucket}
-          selectedWorkBucketName={selectedWorkBucketName}
-          areaSummaries={areaSummaries}
-          specialAreaSummaries={specialAreaSummaries}
-          lineHierarchySummaries={lineHierarchySummaries}
-          areaLineSummaries={areaLineSummaries}
-          workBucketSummaries={workBucketSummaries}
-          routeGroupSummaries={routeGroupSummaries}
-          routeGroupWorkBucketSummaries={routeGroupWorkBucketSummaries}
-          hasRouteGroups={hasRouteGroups}
-          showProductRollupDeferred={showProductRollupDeferred}
-          onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
-          onCloseDetail={() => setSelectedOrderId(null)}
-          onSelectArea={handleSelectArea}
-          onSelectHierarchyLine={handleSelectHierarchyLine}
-          onSelectHierarchyRouteGroup={handleSelectHierarchyRouteGroup}
-          onSelectHierarchyBucket={handleSelectHierarchyBucket}
-          onClearArea={handleClearArea}
-          onClearHierarchyLine={handleClearHierarchyLine}
-          onClearHierarchyRouteGroup={handleClearHierarchyRouteGroup}
-          onClearHierarchyBucket={handleClearHierarchyBucket}
-          workBucketView={workBucketView}
-          productRollup={productRollup?.products}
-          productRollupLoading={isProductRollupLoading}
-          onSetWorkBucketView={setWorkBucketView}
           selectedDate={selectedDate}
           todayDate={todayDate}
-          onChangeDate={onChangeDate}
           onOpenDatePicker={onOpenDatePicker}
-          onCreateShift={onCreateShift}
-          isCreatingShift={isCreatingShift}
-          onBondedImport={shift ? () => setShowBondedImport(true) : undefined}
-        />
+          onChangeDate={onChangeDate}
+          isDesktop
+          headerActions={
+            shift ? (
+              <button
+                type="button"
+                onClick={() => setShowBondedImport(true)}
+                className="rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                aria-label="טעינת קובץ בונדד"
+              >
+                בונדד
+              </button>
+            ) : undefined
+          }
+          contextualRow={
+            <ManualWorkAreaFilters
+              areas={areaSummaries}
+              selectedAreaKey={selectedAreaKey}
+              onSelectArea={handleSelectArea}
+            />
+          }
+          headerMeta={
+            kpi ? (
+              <DesktopKpiRow summary={kpi} />
+            ) : (
+              <div className="flex gap-2 animate-pulse">
+                {Array.from({ length: 7 }).map((_, i) => (
+                  <div key={i} className="h-10 w-12 rounded-lg bg-gray-200" />
+                ))}
+              </div>
+            )
+          }
+          contentClassName="overflow-hidden"
+        >
+          <DesktopOperatorShell
+            shift={shift}
+            isLoading={isLoading || (!!shift && isDaySummaryLoading)}
+            kpi={kpi}
+            orderDetail={orderDetail}
+            selectedDetailType={selectedOrderId ? 'order' : null}
+            selectedAreaKey={selectedAreaKey}
+            selectedAreaLineKey={selectedAreaLineKey}
+            selectedRouteGroupKey={selectedRouteGroupKey}
+            selectedWorkBucketKey={selectedWorkBucketKey}
+            selectedRouteGroupWorkBucket={selectedRouteGroupWorkBucket}
+            selectedWorkBucketName={selectedWorkBucketName}
+            areaSummaries={areaSummaries}
+            specialAreaSummaries={specialAreaSummaries}
+            lineHierarchySummaries={lineHierarchySummaries}
+            areaLineSummaries={areaLineSummaries}
+            workBucketSummaries={workBucketSummaries}
+            routeGroupSummaries={routeGroupSummaries}
+            routeGroupWorkBucketSummaries={routeGroupWorkBucketSummaries}
+            hasRouteGroups={hasRouteGroups}
+            showProductRollupDeferred={showProductRollupDeferred}
+            onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
+            onCloseDetail={() => setSelectedOrderId(null)}
+            onSelectArea={handleSelectArea}
+            onSelectHierarchyLine={handleSelectHierarchyLine}
+            onSelectHierarchyRouteGroup={handleSelectHierarchyRouteGroup}
+            onSelectHierarchyBucket={handleSelectHierarchyBucket}
+            onClearArea={handleClearArea}
+            onClearHierarchyLine={handleClearHierarchyLine}
+            onClearHierarchyRouteGroup={handleClearHierarchyRouteGroup}
+            onClearHierarchyBucket={handleClearHierarchyBucket}
+            workBucketView={workBucketView}
+            productRollup={productRollup?.products}
+            productRollupLoading={isProductRollupLoading}
+            onSetWorkBucketView={setWorkBucketView}
+            onCreateShift={onCreateShift}
+            isCreatingShift={isCreatingShift}
+          />
+        </ManualOperatorShell>
         {showBondedImport && (
           <BondedImportSheet
             shiftId={shift?.id ?? null}
@@ -419,7 +458,7 @@ export function ManualOperatorWorkSection({
       : undefined;
 
   return (
-    <MobileOperatorShell
+    <ManualOperatorShell
       activeSection="work"
       onChangeSection={onChangeSection}
       shift={shift}
@@ -427,6 +466,7 @@ export function ManualOperatorWorkSection({
       selectedDate={selectedDate}
       todayDate={todayDate}
       onOpenDatePicker={onOpenDatePicker}
+      isDesktop={false}
     >
       {isLoading ? (
         <MobileLoadingState />
@@ -502,6 +542,6 @@ export function ManualOperatorWorkSection({
           }}
         />
       )}
-    </MobileOperatorShell>
+    </ManualOperatorShell>
   );
 }
