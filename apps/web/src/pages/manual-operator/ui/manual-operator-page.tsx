@@ -243,7 +243,7 @@ export function ManualOperatorPage() {
           </div>
         ) : !shift && !renderSectionWithoutShift ? (
           <ShiftEmptyState onCreateShift={handleCreateShift} isCreating={createShift.isPending} isToday={isToday} />
-        ) : isDesktop && section !== 'lines' ? (
+        ) : isDesktop && section !== 'lines' && section !== 'products' ? (
           <div className="mx-auto max-w-4xl px-4 py-6">
             {sectionContent}
           </div>
