@@ -66,6 +66,7 @@ import {
   pickerSheetPrintDataSchema
 } from '../../schemas.js';
 import { parseOrThrow } from '../../validation.js';
+import { generatePickerSheetPdf, type PickerSheetPdfParams } from './picker-sheet-pdf.js';
 import { createPickBridgeServiceFromSupabase } from './pick-bridge-service.js';
 
 type GetAuthContext = (
@@ -1312,6 +1313,82 @@ export function registerManualShiftsRoutes(
       });
 
       return parseOrThrow(pickerSheetPrintDataSchema, data);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return sendApiError(reply, error, request.id);
+      }
+      if (error instanceof ZodError) {
+        return sendApiError(reply, new ApiError(400, 'VALIDATION_ERROR', error.message), request.id);
+      }
+      return sendApiError(reply, new ApiError(500, 'INTERNAL_ERROR', 'Unexpected error'), request.id);
+    }
+  });
+
+  // ── Picker sheet PDF ─────────────────────────────────────────────────────────
+
+  app.get('/api/manual-shifts/:shiftId/print/picker-sheet.pdf', async (request, reply) => {
+    try {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      const tenantId = requireTenant(auth);
+      const shiftId = parseOrThrow(idResponseSchema, {
+        id: (request.params as Record<string, string>).shiftId ?? ''
+      }).id;
+
+      const query = request.query as Record<string, string | undefined>;
+      const scope = query.scope;
+      const distributionArea = query.distributionArea;
+      const planningLineName = query.planningLineName;
+      const workGroupName = query.workGroupName;
+
+      const pdfParams: PickerSheetPdfParams = {
+        shiftId,
+        scope: scope as PickerSheetPdfParams['scope'],
+        distributionArea: distributionArea ?? '',
+        planningLineName: planningLineName ?? '',
+      };
+
+      if (scope === 'line') {
+        if (!distributionArea || !planningLineName) {
+          throw new ApiError(400, 'MISSING_PARAMS',
+            'Query params distributionArea and planningLineName are required for scope=line.');
+        }
+
+        const data = await getManualShiftsService(auth).getPickerSheetLine({
+          tenantId, shiftId, distributionArea, planningLineName,
+        });
+
+        const pdf = await generatePickerSheetPdf(auth, pdfParams);
+        const safeDate = (data.shiftDate ?? shiftId).replace(/[^a-zA-Z0-9.-]/g, '-');
+        return reply
+          .header('Content-Type', 'application/pdf')
+          .header('Content-Disposition', `inline; filename="picker-sheet-${safeDate}-line.pdf"`)
+          .send(pdf);
+      }
+
+      if (scope !== 'workGroup') {
+        throw new ApiError(400, 'INVALID_SCOPE',
+          'Only scope=line and scope=workGroup are supported for this endpoint.');
+      }
+
+      if (!distributionArea || !planningLineName || !workGroupName) {
+        throw new ApiError(400, 'MISSING_PARAMS',
+          'Query params distributionArea, planningLineName, and workGroupName are required for scope=workGroup.');
+      }
+
+      pdfParams.workGroupName = workGroupName;
+
+      const data = await getManualShiftsService(auth).getPickerSheetWorkGroup({
+        tenantId, shiftId, distributionArea, planningLineName, workGroupName
+      });
+
+      const pdf = await generatePickerSheetPdf(auth, pdfParams);
+      const safeDate = (data.shiftDate ?? shiftId).replace(/[^a-zA-Z0-9.-]/g, '-');
+      return reply
+        .header('Content-Type', 'application/pdf')
+        .header('Content-Disposition', `inline; filename="picker-sheet-${safeDate}-workGroup.pdf"`)
+        .send(pdf);
     } catch (error) {
       if (error instanceof ApiError) {
         return sendApiError(reply, error, request.id);

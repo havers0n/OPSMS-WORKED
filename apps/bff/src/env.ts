@@ -18,6 +18,16 @@ function parsePort(value: string | undefined, fallback: number): number {
   return parsed;
 }
 
+function parseUrl(value: string | undefined, fallback: string): string {
+  const resolved = value ?? fallback;
+  try {
+    const parsed = new URL(resolved);
+    return parsed.origin;
+  } catch {
+    throw new Error(`Invalid PRINT_RENDER_FRONTEND_URL: "${resolved}". Must be a valid absolute URL origin.`);
+  }
+}
+
 export const env = {
   serviceName: process.env.BFF_SERVICE_NAME ?? '@wos/bff',
   logLevel: process.env.BFF_LOG_LEVEL ?? 'info',
@@ -25,5 +35,6 @@ export const env = {
   host: process.env.BFF_HOST ?? '127.0.0.1',
   supabaseUrl: requiredEnv('SUPABASE_URL'),
   supabaseAnonKey: requiredEnv('SUPABASE_ANON_KEY'),
-  corsOrigin: process.env.BFF_CORS_ORIGIN ?? /http:\/\/127\.0\.0\.1:(4173|5173)$/
+  corsOrigin: process.env.BFF_CORS_ORIGIN ?? /http:\/\/127\.0\.0\.1:(4173|5173)$/,
+  printRenderFrontendUrl: parseUrl(process.env.PRINT_RENDER_FRONTEND_URL, 'http://127.0.0.1:5173')
 };

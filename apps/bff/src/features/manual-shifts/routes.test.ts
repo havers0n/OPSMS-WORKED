@@ -1,4 +1,4 @@
-﻿import { afterEach, describe, expect, it, vi } from 'vitest';
+﻿import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
 import multipart from '@fastify/multipart';
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -28,6 +28,12 @@ import type { AuthenticatedRequestContext } from '../../auth.js';
 import { ApiError } from '../../errors.js';
 import { registerManualShiftsRoutes } from './routes.js';
 import type { ManualShiftsService } from './service.js';
+
+const mockPdfBuffer = vi.hoisted(() => Buffer.from('mock-pdf-content'));
+vi.mock('./picker-sheet-pdf.js', () => ({
+  SUPABASE_STORAGE_KEY: 'supabase.auth.token',
+  generatePickerSheetPdf: vi.fn().mockResolvedValue(mockPdfBuffer),
+}));
 
 const ids = {
   tenant: '11111111-1111-4111-8111-111111111111',
@@ -2868,6 +2874,181 @@ describe('manual shifts routes', () => {
         planningLineName: 'גליל',
         workGroupName: 'כללי'
       });
+
+      await app.close();
+    });
+  });
+
+  describe('GET /api/manual-shifts/:shiftId/print/picker-sheet.pdf', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('returns PDF for scope=workGroup with correct Content-Type and Content-Disposition', async () => {
+      const sheet = {
+        shift: 'Morning Shift',
+        scope: 'workGroup' as const,
+        shiftDate: '2026-06-22',
+        distributionArea: 'גליל',
+        generatedAt: '2026-06-22T10:00:00.000Z',
+        totals: { lines: 1, workGroups: 1, items: 1 },
+        planningLines: [
+          {
+            name: 'גליל',
+            workGroups: [{ name: 'כללי', items: [{ sku: 'SKU-1', displaySku: 'SKU-1', description: 'מוצר', quantity: 1 }] }]
+          }
+        ]
+      };
+      const service = createServiceMock({
+        getPickerSheetWorkGroup: vi.fn(async () => sheet)
+      });
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/print/picker-sheet.pdf?scope=workGroup&distributionArea=%D7%92%D7%9C%D7%99%D7%9C&planningLineName=%D7%92%D7%9C%D7%99%D7%9C&workGroupName=%D7%9B%D7%9C%D7%9C%D7%99`
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['content-type']).toBe('application/pdf');
+      expect(response.headers['content-disposition']).toMatch(/^inline;/);
+      expect(response.headers['content-disposition']).toContain('.pdf');
+
+      await app.close();
+    });
+
+    it('calls getPickerSheetWorkGroup for scope=workGroup', async () => {
+      const sheet = {
+        shift: 'Morning Shift',
+        scope: 'workGroup' as const,
+        shiftDate: '2026-06-22',
+        distributionArea: 'גליל',
+        generatedAt: '2026-06-22T10:00:00.000Z',
+        totals: { lines: 1, workGroups: 1, items: 1 },
+        planningLines: [{ name: 'גליל', workGroups: [{ name: 'כללי', items: [] }] }]
+      };
+      const service = createServiceMock({
+        getPickerSheetWorkGroup: vi.fn(async () => sheet)
+      });
+      const app = await buildTestApp(service);
+
+      await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/print/picker-sheet.pdf?scope=workGroup&distributionArea=%D7%92%D7%9C%D7%99%D7%9C&planningLineName=%D7%92%D7%9C%D7%99%D7%9C&workGroupName=%D7%9B%D7%9C%D7%9C%D7%99`
+      });
+
+      expect(service.getPickerSheetWorkGroup).toHaveBeenCalledWith({
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        distributionArea: 'גליל',
+        planningLineName: 'גליל',
+        workGroupName: 'כללי'
+      });
+
+      await app.close();
+    });
+
+    it('calls getPickerSheetLine for scope=line', async () => {
+      const sheet = {
+        shift: 'Morning Shift',
+        scope: 'line' as const,
+        shiftDate: '2026-06-22',
+        distributionArea: 'גליל',
+        generatedAt: '2026-06-22T10:00:00.000Z',
+        totals: { lines: 1, workGroups: 1, items: 1 },
+        planningLines: [{ name: 'גליל', workGroups: [{ name: 'כללי', items: [] }] }]
+      };
+      const service = createServiceMock({
+        getPickerSheetLine: vi.fn(async () => sheet)
+      });
+      const app = await buildTestApp(service);
+
+      await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/print/picker-sheet.pdf?scope=line&distributionArea=%D7%92%D7%9C%D7%99%D7%9C&planningLineName=%D7%92%D7%9C%D7%99%D7%9C`
+      });
+
+      expect(service.getPickerSheetLine).toHaveBeenCalledWith({
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        distributionArea: 'גליל',
+        planningLineName: 'גליל',
+      });
+
+      await app.close();
+    });
+
+    it('rejects scope=area', async () => {
+      const service = createServiceMock();
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/print/picker-sheet.pdf?scope=area&distributionArea=%D7%92%D7%9C%D7%99%D7%9C`
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = response.json();
+      expect(body.code).toBe('INVALID_SCOPE');
+
+      await app.close();
+    });
+
+    it('rejects missing params for scope=line', async () => {
+      const service = createServiceMock();
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/print/picker-sheet.pdf?scope=line&distributionArea=%D7%92%D7%9C%D7%99%D7%9C`
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().code).toBe('MISSING_PARAMS');
+
+      await app.close();
+    });
+
+    it('rejects missing workGroupName for scope=workGroup', async () => {
+      const service = createServiceMock();
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/print/picker-sheet.pdf?scope=workGroup&distributionArea=%D7%92%D7%9C%D7%99%D7%9C&planningLineName=%D7%92%D7%9C%D7%99%D7%9C`
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().code).toBe('MISSING_PARAMS');
+
+      await app.close();
+    });
+
+    it('returns 401 without auth', async () => {
+      const service = createServiceMock();
+      const app = await buildTestApp(service, null);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/print/picker-sheet.pdf?scope=line&distributionArea=%D7%92%D7%9C%D7%99%D7%9C&planningLineName=%D7%92%D7%9C%D7%99%D7%9C`
+      });
+
+      expect(response.statusCode).toBe(401);
+
+      await app.close();
+    });
+
+    it('rejects invalid shiftId format', async () => {
+      const service = createServiceMock();
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/manual-shifts/not-a-valid-id/print/picker-sheet.pdf?scope=line&distributionArea=%D7%92%D7%9C%D7%99%D7%9C&planningLineName=%D7%92%D7%9C%D7%99%D7%9C'
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().code).toBe('VALIDATION_ERROR');
 
       await app.close();
     });

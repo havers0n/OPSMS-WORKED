@@ -20,6 +20,7 @@
     "bwip-js": "^4.11.1",
     "fastify": "^5.8.5",
     "pdf-lib": "^1.17.1",
+    "playwright": "^1.52.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {

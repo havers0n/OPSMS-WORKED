@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { routes } from '@/shared/config/routes';
 import { bffRequest, BffRequestError } from '@/shared/api/bff/client';
@@ -18,12 +18,28 @@ export function PrintPickerSheetPage() {
   const scopeParam = searchParams.get('scope');
   const planningLineName = searchParams.get('planningLineName') ?? undefined;
   const workGroupName = searchParams.get('workGroupName') ?? undefined;
+  const pdfRender = searchParams.get('pdfRender') === '1';
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [realData, setRealData] = useState<PickerSheetPrintData | null>(null);
 
   const isDemo = shiftId === DEMO_SHIFT;
+
+  const pdfUrl = useMemo<string | undefined>(() => {
+    if (!shiftId || !distributionArea || !planningLineName) return undefined;
+    const scope = scopeParam === 'line' ? 'line' : 'workGroup';
+    const params: Record<string, string> = {
+      shiftId,
+      scope,
+      distributionArea,
+      planningLineName,
+    };
+    if (scope === 'workGroup' && workGroupName) {
+      params.workGroupName = workGroupName;
+    }
+    return `/api/manual-shifts/${shiftId}/print/picker-sheet.pdf?${new URLSearchParams(params).toString()}`;
+  }, [shiftId, distributionArea, planningLineName, workGroupName, scopeParam]);
   const scope: PickerSheetScope = scopeParam === 'line' ? 'line' : scopeParam === 'workGroup' ? 'workGroup' : 'area';
 
   useEffect(() => {
@@ -130,7 +146,7 @@ export function PrintPickerSheetPage() {
 
   return (
     <>
-      <PrintToolbar />
+      {!pdfRender && <PrintToolbar pdfUrl={pdfUrl} />}
       <PrintPage>
         {loading && (
           <div dir="rtl" style={{ padding: 40, textAlign: 'center' }}>

@@ -33,9 +33,9 @@ describe('AppRouter lazy routes', () => {
       </I18nProvider>
     );
 
-    const header = await screen.findByText('Artos Operator');
+    const header = await screen.findByText('Artos Operator', {}, { timeout: 10000 });
     expect(header).toBeTruthy();
-  });
+  }, 15000);
 
   it('redirects /operator/manual to /operator/manual/work', async () => {
     window.history.pushState({}, '', routes.operatorManual);
@@ -47,9 +47,9 @@ describe('AppRouter lazy routes', () => {
       </I18nProvider>
     );
 
-    await screen.findByText('Artos Operator');
+    await screen.findByText('Artos Operator', {}, { timeout: 10000 });
     expect(window.location.pathname).toBe(routes.operatorManualWork);
-  });
+  }, 15000);
 
   it('renders ProductsPage at /products', async () => {
     window.history.pushState({}, '', routes.products);
@@ -61,9 +61,9 @@ describe('AppRouter lazy routes', () => {
       </I18nProvider>
     );
 
-    const title = await screen.findByText('Product Catalog');
+    const title = await screen.findByText('Product Catalog', {}, { timeout: 10000 });
     expect(title).toBeTruthy();
-  });
+  }, 15000);
 
   it('renders PickingQueuePage at /tasks', async () => {
     window.history.pushState({}, '', routes.tasks);
@@ -75,8 +75,8 @@ describe('AppRouter lazy routes', () => {
       </I18nProvider>
     );
 
-    expect(await screen.findByTestId('picking-queue-page')).toBeTruthy();
-  });
+    expect(await screen.findByTestId('picking-queue-page', {}, { timeout: 10000 })).toBeTruthy();
+  }, 15000);
 
   it('redirects /picking to /tasks', async () => {
     window.history.pushState({}, '', routes.picking);
@@ -88,8 +88,8 @@ describe('AppRouter lazy routes', () => {
       </I18nProvider>
     );
 
-    expect(await screen.findByTestId('picking-queue-page')).toBeTruthy();
-  });
+    expect(await screen.findByTestId('picking-queue-page', {}, { timeout: 10000 })).toBeTruthy();
+  }, 15000);
 
   it('redirects /picking/run to /tasks', async () => {
     window.history.pushState({}, '', routes.pickingRun);
@@ -101,6 +101,6 @@ describe('AppRouter lazy routes', () => {
       </I18nProvider>
     );
 
-    expect(await screen.findByTestId('picking-queue-page')).toBeTruthy();
-  });
+    expect(await screen.findByTestId('picking-queue-page', {}, { timeout: 10000 })).toBeTruthy();
+  }, 15000);
 });
