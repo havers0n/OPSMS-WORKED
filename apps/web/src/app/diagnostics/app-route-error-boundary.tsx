@@ -56,9 +56,9 @@ class RouteErrorBoundaryImpl extends Component<
 
   override render() {
     if (this.state.errorId !== null) {
-      return (
-        <div className="flex h-full min-h-[40vh] w-full items-center justify-center px-4">
-          <div className="max-w-md rounded-3xl border border-rose-200 bg-white p-6 text-center shadow-sm">
+        return (
+          <div className="flex h-full min-h-[40vh] w-full items-center justify-center px-4" data-testid="app-route-error">
+            <div className="max-w-md rounded-3xl border border-rose-200 bg-white p-6 text-center shadow-sm">
             <h2 className="text-lg font-semibold text-slate-900">{this.props.title}</h2>
             <p className="mt-2 text-sm text-slate-600">{this.props.description}</p>
             <p className="mt-3 font-mono text-xs text-rose-700">{this.state.errorId}</p>

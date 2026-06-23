@@ -9,7 +9,7 @@ function NoWorkspaceAccess() {
   const { signOut, user, workspaceError } = useAuth();
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--surface-secondary)] px-6">
+    <div className="flex min-h-screen items-center justify-center bg-[var(--surface-secondary)] px-6" data-testid="workspace-access-error">
       <div className="w-full max-w-xl rounded-[24px] border border-amber-200 bg-white p-8 shadow-[var(--shadow-soft)]">
         <div className="text-sm font-semibold uppercase tracking-[0.24em] text-amber-600">{t('auth.workspaceAccess.eyebrow')}</div>
         <div className="mt-3 text-3xl font-semibold text-[var(--text-primary)]">{t('auth.workspaceAccess.title')}</div>
@@ -38,7 +38,7 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
 
   if (!isReady) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--surface-secondary)] text-sm text-[var(--text-muted)]">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--surface-secondary)] text-sm text-[var(--text-muted)]" data-testid="protected-route-loading">
         {t('app.loading.session')}
       </div>
     );

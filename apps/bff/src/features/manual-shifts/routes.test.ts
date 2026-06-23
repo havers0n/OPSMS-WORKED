@@ -31,7 +31,7 @@ import type { ManualShiftsService } from './service.js';
 
 const mockPdfBuffer = vi.hoisted(() => Buffer.from('mock-pdf-content'));
 vi.mock('./picker-sheet-pdf.js', () => ({
-  SUPABASE_STORAGE_KEY: 'supabase.auth.token',
+  SUPABASE_STORAGE_KEY: 'sb-test-auth-token',
   generatePickerSheetPdf: vi.fn().mockResolvedValue(mockPdfBuffer),
 }));
 
