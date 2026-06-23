@@ -715,4 +715,45 @@ describe('ProductControlTab', () => {
     fireEvent.click(screen.getByText('100005'));
     expect(screen.queryByText('בקשת כיסוי בונדד')).toBeNull();
   });
+
+  // === Sub-tab: Bonded Coverage Requests ===
+
+  it('renders sub-tab navigation buttons', async () => {
+    mockedBffRequest.mockResolvedValueOnce(mockResponse);
+    renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('חוסרים + כיסוי בונדד')).toBeTruthy();
+    });
+    expect(screen.getByText('בקשות כיסוי')).toBeTruthy();
+  });
+
+  it('switches to requests view when clicking בקשות כיסוי tab', async () => {
+    mockedBffRequest.mockResolvedValueOnce(mockResponse);
+    renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('חוסרים + כיסוי בונדד')).toBeTruthy();
+    });
+    mockedBffRequest.mockResolvedValueOnce([]);
+    fireEvent.click(screen.getByText('בקשות כיסוי'));
+    await waitFor(() => {
+      expect(screen.getAllByText('בקשות כיסוי').length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  it('switches back to shortage view when clicking חוסרים tab', async () => {
+    mockedBffRequest.mockResolvedValueOnce(mockResponse);
+    renderTab();
+    await waitFor(() => {
+      expect(screen.getByText('חוסרים + כיסוי בונדד')).toBeTruthy();
+    });
+    mockedBffRequest.mockResolvedValueOnce([]);
+    fireEvent.click(screen.getByText('בקשות כיסוי'));
+    await waitFor(() => {
+      expect(screen.getByText('ניהול בקשות כיסוי בונדד')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText('חוסרים + כיסוי בונדד'));
+    await waitFor(() => {
+      expect(screen.getByText('סה״כ מק״טים')).toBeTruthy();
+    });
+  });
 });
