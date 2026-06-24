@@ -1,8 +1,8 @@
-import type { RouteGroupSummary } from '@/entities/manual-shift/model/shift-selectors';
+import type { DistributionGroupSummary } from '@/entities/manual-shift/model/shift-selectors';
 
 interface DesktopRouteGroupCardProps {
-  routeGroup: RouteGroupSummary;
-  onClick?: (routeGroupKey: string) => void;
+  routeGroup: DistributionGroupSummary;
+  onClick?: (distributionGroupKey: string) => void;
 }
 
 const CONFIDENCE_BADGE: Record<string, string> = {

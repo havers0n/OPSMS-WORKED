@@ -1,9 +1,9 @@
 import type {
   RouteGroupWorkBucketSummary,
-  WorkBucketSummary
+  WorkGroupSummary
 } from '@/entities/manual-shift/model/shift-selectors';
 
-type BucketForCard = WorkBucketSummary | RouteGroupWorkBucketSummary;
+type BucketForCard = WorkGroupSummary | RouteGroupWorkBucketSummary;
 
 interface DesktopWorkBucketCardProps {
   bucket: BucketForCard;
@@ -29,12 +29,12 @@ function getOrdersCount(bucket: BucketForCard): number {
 
 function getItemLinesCount(bucket: BucketForCard): number {
   if ('itemLinesCount' in bucket) return bucket.itemLinesCount;
-  return (bucket as WorkBucketSummary).itemLinesCount;
+  return (bucket as WorkGroupSummary).itemLinesCount;
 }
 
 function getTotalQuantity(bucket: BucketForCard): number {
   if ('totalQuantity' in bucket) return bucket.totalQuantity;
-  return (bucket as WorkBucketSummary).totalQuantity;
+  return (bucket as WorkGroupSummary).totalQuantity;
 }
 
 function bucketDisplayName(workBucketName: string, lineName?: string, routeGroupName?: string): string {

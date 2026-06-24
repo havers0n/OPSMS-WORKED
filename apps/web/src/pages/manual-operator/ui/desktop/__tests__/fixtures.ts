@@ -5,7 +5,7 @@ import type {
   PickerDetail,
   OrderDetail,
   LineHierarchySummary,
-  WorkBucketSummary,
+  WorkGroupSummary,
   AreaHierarchySummary
 } from '@/entities/manual-shift/model/shift-selectors';
 import type { ManualShiftSession } from '@wos/domain';
@@ -175,7 +175,7 @@ export const mockLineHierarchySummaries: LineHierarchySummary[] = [
   }
 ];
 
-export const mockWorkBucketSummaries: WorkBucketSummary[] = [
+export const mockWorkGroupSummaries: WorkGroupSummary[] = [
   {
     workBucketName: 'Point A',
     workGroupName: 'Point A',

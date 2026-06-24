@@ -2,9 +2,9 @@ import { Link } from 'react-router-dom';
 import type {
   AreaHierarchySummary,
   LineHierarchySummary,
-  RouteGroupSummary,
+  DistributionGroupSummary,
   RouteGroupWorkBucketSummary,
-  WorkBucketSummary
+  WorkGroupSummary
 } from '@/entities/manual-shift/model/shift-selectors';
 import type { BucketProductRollupRow } from '@wos/domain';
 import { useOpenPickerSheetPdf } from '@/pages/manual-operator/printing/hooks/use-open-picker-sheet-pdf';
@@ -25,27 +25,27 @@ interface DesktopHierarchyPanelProps {
   selectedAreaKey: string | null;
   selectedAreaLineKey?: string | null;
   selectedLineId?: string | null;
-  selectedRouteGroupKey: string | null;
-  selectedWorkBucketKey: string | null;
-  selectedRouteGroupWorkBucket: RouteGroupWorkBucketSummary | undefined;
+  selectedDistributionGroupKey: string | null;
+  selectedWorkGroupKey: string | null;
+  selectedDistributionGroupWorkGroup: RouteGroupWorkBucketSummary | undefined;
   selectedWorkBucketName: string | null;
   areaSummaries: AreaHierarchySummary[];
   specialAreaSummaries: AreaHierarchySummary[];
   lineHierarchySummaries: LineHierarchySummary[];
   areaLineSummaries: LineHierarchySummary[];
-  workBucketSummaries: WorkBucketSummary[];
-  routeGroupSummaries: RouteGroupSummary[];
-  routeGroupWorkBucketSummaries: RouteGroupWorkBucketSummary[];
-  hasRouteGroups: boolean;
+  workGroupSummaries: WorkGroupSummary[];
+  distributionGroupSummaries: DistributionGroupSummary[];
+  distributionGroupWorkGroupSummaries: RouteGroupWorkBucketSummary[];
+  hasDistributionGroups: boolean;
   shiftId: string | null;
   onSelectArea: (areaKey: string | null) => void;
   onSelectLine: (areaLineKey: string) => void;
-  onSelectRouteGroup: (routeGroupKey: string) => void;
+  onSelectDistributionGroup: (distributionGroupKey: string) => void;
   onSelectBucket: (workBucketIdentifier: string) => void;
   onSelectOrder: (orderId: string) => void;
   onClearArea: () => void;
   onClearLine: () => void;
-  onClearRouteGroup: () => void;
+  onClearDistributionGroup: () => void;
   onClearBucket: () => void;
   workBucketView: 'products' | 'orders';
   productRollup: BucketProductRollupRow[] | undefined;
@@ -75,27 +75,27 @@ export function DesktopHierarchyPanel({
   selectedAreaKey,
   selectedAreaLineKey,
   selectedLineId,
-  selectedRouteGroupKey,
-  selectedWorkBucketKey,
-  selectedRouteGroupWorkBucket,
+  selectedDistributionGroupKey,
+  selectedWorkGroupKey,
+  selectedDistributionGroupWorkGroup,
   selectedWorkBucketName,
   areaSummaries,
   specialAreaSummaries,
   lineHierarchySummaries,
   areaLineSummaries,
-  workBucketSummaries,
-  routeGroupSummaries,
-  routeGroupWorkBucketSummaries,
-  hasRouteGroups,
+  workGroupSummaries,
+  distributionGroupSummaries,
+  distributionGroupWorkGroupSummaries,
+  hasDistributionGroups,
   shiftId,
   onSelectArea,
   onSelectLine,
-  onSelectRouteGroup,
+  onSelectDistributionGroup,
   onSelectBucket,
   onSelectOrder,
   onClearArea,
   onClearLine,
-  onClearRouteGroup,
+  onClearDistributionGroup,
   onClearBucket,
   workBucketView,
   productRollup,
@@ -108,9 +108,9 @@ export function DesktopHierarchyPanel({
   const normalAreaSummaries = areaSummaries.filter((area) => !specialAreaKeySet.has(area.areaKey));
   const selectedArea = areaSummaries.find((a) => a.areaKey === selectedAreaKey);
   const selectedLine = lineHierarchySummaries.find((l) => (l.areaLineKey ?? l.lineId) === effectiveSelectedAreaLineKey);
-  const selectedBucketLegacy = workBucketSummaries.find((p) => p.workBucketName === selectedWorkBucketName);
-  const detailWorkGroupName = hasRouteGroups && !!selectedRouteGroupKey
-    ? selectedRouteGroupWorkBucket?.workBucketName
+  const selectedBucketLegacy = workGroupSummaries.find((p) => p.workBucketName === selectedWorkBucketName);
+  const detailWorkGroupName = hasDistributionGroups && !!selectedDistributionGroupKey
+    ? selectedDistributionGroupWorkGroup?.workBucketName
     : selectedBucketLegacy?.workBucketName;
   const linePdfUrl = buildPickerSheetLinePdfUrl({
     shiftId,
@@ -219,8 +219,8 @@ export function DesktopHierarchyPanel({
   }
 
   // ── State 3: Route group selected, but no work bucket yet ──────────────
-  if (hasRouteGroups && selectedRouteGroupKey && !selectedWorkBucketKey && !selectedWorkBucketName) {
-    const selectedRouteGroup = routeGroupSummaries.find((rg) => rg.routeGroupKey === selectedRouteGroupKey);
+  if (hasDistributionGroups && selectedDistributionGroupKey && !selectedWorkGroupKey && !selectedWorkBucketName) {
+    const selectedDistributionGroup = distributionGroupSummaries.find((rg) => rg.routeGroupKey === selectedDistributionGroupKey);
 
     return (
       <div className="p-4">
@@ -237,15 +237,15 @@ export function DesktopHierarchyPanel({
           <button
             type="button"
             className="text-xs text-blue-600 hover:text-blue-800"
-            onClick={onClearRouteGroup}
+            onClick={onClearDistributionGroup}
             aria-label="חזרה לקבוצות חלוקה"
           >
             {selectedArea?.displayName ?? ''}
           </button>
           <span className="text-xs text-gray-400">&gt;</span>
-          <span className="text-xs text-gray-700 font-medium">קבוצת חלוקה: {selectedRouteGroup?.routeGroupName ?? ''}</span>
+          <span className="text-xs text-gray-700 font-medium">קבוצת חלוקה: {selectedDistributionGroup?.routeGroupName ?? ''}</span>
         </div>
-        {routeGroupWorkBucketSummaries.length === 0 ? (
+        {distributionGroupWorkGroupSummaries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 px-4 gap-1">
             <p className="text-sm font-medium text-gray-500">אין קבוצות עבודה בקבוצת חלוקה זו</p>
           </div>
@@ -284,11 +284,11 @@ export function DesktopHierarchyPanel({
               </p>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {routeGroupWorkBucketSummaries.map((wb) => (
+              {distributionGroupWorkGroupSummaries.map((wb) => (
                 <DesktopWorkBucketCard
                   key={wb.workBucketKey}
                   bucket={wb}
-                  routeGroupName={selectedRouteGroup?.routeGroupName}
+                  routeGroupName={selectedDistributionGroup?.routeGroupName}
                   onClick={onSelectBucket}
                 />
               ))}
@@ -300,7 +300,7 @@ export function DesktopHierarchyPanel({
   }
 
   // ── State 4: Line selected, route groups shown (no route group selected) ──
-  if (hasRouteGroups && !selectedRouteGroupKey && !selectedWorkBucketKey && !selectedWorkBucketName) {
+  if (hasDistributionGroups && !selectedDistributionGroupKey && !selectedWorkGroupKey && !selectedWorkBucketName) {
     return (
       <div className="p-4">
         <div className="flex items-center gap-2 mb-3">
@@ -315,7 +315,7 @@ export function DesktopHierarchyPanel({
           <span className="text-xs text-gray-400">&gt;</span>
           <span className="text-xs text-gray-700 font-medium">{selectedArea?.displayName ?? ''}</span>
         </div>
-        {routeGroupSummaries.length === 0 ? (
+        {distributionGroupSummaries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 px-4 gap-1">
             <p className="text-sm font-medium text-gray-500">אין קבוצות חלוקה בקו זה</p>
           </div>
@@ -323,8 +323,8 @@ export function DesktopHierarchyPanel({
           <>
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">קבוצות חלוקה</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {routeGroupSummaries.map((rg) => (
-                <DesktopRouteGroupCard key={rg.routeGroupKey} routeGroup={rg} onClick={onSelectRouteGroup} />
+              {distributionGroupSummaries.map((rg) => (
+                <DesktopRouteGroupCard key={rg.routeGroupKey} routeGroup={rg} onClick={onSelectDistributionGroup} />
               ))}
             </div>
           </>
@@ -334,7 +334,7 @@ export function DesktopHierarchyPanel({
   }
 
   // ── State 5: Legacy fallback — no route groups, no work bucket selected ──
-  if (!selectedWorkBucketKey && !selectedWorkBucketName) {
+  if (!selectedWorkGroupKey && !selectedWorkBucketName) {
     return (
       <div className="p-4">
         <div className="flex items-center gap-2 mb-3">
@@ -364,7 +364,7 @@ export function DesktopHierarchyPanel({
             </>
           )}
         </div>
-        {workBucketSummaries.length === 0 ? (
+        {workGroupSummaries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 px-4 gap-1">
             <p className="text-sm font-medium text-gray-500">אין קבוצות עבודה בקו זה</p>
           </div>
@@ -408,7 +408,7 @@ export function DesktopHierarchyPanel({
               </p>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {workBucketSummaries.map((bucket) => (
+              {workGroupSummaries.map((bucket) => (
                 <DesktopWorkBucketCard
                   key={bucket.workBucketName}
                   bucket={bucket}
@@ -424,18 +424,18 @@ export function DesktopHierarchyPanel({
   }
 
   // ── State 6: Work bucket selected → products/orders ──────────────────────
-  // selectedRouteGroupWorkBucket is the single source of truth for routeGroups mode.
-  // It is derived in the parent from the same routeGroupWorkBucketSummaries list
-  // and selectedWorkBucketKey.  Do not add a secondary find fallback here —
+  // selectedDistributionGroupWorkGroup is the single source of truth for routeGroups mode.
+  // It is derived in the parent from the same distributionGroupWorkGroupSummaries list
+  // and selectedWorkGroupKey.  Do not add a secondary find fallback here —
   // the Products tab pointName derivation and showProductRollupDeferred in the
   // parent depend on exactly the same bucket object.
-  const isRouteGroupBucket = hasRouteGroups && !!selectedRouteGroupKey;
-  const selectedRouteGroup = isRouteGroupBucket
-    ? routeGroupSummaries.find((rg) => rg.routeGroupKey === selectedRouteGroupKey)
+  const isDistributionGroupBucket = hasDistributionGroups && !!selectedDistributionGroupKey;
+  const selectedDistributionGroup = isDistributionGroupBucket
+    ? distributionGroupSummaries.find((rg) => rg.routeGroupKey === selectedDistributionGroupKey)
     : undefined;
 
-  const bucketOrders = isRouteGroupBucket
-    ? (selectedRouteGroupWorkBucket?.orders ?? [])
+  const bucketOrders = isDistributionGroupBucket
+    ? (selectedDistributionGroupWorkGroup?.orders ?? [])
     : (selectedBucketLegacy?.orders ?? []);
 
   return (
@@ -450,12 +450,12 @@ export function DesktopHierarchyPanel({
           אזורי הפצה
         </button>
         <span className="text-xs text-gray-400">&gt;</span>
-        {isRouteGroupBucket ? (
+        {isDistributionGroupBucket ? (
           <>
             <button
               type="button"
               className="text-xs text-blue-600 hover:text-blue-800"
-              onClick={onClearRouteGroup}
+              onClick={onClearDistributionGroup}
               aria-label={`חזרה לקבוצות חלוקה באזור ${selectedArea?.displayName ?? ''}`}
             >
               {selectedArea?.displayName ?? ''}
@@ -464,10 +464,10 @@ export function DesktopHierarchyPanel({
             <button
               type="button"
               className="text-xs text-blue-600 hover:text-blue-800"
-              onClick={onClearRouteGroup}
-              aria-label={`חזרה לקבוצות עבודה בקבוצת חלוקה ${selectedRouteGroup?.routeGroupName ?? ''}`}
+              onClick={onClearDistributionGroup}
+              aria-label={`חזרה לקבוצות עבודה בקבוצת חלוקה ${selectedDistributionGroup?.routeGroupName ?? ''}`}
             >
-              קבוצת חלוקה: {selectedRouteGroup?.routeGroupName ?? ''}
+              קבוצת חלוקה: {selectedDistributionGroup?.routeGroupName ?? ''}
             </button>
           </>
         ) : isAutoSkippedSingleLine ? (

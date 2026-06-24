@@ -3,9 +3,9 @@ import type {
   AreaHierarchySummary,
   LineHierarchySummary,
   OrderDetail,
-  RouteGroupSummary,
+  DistributionGroupSummary,
   RouteGroupWorkBucketSummary,
-  WorkBucketSummary,
+  WorkGroupSummary,
   ShiftSummary
 } from '@/entities/manual-shift/model/shift-selectors';
 import { DesktopDetailDrawer } from './desktop-detail-drawer';
@@ -21,28 +21,28 @@ export interface DesktopOperatorShellProps {
   selectedAreaKey: string | null;
   selectedAreaLineKey?: string | null;
   selectedLineId?: string | null;
-  selectedRouteGroupKey: string | null;
-  selectedWorkBucketKey: string | null;
-  selectedRouteGroupWorkBucket: RouteGroupWorkBucketSummary | undefined;
+  selectedDistributionGroupKey: string | null;
+  selectedWorkGroupKey: string | null;
+  selectedDistributionGroupWorkGroup: RouteGroupWorkBucketSummary | undefined;
   selectedWorkBucketName: string | null;
   areaSummaries: AreaHierarchySummary[];
   specialAreaSummaries: AreaHierarchySummary[];
   lineHierarchySummaries: LineHierarchySummary[];
   areaLineSummaries: LineHierarchySummary[];
-  workBucketSummaries: WorkBucketSummary[];
-  routeGroupSummaries: RouteGroupSummary[];
-  routeGroupWorkBucketSummaries: RouteGroupWorkBucketSummary[];
-  hasRouteGroups: boolean;
+  workGroupSummaries: WorkGroupSummary[];
+  distributionGroupSummaries: DistributionGroupSummary[];
+  distributionGroupWorkGroupSummaries: RouteGroupWorkBucketSummary[];
+  hasDistributionGroups: boolean;
   showProductRollupDeferred: boolean;
   onSelectOrder: (orderId: string) => void;
   onCloseDetail: () => void;
   onSelectArea: (areaName: string | null) => void;
   onSelectHierarchyLine: (areaLineKey: string) => void;
-  onSelectHierarchyRouteGroup: (routeGroupKey: string) => void;
+  onSelectHierarchyDistributionGroup: (distributionGroupKey: string) => void;
   onSelectHierarchyBucket: (workBucketIdentifier: string) => void;
   onClearArea: () => void;
   onClearHierarchyLine: () => void;
-  onClearHierarchyRouteGroup: () => void;
+  onClearHierarchyDistributionGroup: () => void;
   onClearHierarchyBucket: () => void;
   workBucketView: 'products' | 'orders';
   productRollup: BucketProductRollupRow[] | undefined;
@@ -76,28 +76,28 @@ export function DesktopOperatorShell({
   selectedAreaKey,
   selectedAreaLineKey,
   selectedLineId,
-  selectedRouteGroupKey,
-  selectedWorkBucketKey,
-  selectedRouteGroupWorkBucket,
+  selectedDistributionGroupKey,
+  selectedWorkGroupKey,
+  selectedDistributionGroupWorkGroup,
   selectedWorkBucketName,
   areaSummaries,
   specialAreaSummaries,
   lineHierarchySummaries,
   areaLineSummaries,
-  workBucketSummaries,
-  routeGroupSummaries,
-  routeGroupWorkBucketSummaries,
-  hasRouteGroups,
+  workGroupSummaries,
+  distributionGroupSummaries,
+  distributionGroupWorkGroupSummaries,
+  hasDistributionGroups,
   showProductRollupDeferred,
   onSelectOrder,
   onCloseDetail,
   onSelectArea,
   onSelectHierarchyLine,
-  onSelectHierarchyRouteGroup,
+  onSelectHierarchyDistributionGroup,
   onSelectHierarchyBucket,
   onClearArea,
   onClearHierarchyLine,
-  onClearHierarchyRouteGroup,
+  onClearHierarchyDistributionGroup,
   onClearHierarchyBucket,
   workBucketView,
   productRollup,
@@ -132,28 +132,28 @@ export function DesktopOperatorShell({
               selectedAreaKey={selectedAreaKey}
               selectedAreaLineKey={selectedAreaLineKey}
               selectedLineId={selectedLineId}
-              selectedRouteGroupKey={selectedRouteGroupKey}
-              selectedWorkBucketKey={selectedWorkBucketKey}
-              selectedRouteGroupWorkBucket={selectedRouteGroupWorkBucket}
+              selectedDistributionGroupKey={selectedDistributionGroupKey}
+              selectedWorkGroupKey={selectedWorkGroupKey}
+              selectedDistributionGroupWorkGroup={selectedDistributionGroupWorkGroup}
               selectedWorkBucketName={selectedWorkBucketName}
               areaSummaries={areaSummaries}
               specialAreaSummaries={specialAreaSummaries}
               lineHierarchySummaries={lineHierarchySummaries}
               areaLineSummaries={areaLineSummaries}
-              workBucketSummaries={workBucketSummaries}
-              routeGroupSummaries={routeGroupSummaries}
-              routeGroupWorkBucketSummaries={routeGroupWorkBucketSummaries}
-              hasRouteGroups={hasRouteGroups}
+              workGroupSummaries={workGroupSummaries}
+              distributionGroupSummaries={distributionGroupSummaries}
+              distributionGroupWorkGroupSummaries={distributionGroupWorkGroupSummaries}
+              hasDistributionGroups={hasDistributionGroups}
               shiftId={shift.id}
               showProductRollupDeferred={showProductRollupDeferred}
               onSelectArea={onSelectArea}
               onSelectLine={onSelectHierarchyLine}
-              onSelectRouteGroup={onSelectHierarchyRouteGroup}
+              onSelectDistributionGroup={onSelectHierarchyDistributionGroup}
               onSelectBucket={onSelectHierarchyBucket}
               onSelectOrder={onSelectOrder}
               onClearArea={onClearArea}
               onClearLine={onClearHierarchyLine}
-              onClearRouteGroup={onClearHierarchyRouteGroup}
+              onClearDistributionGroup={onClearHierarchyDistributionGroup}
               onClearBucket={onClearHierarchyBucket}
               workBucketView={workBucketView}
               productRollup={productRollup}

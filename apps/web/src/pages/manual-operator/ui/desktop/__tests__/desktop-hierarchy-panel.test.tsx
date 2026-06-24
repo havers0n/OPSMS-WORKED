@@ -4,9 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   AreaHierarchySummary,
   LineHierarchySummary,
-  RouteGroupSummary,
+  DistributionGroupSummary,
   RouteGroupWorkBucketSummary,
-  WorkBucketSummary
+  WorkGroupSummary
 } from '@/entities/manual-shift/model/shift-selectors';
 import { NO_DISTRIBUTION_AREA_KEY } from '@/entities/manual-shift/model/shift-selectors';
 import { bffRequestBlob } from '@/shared/api/bff/client';
@@ -85,7 +85,7 @@ const mockLineHierarchySummaries: LineHierarchySummary[] = [
   }
 ];
 
-const mockWorkBucketSummaries: WorkBucketSummary[] = [
+const mockWorkGroupSummaries: WorkGroupSummary[] = [
   {
     workBucketName: 'Point A',
     workGroupName: 'Point A',
@@ -162,28 +162,28 @@ describe('DesktopHierarchyPanel', () => {
         <DesktopHierarchyPanel
           selectedAreaKey={null}
           selectedLineId={null}
-          selectedRouteGroupKey={null}
-          selectedWorkBucketKey={null}
-          selectedRouteGroupWorkBucket={undefined}
+          selectedDistributionGroupKey={null}
+          selectedWorkGroupKey={null}
+          selectedDistributionGroupWorkGroup={undefined}
           selectedWorkBucketName={null}
           areaSummaries={mockAreaSummaries}
           specialAreaSummaries={[]}
           lineHierarchySummaries={[]}
           areaLineSummaries={mockLineHierarchySummaries}
-          workBucketSummaries={[]}
-          routeGroupSummaries={[]}
-          routeGroupWorkBucketSummaries={[]}
-          hasRouteGroups={false}
+          workGroupSummaries={[]}
+          distributionGroupSummaries={[]}
+          distributionGroupWorkGroupSummaries={[]}
+          hasDistributionGroups={false}
           shiftId={null}
           showProductRollupDeferred={false}
           onSelectArea={noop}
           onSelectLine={noop}
-          onSelectRouteGroup={noop}
+          onSelectDistributionGroup={noop}
           onSelectBucket={noop}
           onSelectOrder={noop}
           onClearArea={noop}
           onClearLine={noop}
-          onClearRouteGroup={noop}
+          onClearDistributionGroup={noop}
           onClearBucket={noop}
           workBucketView="products"
           productRollup={undefined}
@@ -327,7 +327,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: mockWorkBucketSummaries
+        workGroupSummaries: mockWorkGroupSummaries
       });
       expect(screen.getByText('Point A')).toBeTruthy();
       expect(screen.getByText('No Point')).toBeTruthy();
@@ -338,7 +338,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: mockWorkBucketSummaries
+        workGroupSummaries: mockWorkGroupSummaries
       });
       expect(screen.getByText('אזורי הפצה')).toBeTruthy();
       expect(screen.getByText('צפון')).toBeTruthy();
@@ -350,7 +350,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: []
+        workGroupSummaries: []
       });
       expect(screen.getByText('אין קבוצות עבודה בקו זה')).toBeTruthy();
     });
@@ -361,7 +361,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: mockWorkBucketSummaries,
+        workGroupSummaries: mockWorkGroupSummaries,
         onSelectBucket
       });
       fireEvent.click(screen.getByText('Point A'));
@@ -376,7 +376,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-1',
         areaLineSummaries: [mockLineHierarchySummaries[0]],
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: mockWorkBucketSummaries
+        workGroupSummaries: mockWorkGroupSummaries
       });
       expect(screen.getByText('Point A')).toBeTruthy();
       expect(screen.getByText('No Point')).toBeTruthy();
@@ -390,7 +390,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-1',
         areaLineSummaries: [mockLineHierarchySummaries[0]],
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: mockWorkBucketSummaries
+        workGroupSummaries: mockWorkGroupSummaries
       });
       expect(screen.getByText('קבוצות עבודה')).toBeTruthy();
     });
@@ -401,7 +401,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-1',
         areaLineSummaries: [mockLineHierarchySummaries[0]],
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: mockWorkBucketSummaries
+        workGroupSummaries: mockWorkGroupSummaries
       });
       expect(screen.getByText('אזורי הפצה')).toBeTruthy();
       expect(screen.getByText('צפון')).toBeTruthy();
@@ -410,7 +410,7 @@ describe('DesktopHierarchyPanel', () => {
     });
 
     it('general bucket displays as "כללי" in auto-skipped single-line area', () => {
-      const workBucketSummaries: WorkBucketSummary[] = [
+      const workGroupSummaries: WorkGroupSummary[] = [
         {
           workBucketName: 'Line South',
           workGroupName: 'Line South',
@@ -440,7 +440,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-1',
         areaLineSummaries: [mockLineHierarchySummaries[0]],
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries
+        workGroupSummaries
       });
 
       expect(screen.getByText('כללי')).toBeTruthy();
@@ -452,7 +452,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-1',
         areaLineSummaries: [mockLineHierarchySummaries[0]],
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: mockWorkBucketSummaries
+        workGroupSummaries: mockWorkGroupSummaries
       });
 
       expect(screen.getByText('Point A')).toBeTruthy();
@@ -461,7 +461,7 @@ describe('DesktopHierarchyPanel', () => {
 
     it('clicking general bucket passes raw bucket identity, not display label', () => {
       const onSelectBucket = vi.fn();
-      const workBucketSummaries: WorkBucketSummary[] = [
+      const workGroupSummaries: WorkGroupSummary[] = [
         {
           workBucketName: 'Line South',
           workGroupName: 'Line South',
@@ -491,7 +491,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-1',
         areaLineSummaries: [mockLineHierarchySummaries[0]],
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries,
+        workGroupSummaries,
         onSelectBucket
       });
 
@@ -507,7 +507,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-1',
         areaLineSummaries: [mockLineHierarchySummaries[0]],
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: mockWorkBucketSummaries,
+        workGroupSummaries: mockWorkGroupSummaries,
         onClearArea
       });
       fireEvent.click(screen.getByText('אזורי הפצה'));
@@ -522,7 +522,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedWorkBucketName: 'Point A',
         areaLineSummaries: [mockLineHierarchySummaries[0]],
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: mockWorkBucketSummaries,
+        workGroupSummaries: mockWorkGroupSummaries,
         onClearBucket
       });
       expect(screen.getByText('אזורי הפצה')).toBeTruthy();
@@ -541,7 +541,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-1',
         selectedWorkBucketName: 'Point A',
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: mockWorkBucketSummaries,
+        workGroupSummaries: mockWorkGroupSummaries,
         workBucketView: 'orders'
       });
       expect(screen.getByTestId('order-mini-card-order-1')).toBeTruthy();
@@ -554,7 +554,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-1',
         selectedWorkBucketName: 'Point A',
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: mockWorkBucketSummaries,
+        workGroupSummaries: mockWorkGroupSummaries,
         workBucketView: 'orders'
       });
       expect(screen.getByText('אזורי הפצה')).toBeTruthy();
@@ -569,7 +569,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-1',
         selectedWorkBucketName: 'Point A',
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: mockWorkBucketSummaries,
+        workGroupSummaries: mockWorkGroupSummaries,
         workBucketView: 'orders'
       });
       expect(screen.getByText('Customer A')).toBeTruthy();
@@ -584,7 +584,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-1',
         selectedWorkBucketName: 'Point A',
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: mockWorkBucketSummaries,
+        workGroupSummaries: mockWorkGroupSummaries,
         onSelectOrder,
         workBucketView: 'orders'
       });
@@ -598,7 +598,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-1',
         selectedWorkBucketName: 'Empty Bucket',
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: [{
+        workGroupSummaries: [{
       workBucketName: 'Empty Bucket',
       workGroupName: 'Empty Bucket',
       ordersCount: 0,
@@ -628,7 +628,7 @@ describe('DesktopHierarchyPanel', () => {
 
   describe('bucket label polish', () => {
     it('displays general bucket label when work bucket name equals line name', () => {
-      const workBucketSummaries: WorkBucketSummary[] = [
+      const workGroupSummaries: WorkGroupSummary[] = [
         {
           workBucketName: 'Line South',
           workGroupName: 'Line South',
@@ -657,7 +657,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries
+        workGroupSummaries
       });
 
       expect(screen.getByText('כללי')).toBeTruthy();
@@ -668,7 +668,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: mockWorkBucketSummaries
+        workGroupSummaries: mockWorkGroupSummaries
       });
 
       expect(screen.getByText('Point A')).toBeTruthy();
@@ -682,14 +682,14 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-1',
         selectedWorkBucketName: 'Point A',
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries: mockWorkBucketSummaries
+        workGroupSummaries: mockWorkGroupSummaries
       });
 
       expect(screen.queryByText('0 שורות')).toBeNull();
     });
 
     it('renders positive lineCount with שורות label', () => {
-      const workBucketSummaries: WorkBucketSummary[] = [
+      const workGroupSummaries: WorkGroupSummary[] = [
         {
           workBucketName: 'Bucket B',
           workGroupName: 'Bucket B',
@@ -719,7 +719,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-2',
         selectedWorkBucketName: 'Bucket B',
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries,
+        workGroupSummaries,
         workBucketView: 'orders'
       });
 
@@ -727,7 +727,7 @@ describe('DesktopHierarchyPanel', () => {
     });
 
     it('does not render 0 פריטים / שורות on work bucket cards', () => {
-      const workBucketSummaries: WorkBucketSummary[] = [
+      const workGroupSummaries: WorkGroupSummary[] = [
         {
       workBucketName: 'Empty Bucket',
       workGroupName: 'Empty Bucket',
@@ -743,7 +743,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
         lineHierarchySummaries: mockLineHierarchySummaries,
-        workBucketSummaries
+        workGroupSummaries
       });
 
       expect(screen.queryByText(/0 פריטים/)).toBeNull();
@@ -751,7 +751,7 @@ describe('DesktopHierarchyPanel', () => {
   });
 
   describe('route group product rollup deferral', () => {
-    const mockRouteGroupSummaries: RouteGroupSummary[] = [
+    const mockDistributionGroupSummaries: DistributionGroupSummary[] = [
       {
         routeGroupKey: 'galil-general',
         routeGroupName: 'גליל כללי',
@@ -765,7 +765,7 @@ describe('DesktopHierarchyPanel', () => {
       }
     ];
 
-    const mockRouteGroupWorkBucketSummaries: RouteGroupWorkBucketSummary[] = [
+    const mockDistributionGroupWorkGroupSummaries: RouteGroupWorkBucketSummary[] = [
       {
         workBucketKey: 'wb-klali',
         workBucketName: 'כללי',
@@ -802,23 +802,23 @@ describe('DesktopHierarchyPanel', () => {
       }
     ];
 
-    const mockSelectedGalilBucket = mockRouteGroupWorkBucketSummaries[0];
-    const _mockSelectedSellularBucket = mockRouteGroupWorkBucketSummaries[1];
+    const mockSelectedGalilBucket = mockDistributionGroupWorkGroupSummaries[0];
+    const _mockSelectedSellularBucket = mockDistributionGroupWorkGroupSummaries[1];
 
     it('does NOT render deferred message when showProductRollupDeferred=false', () => {
       renderPanel({
         selectedAreaKey: 'גליל',
         selectedLineId: 'line-galil',
-        selectedRouteGroupKey: 'galil-general',
-        selectedWorkBucketKey: 'wb-klali',
-        selectedRouteGroupWorkBucket: mockSelectedGalilBucket,
+        selectedDistributionGroupKey: 'galil-general',
+        selectedWorkGroupKey: 'wb-klali',
+        selectedDistributionGroupWorkGroup: mockSelectedGalilBucket,
         selectedWorkBucketName: 'כללי',
         areaSummaries: [{ areaKey: 'גליל', displayName: 'גליל', areaName: 'גליל', totalLines: 1, totalBuckets: 2, totalOrders: 4, totalQuantity: 100, statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
         areaLineSummaries: [{ lineId: 'line-galil', lineName: 'גליל', distributionArea: 'גליל', lineStatus: 'open', ordersCount: 4, itemLinesCount: 10, totalQuantity: 100, statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
         lineHierarchySummaries: [{ lineId: 'line-galil', lineName: 'גליל', distributionArea: 'גליל', lineStatus: 'open', ordersCount: 4, itemLinesCount: 10, totalQuantity: 100, statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
-        hasRouteGroups: true,
-        routeGroupSummaries: mockRouteGroupSummaries,
-        routeGroupWorkBucketSummaries: mockRouteGroupWorkBucketSummaries,
+        hasDistributionGroups: true,
+        distributionGroupSummaries: mockDistributionGroupSummaries,
+        distributionGroupWorkGroupSummaries: mockDistributionGroupWorkGroupSummaries,
         showProductRollupDeferred: false,
         workBucketView: 'products',
         productRollup: [{ sku: 'SKU-001', description: 'מוצר לדוגמה', category: 'קטגוריה', totalQuantity: 10, orderCount: 2 }],
@@ -841,16 +841,16 @@ describe('DesktopHierarchyPanel', () => {
       renderPanel({
         selectedAreaKey: 'גליל',
         selectedLineId: 'line-galil',
-        selectedRouteGroupKey: 'galil-general',
-        selectedWorkBucketKey: 'wb-klali',
-        selectedRouteGroupWorkBucket: mockSelectedGalilBucket,
+        selectedDistributionGroupKey: 'galil-general',
+        selectedWorkGroupKey: 'wb-klali',
+        selectedDistributionGroupWorkGroup: mockSelectedGalilBucket,
         selectedWorkBucketName: 'כללי',
         areaSummaries: [{ areaKey: 'גליל', displayName: 'גליל', areaName: 'גליל', totalLines: 1, totalBuckets: 2, totalOrders: 4, totalQuantity: 100, statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
         areaLineSummaries: [{ lineId: 'line-galil', lineName: 'גליל', distributionArea: 'גליל', lineStatus: 'open', ordersCount: 4, itemLinesCount: 10, totalQuantity: 100, statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
         lineHierarchySummaries: [{ lineId: 'line-galil', lineName: 'גליל', distributionArea: 'גליל', lineStatus: 'open', ordersCount: 4, itemLinesCount: 10, totalQuantity: 100, statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
-        hasRouteGroups: true,
-        routeGroupSummaries: mockRouteGroupSummaries,
-        routeGroupWorkBucketSummaries: mockRouteGroupWorkBucketSummaries,
+        hasDistributionGroups: true,
+        distributionGroupSummaries: mockDistributionGroupSummaries,
+        distributionGroupWorkGroupSummaries: mockDistributionGroupWorkGroupSummaries,
         showProductRollupDeferred: true,
         workBucketView: 'products'
       });
@@ -865,16 +865,16 @@ describe('DesktopHierarchyPanel', () => {
       renderPanel({
         selectedAreaKey: 'גליל',
         selectedLineId: 'line-galil',
-        selectedRouteGroupKey: 'galil-general',
-        selectedWorkBucketKey: 'wb-klali',
-        selectedRouteGroupWorkBucket: mockSelectedGalilBucket,
+        selectedDistributionGroupKey: 'galil-general',
+        selectedWorkGroupKey: 'wb-klali',
+        selectedDistributionGroupWorkGroup: mockSelectedGalilBucket,
         selectedWorkBucketName: 'כללי',
         areaSummaries: [{ areaKey: 'גליל', displayName: 'גליל', areaName: 'גליל', totalLines: 1, totalBuckets: 2, totalOrders: 4, totalQuantity: 100, statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
         areaLineSummaries: [{ lineId: 'line-galil', lineName: 'גליל', distributionArea: 'גליל', lineStatus: 'open', ordersCount: 4, itemLinesCount: 10, totalQuantity: 100, statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
         lineHierarchySummaries: [{ lineId: 'line-galil', lineName: 'גליל', distributionArea: 'גליל', lineStatus: 'open', ordersCount: 4, itemLinesCount: 10, totalQuantity: 100, statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
-        hasRouteGroups: true,
-        routeGroupSummaries: mockRouteGroupSummaries,
-        routeGroupWorkBucketSummaries: mockRouteGroupWorkBucketSummaries,
+        hasDistributionGroups: true,
+        distributionGroupSummaries: mockDistributionGroupSummaries,
+        distributionGroupWorkGroupSummaries: mockDistributionGroupWorkGroupSummaries,
         showProductRollupDeferred: false,
         workBucketView: 'orders'
       });
@@ -906,18 +906,18 @@ describe('DesktopHierarchyPanel', () => {
       renderPanel({
         selectedAreaKey: 'גליל',
         selectedLineId: 'line-galil',
-        selectedRouteGroupKey: 'dbeach',
-        selectedWorkBucketKey: 'wb-dabach',
-        selectedRouteGroupWorkBucket: standaloneBucket,
+        selectedDistributionGroupKey: 'dbeach',
+        selectedWorkGroupKey: 'wb-dabach',
+        selectedDistributionGroupWorkGroup: standaloneBucket,
         selectedWorkBucketName: 'כללי',
         areaSummaries: [{ areaKey: 'גליל', displayName: 'גליל', areaName: 'גליל', totalLines: 1, totalBuckets: 1, totalOrders: 1, totalQuantity: 20, statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
         areaLineSummaries: [{ lineId: 'line-galil', lineName: 'גליל', distributionArea: 'גליל', lineStatus: 'open', ordersCount: 1, itemLinesCount: 2, totalQuantity: 20, statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
         lineHierarchySummaries: [{ lineId: 'line-galil', lineName: 'גליל', distributionArea: 'גליל', lineStatus: 'open', ordersCount: 1, itemLinesCount: 2, totalQuantity: 20, statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
-        hasRouteGroups: true,
-        routeGroupSummaries: [
+        hasDistributionGroups: true,
+        distributionGroupSummaries: [
           { routeGroupKey: 'dbeach', routeGroupName: 'דבאח עין המפרץ', distributionGroupName: 'דבאח עין המפרץ', classificationConfidence: 'high', orderCount: 1, itemLinesCount: 2, totalQuantity: 20, statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, workBucketCount: 1 }
         ],
-        routeGroupWorkBucketSummaries: [standaloneBucket],
+        distributionGroupWorkGroupSummaries: [standaloneBucket],
         showProductRollupDeferred: false,
         workBucketView: 'orders'
       });
@@ -926,7 +926,7 @@ describe('DesktopHierarchyPanel', () => {
     });
   });
 
-  describe('selectedRouteGroupWorkBucket as single source of truth', () => {
+  describe('selectedDistributionGroupWorkGroup as single source of truth', () => {
     const mockGalilArea = {
       areaKey: 'גליל', displayName: 'גליל', areaName: 'גליל',
       totalLines: 1, totalBuckets: 2, totalOrders: 4, totalQuantity: 100,
@@ -939,14 +939,14 @@ describe('DesktopHierarchyPanel', () => {
       statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 }
     };
 
-    const mockGalilRouteGroup: RouteGroupSummary = {
+    const mockGalilDistributionGroup: DistributionGroupSummary = {
       routeGroupKey: 'galil-general', routeGroupName: 'גליל כללי', distributionGroupName: 'גליל כללי',
       classificationConfidence: 'high', orderCount: 4, itemLinesCount: 10, totalQuantity: 100,
       statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
       workBucketCount: 2
     };
 
-    const mockRouteGroupWBKlali: RouteGroupWorkBucketSummary = {
+    const mockDistributionGroupWBKlali: RouteGroupWorkBucketSummary = {
       workBucketKey: 'wb-galil-klali', workBucketName: 'כללי', workBucketDisplayName: 'כללי',
       workGroupKey: 'wb-galil-klali', workGroupName: 'כללי', workGroupDisplayName: 'כללי',
       classificationConfidence: 'high', orderCount: 3, itemLinesCount: 7, totalQuantity: 60,
@@ -958,7 +958,7 @@ describe('DesktopHierarchyPanel', () => {
       ]
     };
 
-    const mockRouteGroupWBSellular: RouteGroupWorkBucketSummary = {
+    const mockDistributionGroupWBSellular: RouteGroupWorkBucketSummary = {
       workBucketKey: 'wb-galil-sellular', workBucketName: 'סלולר', workBucketDisplayName: 'סלולר',
       workGroupKey: 'wb-galil-sellular', workGroupName: 'סלולר', workGroupDisplayName: 'סלולר',
       classificationConfidence: 'high', orderCount: 1, itemLinesCount: 3, totalQuantity: 40,
@@ -968,7 +968,7 @@ describe('DesktopHierarchyPanel', () => {
       ]
     };
 
-    const mockDabachRouteGroup: RouteGroupSummary = {
+    const mockDabachDistributionGroup: DistributionGroupSummary = {
       routeGroupKey: 'dbeach', routeGroupName: 'דבאח עין המפרץ', distributionGroupName: 'דבאח עין המפרץ',
       classificationConfidence: 'high', orderCount: 2, itemLinesCount: 5, totalQuantity: 60,
       statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
@@ -986,7 +986,7 @@ describe('DesktopHierarchyPanel', () => {
       ]
     };
 
-    const mockMultiSourceRouteGroup: RouteGroupSummary = {
+    const mockMultiSourceDistributionGroup: DistributionGroupSummary = {
       routeGroupKey: 'multi-src', routeGroupName: 'מעורב', distributionGroupName: 'מעורב',
       classificationConfidence: 'high', orderCount: 2, itemLinesCount: 5, totalQuantity: 30,
       statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
@@ -1004,26 +1004,26 @@ describe('DesktopHierarchyPanel', () => {
       ]
     };
 
-    function renderRouteGroupPanel(overrides: Partial<Parameters<typeof DesktopHierarchyPanel>[0]> = {}) {
+    function renderDistributionGroupPanel(overrides: Partial<Parameters<typeof DesktopHierarchyPanel>[0]> = {}) {
       return renderPanel({
         selectedAreaKey: 'גליל',
         selectedLineId: 'line-galil',
-        selectedRouteGroupKey: 'galil-general',
+        selectedDistributionGroupKey: 'galil-general',
         areaSummaries: [mockGalilArea],
         areaLineSummaries: [mockGalilLineSummary],
         lineHierarchySummaries: [mockGalilLineSummary],
-        hasRouteGroups: true,
-        routeGroupSummaries: [mockGalilRouteGroup],
-        routeGroupWorkBucketSummaries: [mockRouteGroupWBKlali, mockRouteGroupWBSellular],
+        hasDistributionGroups: true,
+        distributionGroupSummaries: [mockGalilDistributionGroup],
+        distributionGroupWorkGroupSummaries: [mockDistributionGroupWBKlali, mockDistributionGroupWBSellular],
         ...overrides
       });
     }
 
     // ── Case 1: גליל כללי > כללי ──────────────────────────────────────────
     it('Case 1 — גליל כללי > כללי: product table renders with pointName=גליל', () => {
-      renderRouteGroupPanel({
-        selectedWorkBucketKey: 'wb-galil-klali',
-        selectedRouteGroupWorkBucket: mockRouteGroupWBKlali,
+      renderDistributionGroupPanel({
+        selectedWorkGroupKey: 'wb-galil-klali',
+        selectedDistributionGroupWorkGroup: mockDistributionGroupWBKlali,
         selectedWorkBucketName: 'כללי',
         showProductRollupDeferred: false,
         workBucketView: 'products',
@@ -1037,9 +1037,9 @@ describe('DesktopHierarchyPanel', () => {
     });
 
     it('Case 1 — גליל כללי > כללי: orders tab contains only orders with pointName=גליל', () => {
-      renderRouteGroupPanel({
-        selectedWorkBucketKey: 'wb-galil-klali',
-        selectedRouteGroupWorkBucket: mockRouteGroupWBKlali,
+      renderDistributionGroupPanel({
+        selectedWorkGroupKey: 'wb-galil-klali',
+        selectedDistributionGroupWorkGroup: mockDistributionGroupWBKlali,
         selectedWorkBucketName: 'כללי',
         showProductRollupDeferred: false,
         workBucketView: 'orders'
@@ -1053,9 +1053,9 @@ describe('DesktopHierarchyPanel', () => {
 
     // ── Case 2: גליל כללי > סלולר ──────────────────────────────────────────
     it('Case 2 — גליל כללי > סלולר: product table renders with pointName=סלולר, not deferred', () => {
-      renderRouteGroupPanel({
-        selectedWorkBucketKey: 'wb-galil-sellular',
-        selectedRouteGroupWorkBucket: mockRouteGroupWBSellular,
+      renderDistributionGroupPanel({
+        selectedWorkGroupKey: 'wb-galil-sellular',
+        selectedDistributionGroupWorkGroup: mockDistributionGroupWBSellular,
         selectedWorkBucketName: 'סלולר',
         showProductRollupDeferred: false,
         workBucketView: 'products',
@@ -1069,9 +1069,9 @@ describe('DesktopHierarchyPanel', () => {
     });
 
     it('Case 2 — גליל כללי > סלולר: orders tab contains only orders with pointName=סלולר', () => {
-      renderRouteGroupPanel({
-        selectedWorkBucketKey: 'wb-galil-sellular',
-        selectedRouteGroupWorkBucket: mockRouteGroupWBSellular,
+      renderDistributionGroupPanel({
+        selectedWorkGroupKey: 'wb-galil-sellular',
+        selectedDistributionGroupWorkGroup: mockDistributionGroupWBSellular,
         selectedWorkBucketName: 'סלולר',
         showProductRollupDeferred: false,
         workBucketView: 'orders'
@@ -1098,16 +1098,16 @@ describe('DesktopHierarchyPanel', () => {
       renderPanel({
         selectedAreaKey: 'גליל',
         selectedLineId: 'line-galil',
-        selectedRouteGroupKey: 'galil-general',
-        selectedWorkBucketKey: 'wb-rechev',
-        selectedRouteGroupWorkBucket: rechevBucket,
+        selectedDistributionGroupKey: 'galil-general',
+        selectedWorkGroupKey: 'wb-rechev',
+        selectedDistributionGroupWorkGroup: rechevBucket,
         selectedWorkBucketName: 'רכב-פז נהריה',
         areaSummaries: [mockGalilArea],
         areaLineSummaries: [mockGalilLineSummary],
         lineHierarchySummaries: [mockGalilLineSummary],
-        hasRouteGroups: true,
-        routeGroupSummaries: [mockGalilRouteGroup],
-        routeGroupWorkBucketSummaries: [mockRouteGroupWBKlali, mockRouteGroupWBSellular, rechevBucket],
+        hasDistributionGroups: true,
+        distributionGroupSummaries: [mockGalilDistributionGroup],
+        distributionGroupWorkGroupSummaries: [mockDistributionGroupWBKlali, mockDistributionGroupWBSellular, rechevBucket],
         showProductRollupDeferred: false,
         workBucketView: 'products',
         productRollup: [{ sku: 'SKU-R', description: 'חלקי רכב', category: 'רכב', totalQuantity: 25, orderCount: 1 }],
@@ -1123,16 +1123,16 @@ describe('DesktopHierarchyPanel', () => {
       renderPanel({
         selectedAreaKey: 'גליל',
         selectedLineId: 'line-galil',
-        selectedRouteGroupKey: 'dbeach',
-        selectedWorkBucketKey: 'wb-dbeach-klali',
-        selectedRouteGroupWorkBucket: mockDabachBucket,
+        selectedDistributionGroupKey: 'dbeach',
+        selectedWorkGroupKey: 'wb-dbeach-klali',
+        selectedDistributionGroupWorkGroup: mockDabachBucket,
         selectedWorkBucketName: 'כללי',
         areaSummaries: [mockGalilArea],
         areaLineSummaries: [mockGalilLineSummary],
         lineHierarchySummaries: [mockGalilLineSummary],
-        hasRouteGroups: true,
-        routeGroupSummaries: [mockDabachRouteGroup],
-        routeGroupWorkBucketSummaries: [mockDabachBucket],
+        hasDistributionGroups: true,
+        distributionGroupSummaries: [mockDabachDistributionGroup],
+        distributionGroupWorkGroupSummaries: [mockDabachBucket],
         showProductRollupDeferred: false,
         workBucketView: 'products',
         productRollup: [{ sku: 'SKU-D', description: 'דבאח', category: 'דבאח', totalQuantity: 60, orderCount: 2 }],
@@ -1145,20 +1145,20 @@ describe('DesktopHierarchyPanel', () => {
       expect(screen.getByText('קבוצת חלוקה: דבאח עין המפרץ')).toBeTruthy();
     });
 
-    it('Case 4 — standalone route group orders tab uses selectedRouteGroupWorkBucket.orders', () => {
+    it('Case 4 — standalone route group orders tab uses selectedDistributionGroupWorkGroup.orders', () => {
       renderPanel({
         selectedAreaKey: 'גליל',
         selectedLineId: 'line-galil',
-        selectedRouteGroupKey: 'dbeach',
-        selectedWorkBucketKey: 'wb-dbeach-klali',
-        selectedRouteGroupWorkBucket: mockDabachBucket,
+        selectedDistributionGroupKey: 'dbeach',
+        selectedWorkGroupKey: 'wb-dbeach-klali',
+        selectedDistributionGroupWorkGroup: mockDabachBucket,
         selectedWorkBucketName: 'כללי',
         areaSummaries: [mockGalilArea],
         areaLineSummaries: [mockGalilLineSummary],
         lineHierarchySummaries: [mockGalilLineSummary],
-        hasRouteGroups: true,
-        routeGroupSummaries: [mockDabachRouteGroup],
-        routeGroupWorkBucketSummaries: [mockDabachBucket],
+        hasDistributionGroups: true,
+        distributionGroupSummaries: [mockDabachDistributionGroup],
+        distributionGroupWorkGroupSummaries: [mockDabachBucket],
         showProductRollupDeferred: false,
         workBucketView: 'orders'
       });
@@ -1172,16 +1172,16 @@ describe('DesktopHierarchyPanel', () => {
       renderPanel({
         selectedAreaKey: 'גליל',
         selectedLineId: 'line-galil',
-        selectedRouteGroupKey: 'multi-src',
-        selectedWorkBucketKey: 'wb-mixed',
-        selectedRouteGroupWorkBucket: mockMultiSourceBucket,
+        selectedDistributionGroupKey: 'multi-src',
+        selectedWorkGroupKey: 'wb-mixed',
+        selectedDistributionGroupWorkGroup: mockMultiSourceBucket,
         selectedWorkBucketName: 'מעורב',
         areaSummaries: [mockGalilArea],
         areaLineSummaries: [mockGalilLineSummary],
         lineHierarchySummaries: [mockGalilLineSummary],
-        hasRouteGroups: true,
-        routeGroupSummaries: [mockMultiSourceRouteGroup],
-        routeGroupWorkBucketSummaries: [mockMultiSourceBucket],
+        hasDistributionGroups: true,
+        distributionGroupSummaries: [mockMultiSourceDistributionGroup],
+        distributionGroupWorkGroupSummaries: [mockMultiSourceBucket],
         showProductRollupDeferred: true,
         workBucketView: 'products'
       });
@@ -1194,16 +1194,16 @@ describe('DesktopHierarchyPanel', () => {
       renderPanel({
         selectedAreaKey: 'גליל',
         selectedLineId: 'line-galil',
-        selectedRouteGroupKey: 'multi-src',
-        selectedWorkBucketKey: 'wb-mixed',
-        selectedRouteGroupWorkBucket: mockMultiSourceBucket,
+        selectedDistributionGroupKey: 'multi-src',
+        selectedWorkGroupKey: 'wb-mixed',
+        selectedDistributionGroupWorkGroup: mockMultiSourceBucket,
         selectedWorkBucketName: 'מעורב',
         areaSummaries: [mockGalilArea],
         areaLineSummaries: [mockGalilLineSummary],
         lineHierarchySummaries: [mockGalilLineSummary],
-        hasRouteGroups: true,
-        routeGroupSummaries: [mockMultiSourceRouteGroup],
-        routeGroupWorkBucketSummaries: [mockMultiSourceBucket],
+        hasDistributionGroups: true,
+        distributionGroupSummaries: [mockMultiSourceDistributionGroup],
+        distributionGroupWorkGroupSummaries: [mockMultiSourceBucket],
         showProductRollupDeferred: true,
         workBucketView: 'orders'
       });
@@ -1214,9 +1214,9 @@ describe('DesktopHierarchyPanel', () => {
 
     // ── Case 6: No sibling bucket leakage ───────────────────────────────────
     it('selected bucket orders do not include sibling bucket orders', () => {
-      renderRouteGroupPanel({
-        selectedWorkBucketKey: 'wb-galil-klali',
-        selectedRouteGroupWorkBucket: mockRouteGroupWBKlali,
+      renderDistributionGroupPanel({
+        selectedWorkGroupKey: 'wb-galil-klali',
+        selectedDistributionGroupWorkGroup: mockDistributionGroupWBKlali,
         selectedWorkBucketName: 'כללי',
         showProductRollupDeferred: false,
         workBucketView: 'orders'
@@ -1242,16 +1242,16 @@ describe('DesktopHierarchyPanel', () => {
       renderPanel({
         selectedAreaKey: 'גליל',
         selectedLineId: 'line-galil',
-        selectedRouteGroupKey: 'galil-general',
-        selectedWorkBucketKey: 'wb-empty',
-        selectedRouteGroupWorkBucket: emptyBucket,
+        selectedDistributionGroupKey: 'galil-general',
+        selectedWorkGroupKey: 'wb-empty',
+        selectedDistributionGroupWorkGroup: emptyBucket,
         selectedWorkBucketName: 'ריק',
         areaSummaries: [mockGalilArea],
         areaLineSummaries: [mockGalilLineSummary],
         lineHierarchySummaries: [mockGalilLineSummary],
-        hasRouteGroups: true,
-        routeGroupSummaries: [mockGalilRouteGroup],
-        routeGroupWorkBucketSummaries: [emptyBucket],
+        hasDistributionGroups: true,
+        distributionGroupSummaries: [mockGalilDistributionGroup],
+        distributionGroupWorkGroupSummaries: [emptyBucket],
         showProductRollupDeferred: true,
         workBucketView: 'orders'
       });
@@ -1259,9 +1259,9 @@ describe('DesktopHierarchyPanel', () => {
       expect(screen.getByText('אין הזמנות בקבוצת עבודה זו')).toBeTruthy();
     });
 
-    // ── selectedRouteGroupWorkBucket is sole source for orders ──────────────
-    it('orders tab uses selectedRouteGroupWorkBucket.orders, ignoring routeGroupWorkBucketSummaries list', () => {
-      // Provide a bucket via selectedRouteGroupWorkBucket that is NOT in routeGroupWorkBucketSummaries
+    // ── selectedDistributionGroupWorkGroup is sole source for orders ─────────
+    it('orders tab uses selectedDistributionGroupWorkGroup.orders, ignoring distributionGroupWorkGroupSummaries list', () => {
+      // Provide a bucket via selectedDistributionGroupWorkGroup that is NOT in distributionGroupWorkGroupSummaries
       const standaloneBucket: RouteGroupWorkBucketSummary = {
         workBucketKey: 'wb-standalone', workBucketName: 'עצמאי', workBucketDisplayName: 'עצמאי',
         workGroupKey: 'wb-standalone', workGroupName: 'עצמאי', workGroupDisplayName: 'עצמאי',
@@ -1272,27 +1272,27 @@ describe('DesktopHierarchyPanel', () => {
         ]
       };
 
-      // routeGroupWorkBucketSummaries does NOT include standaloneBucket
+      // distributionGroupWorkGroupSummaries does NOT include standaloneBucket
       renderPanel({
         selectedAreaKey: 'גליל',
         selectedLineId: 'line-galil',
-        selectedRouteGroupKey: 'galil-general',
-        selectedWorkBucketKey: 'wb-standalone',
-        selectedRouteGroupWorkBucket: standaloneBucket,
+        selectedDistributionGroupKey: 'galil-general',
+        selectedWorkGroupKey: 'wb-standalone',
+        selectedDistributionGroupWorkGroup: standaloneBucket,
         selectedWorkBucketName: 'עצמאי',
         areaSummaries: [mockGalilArea],
         areaLineSummaries: [mockGalilLineSummary],
         lineHierarchySummaries: [mockGalilLineSummary],
-        hasRouteGroups: true,
-        routeGroupSummaries: [mockGalilRouteGroup],
-        routeGroupWorkBucketSummaries: [mockRouteGroupWBKlali], // different list!
+        hasDistributionGroups: true,
+        distributionGroupSummaries: [mockGalilDistributionGroup],
+        distributionGroupWorkGroupSummaries: [mockDistributionGroupWBKlali], // different list!
         showProductRollupDeferred: false,
         workBucketView: 'orders'
       });
 
-      // The standalone bucket's order must render (source: selectedRouteGroupWorkBucket)
+      // The standalone bucket's order must render (source: selectedDistributionGroupWorkGroup)
       expect(screen.getByTestId('order-mini-card-s-o-1')).toBeTruthy();
-      // The klali bucket's orders must NOT render (they are not in selectedRouteGroupWorkBucket)
+      // The klali bucket's orders must NOT render (they are not in selectedDistributionGroupWorkGroup)
       expect(screen.queryByTestId('order-mini-card-g-o-1')).toBeNull();
     });
   });
@@ -1326,7 +1326,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedAreaKey: 'שפלה 1',
         selectedLineId: 'line-chita',
         lineHierarchySummaries: [deliveryLine],
-        workBucketSummaries: mockWorkBucketSummaries
+        workGroupSummaries: mockWorkGroupSummaries
       });
       expect(screen.getByText(`ערוץ משלוח: צ'יטה`)).toBeTruthy();
     });
@@ -1336,7 +1336,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedAreaKey: 'גליל',
         selectedLineId: 'line-galil',
         lineHierarchySummaries: [normalLine],
-        workBucketSummaries: mockWorkBucketSummaries
+        workGroupSummaries: mockWorkGroupSummaries
       });
       expect(screen.getByText('קו: גליל')).toBeTruthy();
     });
@@ -1347,7 +1347,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-chita',
         areaLineSummaries: [deliveryLine],
         lineHierarchySummaries: [deliveryLine],
-        workBucketSummaries: mockWorkBucketSummaries
+        workGroupSummaries: mockWorkGroupSummaries
       });
       expect(screen.getByText(`ערוץ משלוח: צ'יטה`)).toBeTruthy();
       expect(screen.queryByText('קו הפצה:')).toBeNull();
@@ -1359,7 +1359,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-galil',
         areaLineSummaries: [normalLine],
         lineHierarchySummaries: [normalLine],
-        workBucketSummaries: mockWorkBucketSummaries
+        workGroupSummaries: mockWorkGroupSummaries
       });
       expect(screen.getByText('קו הפצה: גליל')).toBeTruthy();
       expect(screen.queryByText('ערוץ משלוח:')).toBeNull();
@@ -1372,7 +1372,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
         lineHierarchySummaries: [mockLineHierarchySummaries[0]],
-        workBucketSummaries: mockWorkBucketSummaries,
+        workGroupSummaries: mockWorkGroupSummaries,
         shiftId: 'shift-1'
       });
       expect(screen.getByTestId('print-picker-sheet-line')).toBeTruthy();
@@ -1383,7 +1383,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
         lineHierarchySummaries: [mockLineHierarchySummaries[0]],
-        workBucketSummaries: mockWorkBucketSummaries,
+        workGroupSummaries: mockWorkGroupSummaries,
         shiftId: null
       });
       expect(screen.queryByTestId('print-picker-sheet-line')).toBeNull();
@@ -1395,7 +1395,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-2',
         lineHierarchySummaries: [mockLineHierarchySummaries[1]],
         areaLineSummaries: [mockLineHierarchySummaries[1]],
-        workBucketSummaries: mockWorkBucketSummaries,
+        workGroupSummaries: mockWorkGroupSummaries,
         shiftId: 'shift-1'
       });
       expect(screen.queryByTestId('print-picker-sheet-line')).toBeNull();
@@ -1406,7 +1406,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
         lineHierarchySummaries: [mockLineHierarchySummaries[0]],
-        workBucketSummaries: mockWorkBucketSummaries,
+        workGroupSummaries: mockWorkGroupSummaries,
         shiftId: 'shift-1'
       });
 
@@ -1432,7 +1432,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-1',
         lineHierarchySummaries: [mockLineHierarchySummaries[0]],
         selectedWorkBucketName: 'Point A',
-        workBucketSummaries: mockWorkBucketSummaries,
+        workGroupSummaries: mockWorkGroupSummaries,
         shiftId: 'shift-1'
       });
       expect(screen.getByTestId('print-picker-sheet-detail')).toBeTruthy();
@@ -1444,7 +1444,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-1',
         lineHierarchySummaries: [mockLineHierarchySummaries[0]],
         selectedWorkBucketName: 'Point A',
-        workBucketSummaries: mockWorkBucketSummaries,
+        workGroupSummaries: mockWorkGroupSummaries,
         shiftId: null
       });
       expect(screen.queryByTestId('print-picker-sheet-detail')).toBeNull();
@@ -1462,7 +1462,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
         lineHierarchySummaries: [mockLineHierarchySummaries[0]],
-        workBucketSummaries: mockWorkBucketSummaries,
+        workGroupSummaries: mockWorkGroupSummaries,
         shiftId: 'shift-1'
       });
 
@@ -1483,7 +1483,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
         lineHierarchySummaries: [mockLineHierarchySummaries[0]],
-        workBucketSummaries: mockWorkBucketSummaries,
+        workGroupSummaries: mockWorkGroupSummaries,
         shiftId: 'shift-1'
       });
 
@@ -1506,7 +1506,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
         lineHierarchySummaries: [mockLineHierarchySummaries[0]],
-        workBucketSummaries: mockWorkBucketSummaries,
+        workGroupSummaries: mockWorkGroupSummaries,
         shiftId: 'shift-1'
       });
 
@@ -1522,7 +1522,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedLineId: 'line-1',
         lineHierarchySummaries: [mockLineHierarchySummaries[0]],
         selectedWorkBucketName: 'Point A',
-        workBucketSummaries: mockWorkBucketSummaries,
+        workGroupSummaries: mockWorkGroupSummaries,
         shiftId: 'shift-1'
       });
 
@@ -1546,7 +1546,7 @@ describe('DesktopHierarchyPanel', () => {
         selectedAreaKey: 'צפון',
         selectedLineId: 'line-1',
         lineHierarchySummaries: [mockLineHierarchySummaries[0]],
-        workBucketSummaries: mockWorkBucketSummaries,
+        workGroupSummaries: mockWorkGroupSummaries,
         shiftId: 'shift-1'
       });
 

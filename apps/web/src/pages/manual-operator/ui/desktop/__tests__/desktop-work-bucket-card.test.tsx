@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { RouteGroupWorkBucketSummary, WorkBucketSummary } from '@/entities/manual-shift/model/shift-selectors';
+import type { RouteGroupWorkBucketSummary, WorkGroupSummary } from '@/entities/manual-shift/model/shift-selectors';
 import { DesktopWorkBucketCard } from '../desktop-work-bucket-card';
 
 function renderCard(element: React.ReactElement) {
@@ -10,7 +10,7 @@ function renderCard(element: React.ReactElement) {
 describe('DesktopWorkBucketCard', () => {
   it('passes the legacy bucket name for non-route-group buckets', () => {
     const onClick = vi.fn();
-    const bucket: WorkBucketSummary = {
+    const bucket: WorkGroupSummary = {
       workBucketName: 'Point A',
       workGroupName: 'Point A',
       ordersCount: 2,
