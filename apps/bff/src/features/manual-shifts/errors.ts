@@ -255,3 +255,41 @@ export function manualShiftAshlamaCheckUnitOrderMismatch(checkUnitId: string, or
     `Check unit ${checkUnitId} does not belong to order ${orderId}.`
   );
 }
+
+// --- Demand Planning Draft errors ---
+
+export function demandPlanningDraftNotFound(draftId: string) {
+  return new ApiError(404, 'DEMAND_PLANNING_DRAFT_NOT_FOUND', `Demand planning draft ${draftId} was not found.`);
+}
+
+export function demandPlanningDraftNotMutable(draftId: string, status: string) {
+  return new ApiError(
+    409,
+    'DEMAND_PLANNING_DRAFT_NOT_MUTABLE',
+    `Demand planning draft ${draftId} has status '${status}' and cannot be modified.`
+  );
+}
+
+export function demandPlanningAllocationOverflow(rawDemandRowId: string, requested: number, available: number) {
+  return new ApiError(
+    422,
+    'DEMAND_PLANNING_ALLOCATION_OVERFLOW',
+    `Allocation for raw demand row ${rawDemandRowId}: requested ${requested}, but only ${available} remaining.`
+  );
+}
+
+export function demandPlanningRawDemandRowNotFound(rawDemandRowId: string) {
+  return new ApiError(
+    404,
+    'DEMAND_PLANNING_RAW_DEMAND_ROW_NOT_FOUND',
+    `Raw demand row ${rawDemandRowId} was not found in this batch/tenant.`
+  );
+}
+
+export function demandPlanningBucketNotFound(bucketKey: string) {
+  return new ApiError(
+    404,
+    'DEMAND_PLANNING_BUCKET_NOT_FOUND',
+    `Bucket '${bucketKey}' was not found in the plan.`
+  );
+}

@@ -735,6 +735,22 @@ function createRepo() {
         new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>()
     ),
     findLineByShiftAndName: vi.fn(async (_shiftId: string, _lineName: string) => null),
+    createDemandPlanningDraft: vi.fn(async () => ({
+      id: '00000000-0000-4000-8000-000000000001', tenantId: ids.tenant, batchId: '00000000-0000-4000-8000-000000000099', status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
+    })),
+    getDemandPlanningDraft: vi.fn(async () => ({
+      id: '00000000-0000-4000-8000-000000000001', tenantId: ids.tenant, batchId: '00000000-0000-4000-8000-000000000099', status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
+    })),
+    updateDemandPlanningDraftStatus: vi.fn(async () => ({
+      id: '00000000-0000-4000-8000-000000000001', tenantId: ids.tenant, batchId: '00000000-0000-4000-8000-000000000099', status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
+    })),
+    deleteDemandPlanningBucketsByDraft: vi.fn(async () => undefined),
+    insertDemandPlanningBuckets: vi.fn(async () => []),
+    listDemandPlanningBuckets: vi.fn(async () => []),
+    deleteDemandPlanningAllocationsByDraft: vi.fn(async () => undefined),
+    insertDemandPlanningAllocations: vi.fn(async () => []),
+    listDemandPlanningAllocations: vi.fn(async () => []),
+    listRawDemandRowsByIds: vi.fn(async () => []),
   };
  
   return { repo, state };
@@ -1571,7 +1587,17 @@ describe('manual shift workers service', () => {
               k !== 'setWorkerAuthUser' &&
               k !== 'insertMonthlyImportExcludedRows' &&
               k !== 'insertRawDemandRows' &&
-              k !== 'getDemandImportBatch'
+              k !== 'getDemandImportBatch' &&
+              k !== 'createDemandPlanningDraft' &&
+              k !== 'getDemandPlanningDraft' &&
+              k !== 'updateDemandPlanningDraftStatus' &&
+              k !== 'deleteDemandPlanningBucketsByDraft' &&
+              k !== 'insertDemandPlanningBuckets' &&
+              k !== 'listDemandPlanningBuckets' &&
+              k !== 'deleteDemandPlanningAllocationsByDraft' &&
+              k !== 'insertDemandPlanningAllocations' &&
+              k !== 'listDemandPlanningAllocations' &&
+              k !== 'listRawDemandRowsByIds'
     );
     expect(canonicalKeys).toEqual([]);
   });
@@ -5006,6 +5032,470 @@ function makeBondedRow(overrides: {
   diagnostics?: string[];
   remainingBondedRaw?: string | null;
 }) {
+
+// --- Demand Planning Draft Service Tests ---
+
+describe('demand planning draft — create', () => {
+  const batchId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const rowId1 = 'e1000000-0000-4000-8000-000000000001';
+  const rowId2 = 'e2000000-0000-4000-8000-000000000002';
+
+  /**
+   * Creates a mock ManualShiftsRepo with real demand planning methods.
+   * Non-demand methods are vi.fn() stubs.
+   */
+  function createDemandRepo() {
+    const state: {
+      batches: DemandImportBatch[];
+      rows: RawDemandRow[];
+      drafts: Array<{ id: string; tenantId: string; batchId: string; status: string; createdBy: string | null; createdAt: string; updatedAt: string }>;
+      buckets: Array<{ id: string; tenantId: string; draftId: string; batchId: string; distributionArea: string | null; planningLineName: string; bucketName: string; sortOrder: number; createdAt: string; updatedAt: string }>;
+      allocations: Array<{ id: string; tenantId: string; draftId: string; batchId: string; rawDemandRowId: string; bucketId: string; allocatedQuantity: number; createdAt: string; updatedAt: string }>;
+    } = { batches: [], rows: [], drafts: [], buckets: [], allocations: [] };
+
+    let draftCounter = 0;
+    let bucketCounter = 0;
+    let allocCounter = 0;
+
+    // Use createRepo().repo as the base for its full vi.fn() stub set
+    const base = createRepo().repo;
+
+    const repo: ManualShiftsRepo = {
+      ...base,
+      getDemandImportBatch: vi.fn(async (input: { tenantId: string; batchId: string }) => {
+        return state.batches.find((b) => b.tenantId === input.tenantId && b.id === input.batchId) ?? null;
+      }) as unknown as ManualShiftsRepo['getDemandImportBatch'],
+      listRawDemandRowsByBatch: vi.fn(async (input: { tenantId: string; batchId: string }) => {
+        return state.rows.filter((r) => r.tenantId === input.tenantId && r.batchId === input.batchId);
+      }) as unknown as ManualShiftsRepo['listRawDemandRowsByBatch'],
+      createDemandPlanningDraft: vi.fn(async (input: { tenantId: string; batchId: string; createdBy: string | null }) => {
+        draftCounter += 1;
+        const draft = { id: `draft-${draftCounter}`, tenantId: input.tenantId, batchId: input.batchId, status: 'draft', createdBy: input.createdBy, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' };
+        state.drafts.push(draft);
+        return draft;
+      }) as unknown as ManualShiftsRepo['createDemandPlanningDraft'],
+      getDemandPlanningDraft: vi.fn(async (input: { tenantId: string; draftId: string }) => {
+        return state.drafts.find((d) => d.tenantId === input.tenantId && d.id === input.draftId) ?? null;
+      }) as unknown as ManualShiftsRepo['getDemandPlanningDraft'],
+      updateDemandPlanningDraftStatus: vi.fn(async (input: { tenantId: string; draftId: string; status: string }) => {
+        const draft = state.drafts.find((d) => d.tenantId === input.tenantId && d.id === input.draftId);
+        if (draft) { draft.status = input.status; return { ...draft }; }
+        return null;
+      }) as unknown as ManualShiftsRepo['updateDemandPlanningDraftStatus'],
+      deleteDemandPlanningBucketsByDraft: vi.fn(async (input: { tenantId: string; draftId: string }) => {
+        state.buckets = state.buckets.filter((b) => !(b.tenantId === input.tenantId && b.draftId === input.draftId));
+      }) as unknown as ManualShiftsRepo['deleteDemandPlanningBucketsByDraft'],
+      insertDemandPlanningBuckets: vi.fn(async (input: { tenantId: string; draftId: string; batchId: string; buckets: Array<{ distributionArea: string | null; planningLineName: string; bucketName: string; sortOrder: number }> }) => {
+        return input.buckets.map((b) => {
+          bucketCounter += 1;
+          const bucket = { id: `bucket-${bucketCounter}`, tenantId: input.tenantId, draftId: input.draftId, batchId: input.batchId, distributionArea: b.distributionArea, planningLineName: b.planningLineName, bucketName: b.bucketName, sortOrder: b.sortOrder, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' };
+          state.buckets.push(bucket);
+          return bucket;
+        });
+      }) as unknown as ManualShiftsRepo['insertDemandPlanningBuckets'],
+      listDemandPlanningBuckets: vi.fn(async (input: { tenantId: string; draftId: string }) => {
+        return state.buckets.filter((b) => b.tenantId === input.tenantId && b.draftId === input.draftId);
+      }) as unknown as ManualShiftsRepo['listDemandPlanningBuckets'],
+      deleteDemandPlanningAllocationsByDraft: vi.fn(async (input: { tenantId: string; draftId: string }) => {
+        state.allocations = state.allocations.filter((a) => !(a.tenantId === input.tenantId && a.draftId === input.draftId));
+      }) as unknown as ManualShiftsRepo['deleteDemandPlanningAllocationsByDraft'],
+      insertDemandPlanningAllocations: vi.fn(async (input: { tenantId: string; draftId: string; batchId: string; allocations: Array<{ rawDemandRowId: string; bucketId: string; allocatedQuantity: number }> }) => {
+        return input.allocations.map((a) => {
+          allocCounter += 1;
+          const alloc = { id: `alloc-${allocCounter}`, tenantId: input.tenantId, draftId: input.draftId, batchId: input.batchId, rawDemandRowId: a.rawDemandRowId, bucketId: a.bucketId, allocatedQuantity: a.allocatedQuantity, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' };
+          state.allocations.push(alloc);
+          return alloc;
+        });
+      }) as unknown as ManualShiftsRepo['insertDemandPlanningAllocations'],
+      listDemandPlanningAllocations: vi.fn(async (input: { tenantId: string; draftId: string }) => {
+        return state.allocations.filter((a) => a.tenantId === input.tenantId && a.draftId === input.draftId);
+      }) as unknown as ManualShiftsRepo['listDemandPlanningAllocations'],
+      listRawDemandRowsByIds: vi.fn(async (input: { tenantId: string; rowIds: string[] }) => {
+        return state.rows.filter((r) => r.tenantId === input.tenantId && input.rowIds.includes(r.id));
+      }) as unknown as ManualShiftsRepo['listRawDemandRowsByIds'],
+    };
+
+    return { repo, state };
+  }
+
+  it('creates draft for valid batch with one unassigned bucket per area', async () => {
+    const { repo, state } = createDemandRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => '2026-06-25T00:00:00.000Z' });
+
+    // Setup: batch with two distribution areas
+    const batch = { id: batchId, tenantId: ids.tenant, sourceFile: 'test.xlsx', sourceSheet: 'DataSheet' as const, uploadedAt: '2026-06-24T08:00:00.000Z', uploadedBy: null, status: 'ready' as const, rowsCount: 2, rawRowsCount: 2, warningRowsCount: 0, errorRowsCount: 0, specialFlowRowsCount: 0, distributionAreasCount: 2, distinctOrdersCount: 2, distinctSkuCount: 2 };
+    state.batches.push(batch);
+
+    state.rows.push(
+      { id: rowId1, tenantId: ids.tenant, batchId, sourceSheet: 'DataSheet', sourceRowNumber: 2, agent: null, orderDate: '2026-06-24', customerName: 'C1', orderNumber: 'O1', sku: 'SKU-1', description: null, category: null, quantity: 3, cost: null, notes: null, distributionArea: 'דרום', rawRouteLine: null, plannedDeliveryDate: null, plannedRouteLine: null, plannedWorkBucket: null, planningStatus: 'unplanned', routeFlow: 'unassigned', productHandlingFlow: 'regular', noteDateHints: [], issues: [], createdAt: '2026-06-24T08:00:00.000Z' },
+      { id: rowId2, tenantId: ids.tenant, batchId, sourceSheet: 'DataSheet', sourceRowNumber: 3, agent: null, orderDate: '2026-06-24', customerName: 'C2', orderNumber: 'O2', sku: 'SKU-2', description: null, category: null, quantity: 5, cost: null, notes: null, distributionArea: 'צפון', rawRouteLine: null, plannedDeliveryDate: null, plannedRouteLine: null, plannedWorkBucket: null, planningStatus: 'unplanned', routeFlow: 'unassigned', productHandlingFlow: 'regular', noteDateHints: [], issues: [], createdAt: '2026-06-24T08:00:00.000Z' }
+    );
+
+    const result = await service.createDemandPlanningDraft({
+      tenantId: ids.tenant,
+      batchId,
+      createdBy: null
+    });
+
+    expect(result.draft.tenantId).toBe(ids.tenant);
+    expect(result.draft.status).toBe('draft');
+    expect(result.buckets).toHaveLength(2);
+    expect(result.buckets.map((b) => b.distributionArea).sort()).toEqual(['דרום', 'צפון']);
+    expect(result.buckets[0].planningLineName).toBe('default');
+    expect(result.buckets[0].bucketName).toBe('unassigned');
+    expect(result.allocations).toHaveLength(0);
+  });
+
+  it('rejects missing batch', async () => {
+    const { repo } = createDemandRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => '2026-06-25T00:00:00.000Z' });
+
+    // Dont add any batch to state
+    await expect(service.createDemandPlanningDraft({
+      tenantId: ids.tenant,
+      batchId: '00000000-0000-0000-0000-000000000000',
+      createdBy: null
+    })).rejects.toThrow(/not found/i);
+  });
+
+  it('rejects tenant mismatch', async () => {
+    const { repo, state } = createDemandRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => '2026-06-25T00:00:00.000Z' });
+
+    const batch = { id: batchId, tenantId: ids.otherTenant, sourceFile: 'test.xlsx', sourceSheet: 'DataSheet' as const, uploadedAt: '2026-06-24T08:00:00.000Z', uploadedBy: null, status: 'ready' as const, rowsCount: 1, rawRowsCount: 1, warningRowsCount: 0, errorRowsCount: 0, specialFlowRowsCount: 0, distributionAreasCount: 1, distinctOrdersCount: 1, distinctSkuCount: 1 };
+    state.batches.push(batch);
+
+    await expect(service.createDemandPlanningDraft({
+      tenantId: ids.tenant, // different from batch's tenant
+      batchId,
+      createdBy: null
+    })).rejects.toThrow(/not found/i);
+  });
+});
+
+describe('demand planning draft — get', () => {
+  const batchId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+  function createDemandRepo() {
+    const state = {
+      drafts: [] as Array<{ id: string; tenantId: string; batchId: string; status: string; createdBy: string | null; createdAt: string; updatedAt: string }>,
+      buckets: [] as Array<{ id: string; tenantId: string; draftId: string; batchId: string; distributionArea: string | null; planningLineName: string; bucketName: string; sortOrder: number; createdAt: string; updatedAt: string }>,
+      allocations: [] as Array<{ id: string; tenantId: string; draftId: string; batchId: string; rawDemandRowId: string; bucketId: string; allocatedQuantity: number; createdAt: string; updatedAt: string }>
+    };
+
+    const base = createRepo().repo;
+    const repo: ManualShiftsRepo = {
+      ...base,
+      getDemandPlanningDraft: vi.fn(async (input: { tenantId: string; draftId: string }) => {
+        return state.drafts.find((d) => d.tenantId === input.tenantId && d.id === input.draftId) ?? null;
+      }) as unknown as ManualShiftsRepo['getDemandPlanningDraft'],
+      listDemandPlanningBuckets: vi.fn(async (input: { tenantId: string; draftId: string }) => {
+        return state.buckets.filter((b) => b.tenantId === input.tenantId && b.draftId === input.draftId);
+      }) as unknown as ManualShiftsRepo['listDemandPlanningBuckets'],
+      listDemandPlanningAllocations: vi.fn(async (input: { tenantId: string; draftId: string }) => {
+        return state.allocations.filter((a) => a.tenantId === input.tenantId && a.draftId === input.draftId);
+      }) as unknown as ManualShiftsRepo['listDemandPlanningAllocations'],
+    };
+
+    return { repo, state };
+  }
+
+  it('returns draft with buckets and allocations', async () => {
+    const { repo, state } = createDemandRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    state.drafts.push({ id: 'draft-1', tenantId: ids.tenant, batchId, status: 'draft', createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' });
+    state.buckets.push({ id: 'bucket-1', tenantId: ids.tenant, draftId: 'draft-1', batchId, distributionArea: 'דרום', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 0, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' });
+    state.allocations.push({ id: 'alloc-1', tenantId: ids.tenant, draftId: 'draft-1', batchId, rawDemandRowId: 'row-1', bucketId: 'bucket-1', allocatedQuantity: 3, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' });
+
+    const result = await service.getDemandPlanningDraft({ tenantId: ids.tenant, draftId: 'draft-1' });
+
+    expect(result.draft.id).toBe('draft-1');
+    expect(result.buckets).toHaveLength(1);
+    expect(result.allocations).toHaveLength(1);
+    expect(result.allocations[0].allocatedQuantity).toBe(3);
+  });
+
+  it('rejects missing draft', async () => {
+    const { repo } = createDemandRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    await expect(service.getDemandPlanningDraft({
+      tenantId: ids.tenant,
+      draftId: '00000000-0000-0000-0000-000000000000'
+    })).rejects.toThrow(/not found/i);
+  });
+
+  it('rejects tenant mismatch', async () => {
+    const { repo, state } = createDemandRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    state.drafts.push({ id: 'draft-1', tenantId: ids.otherTenant, batchId, status: 'draft', createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' });
+
+    await expect(service.getDemandPlanningDraft({
+      tenantId: ids.tenant,
+      draftId: 'draft-1'
+    })).rejects.toThrow(/not found/i);
+  });
+});
+
+describe('demand planning draft — PUT plan', () => {
+  const batchId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const rowId1 = 'e1000000-0000-4000-8000-000000000001';
+  const rowId2 = 'e2000000-0000-4000-8000-000000000002';
+  const draftId = 'draft-001';
+
+  function createPlanRepo() {
+    const state: {
+      drafts: Array<{ id: string; tenantId: string; batchId: string; status: string; createdBy: string | null; createdAt: string; updatedAt: string }>;
+      buckets: Array<{ id: string; tenantId: string; draftId: string; batchId: string; distributionArea: string | null; planningLineName: string; bucketName: string; sortOrder: number; createdAt: string; updatedAt: string }>;
+      allocations: Array<{ id: string; tenantId: string; draftId: string; batchId: string; rawDemandRowId: string; bucketId: string; allocatedQuantity: number; createdAt: string; updatedAt: string }>;
+      rows: RawDemandRow[];
+    } = { drafts: [], buckets: [], allocations: [], rows: [] };
+
+    let bucketCounter = 0;
+    let allocCounter = 0;
+
+    const base = createRepo().repo;
+    const repo: ManualShiftsRepo = {
+      ...base,
+      getDemandPlanningDraft: vi.fn(async (input: { tenantId: string; draftId: string }) => {
+        return state.drafts.find((d) => d.tenantId === input.tenantId && d.id === input.draftId) ?? null;
+      }) as unknown as ManualShiftsRepo['getDemandPlanningDraft'],
+      deleteDemandPlanningBucketsByDraft: vi.fn(async (input: { tenantId: string; draftId: string }) => {
+        state.buckets = state.buckets.filter((b) => !(b.tenantId === input.tenantId && b.draftId === input.draftId));
+      }) as unknown as ManualShiftsRepo['deleteDemandPlanningBucketsByDraft'],
+      insertDemandPlanningBuckets: vi.fn(async (input: { tenantId: string; draftId: string; batchId: string; buckets: Array<{ distributionArea: string | null; planningLineName: string; bucketName: string; sortOrder: number }> }) => {
+        return input.buckets.map((b) => {
+          bucketCounter += 1;
+          const bucket = { id: `bucket-${bucketCounter}`, tenantId: input.tenantId, draftId: input.draftId, batchId: input.batchId, distributionArea: b.distributionArea, planningLineName: b.planningLineName, bucketName: b.bucketName, sortOrder: b.sortOrder, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' };
+          state.buckets.push(bucket);
+          return bucket;
+        });
+      }) as unknown as ManualShiftsRepo['insertDemandPlanningBuckets'],
+      deleteDemandPlanningAllocationsByDraft: vi.fn(async (input: { tenantId: string; draftId: string }) => {
+        state.allocations = state.allocations.filter((a) => !(a.tenantId === input.tenantId && a.draftId === input.draftId));
+      }) as unknown as ManualShiftsRepo['deleteDemandPlanningAllocationsByDraft'],
+      insertDemandPlanningAllocations: vi.fn(async (input: { tenantId: string; draftId: string; batchId: string; allocations: Array<{ rawDemandRowId: string; bucketId: string; allocatedQuantity: number }> }) => {
+        return input.allocations.map((a) => {
+          allocCounter += 1;
+          const alloc = { id: `alloc-${allocCounter}`, tenantId: input.tenantId, draftId: input.draftId, batchId: input.batchId, rawDemandRowId: a.rawDemandRowId, bucketId: a.bucketId, allocatedQuantity: a.allocatedQuantity, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' };
+          state.allocations.push(alloc);
+          return alloc;
+        });
+      }) as unknown as ManualShiftsRepo['insertDemandPlanningAllocations'],
+      listDemandPlanningAllocations: vi.fn(async (input: { tenantId: string; draftId: string }) => {
+        return state.allocations.filter((a) => a.tenantId === input.tenantId && a.draftId === input.draftId);
+      }) as unknown as ManualShiftsRepo['listDemandPlanningAllocations'],
+      listDemandPlanningBuckets: vi.fn(async (input: { tenantId: string; draftId: string }) => {
+        return state.buckets.filter((b) => b.tenantId === input.tenantId && b.draftId === input.draftId);
+      }) as unknown as ManualShiftsRepo['listDemandPlanningBuckets'],
+      listRawDemandRowsByIds: vi.fn(async (input: { tenantId: string; rowIds: string[] }) => {
+        return state.rows.filter((r) => r.tenantId === input.tenantId && input.rowIds.includes(r.id));
+      }) as unknown as ManualShiftsRepo['listRawDemandRowsByIds'],
+    };
+
+    return { repo, state };
+  }
+
+  it('saves buckets and allocations, replacing previous state', async () => {
+    const { repo, state } = createPlanRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    state.drafts.push({ id: draftId, tenantId: ids.tenant, batchId, status: 'draft', createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' });
+    state.rows.push(
+      { id: rowId1, tenantId: ids.tenant, batchId, sourceSheet: 'DataSheet', sourceRowNumber: 2, agent: null, orderDate: null, customerName: 'C1', orderNumber: 'O1', sku: 'SKU-1', description: null, category: null, quantity: 10, cost: null, notes: null, distributionArea: 'דרום', rawRouteLine: null, plannedDeliveryDate: null, plannedRouteLine: null, plannedWorkBucket: null, planningStatus: 'unplanned', routeFlow: 'unassigned', productHandlingFlow: 'regular', noteDateHints: [], issues: [], createdAt: '2026-06-25T00:00:00.000Z' }
+    );
+
+    const result = await service.putDemandPlanningPlan({
+      tenantId: ids.tenant,
+      draftId,
+      buckets: [
+        { distributionArea: 'דרום', planningLineName: 'כללי', bucketName: 'סיגריות' },
+        { distributionArea: 'דרום', planningLineName: 'כללי', bucketName: 'גדול' }
+      ],
+      allocations: [
+        { rawDemandRowId: rowId1, bucketKey: 'דרום|כללי|סיגריות', allocatedQuantity: 7 }
+      ]
+    });
+
+    expect(result.buckets).toHaveLength(2);
+    expect(result.allocations).toHaveLength(1);
+    expect(result.allocations[0].allocatedQuantity).toBe(7);
+    expect(result.draft.id).toBe(draftId);
+  });
+
+  it('supports split order across multiple buckets', async () => {
+    const { repo, state } = createPlanRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    state.drafts.push({ id: draftId, tenantId: ids.tenant, batchId, status: 'draft', createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' });
+    state.rows.push(
+      { id: rowId1, tenantId: ids.tenant, batchId, sourceSheet: 'DataSheet', sourceRowNumber: 2, agent: null, orderDate: null, customerName: 'C1', orderNumber: 'O1', sku: 'SKU-1', description: null, category: null, quantity: 10, cost: null, notes: null, distributionArea: 'דרום', rawRouteLine: null, plannedDeliveryDate: null, plannedRouteLine: null, plannedWorkBucket: null, planningStatus: 'unplanned', routeFlow: 'unassigned', productHandlingFlow: 'cigarette', noteDateHints: [], issues: [], createdAt: '2026-06-25T00:00:00.000Z' },
+      { id: rowId2, tenantId: ids.tenant, batchId, sourceSheet: 'DataSheet', sourceRowNumber: 3, agent: null, orderDate: null, customerName: 'C1', orderNumber: 'O1', sku: 'SKU-2', description: null, category: null, quantity: 5, cost: null, notes: null, distributionArea: 'דרום', rawRouteLine: null, plannedDeliveryDate: null, plannedRouteLine: null, plannedWorkBucket: null, planningStatus: 'unplanned', routeFlow: 'unassigned', productHandlingFlow: 'regular', noteDateHints: [], issues: [], createdAt: '2026-06-25T00:00:00.000Z' }
+    );
+
+    const result = await service.putDemandPlanningPlan({
+      tenantId: ids.tenant,
+      draftId,
+      buckets: [
+        { distributionArea: 'דרום', planningLineName: 'כללי', bucketName: 'סיגריות' },
+        { distributionArea: 'דרום', planningLineName: 'כללי', bucketName: 'כללי' }
+      ],
+      allocations: [
+        { rawDemandRowId: rowId1, bucketKey: 'דרום|כללי|סיגריות', allocatedQuantity: 10 },
+        { rawDemandRowId: rowId2, bucketKey: 'דרום|כללי|כללי', allocatedQuantity: 5 }
+      ]
+    });
+
+    // Same order O1, but items split across two buckets
+    expect(result.allocations).toHaveLength(2);
+    const bucketIds = [...new Set(result.allocations.map((a) => a.bucketId))];
+    expect(bucketIds).toHaveLength(2);
+  });
+
+  it('supports two allocations for same rawDemandRow if sum <= quantity', async () => {
+    const { repo, state } = createPlanRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    state.drafts.push({ id: draftId, tenantId: ids.tenant, batchId, status: 'draft', createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' });
+    state.rows.push(
+      { id: rowId1, tenantId: ids.tenant, batchId, sourceSheet: 'DataSheet', sourceRowNumber: 2, agent: null, orderDate: null, customerName: 'C1', orderNumber: 'O1', sku: 'SKU-1', description: null, category: null, quantity: 10, cost: null, notes: null, distributionArea: 'דרום', rawRouteLine: null, plannedDeliveryDate: null, plannedRouteLine: null, plannedWorkBucket: null, planningStatus: 'unplanned', routeFlow: 'unassigned', productHandlingFlow: 'regular', noteDateHints: [], issues: [], createdAt: '2026-06-25T00:00:00.000Z' }
+    );
+
+    const result = await service.putDemandPlanningPlan({
+      tenantId: ids.tenant,
+      draftId,
+      buckets: [
+        { distributionArea: 'דרום', planningLineName: 'כללי', bucketName: 'א' },
+        { distributionArea: 'דרום', planningLineName: 'כללי', bucketName: 'ב' }
+      ],
+      allocations: [
+        { rawDemandRowId: rowId1, bucketKey: 'דרום|כללי|א', allocatedQuantity: 4 },
+        { rawDemandRowId: rowId1, bucketKey: 'דרום|כללי|ב', allocatedQuantity: 6 }
+      ]
+    });
+
+    expect(result.allocations).toHaveLength(2);
+    const total = result.allocations.reduce((s, a) => s + a.allocatedQuantity, 0);
+    expect(total).toBe(10);
+  });
+
+  it('rejects draft status applied', async () => {
+    const { repo, state } = createPlanRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    state.drafts.push({ id: draftId, tenantId: ids.tenant, batchId, status: 'applied', createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' });
+
+    await expect(service.putDemandPlanningPlan({
+      tenantId: ids.tenant,
+      draftId,
+      buckets: [], allocations: []
+    })).rejects.toThrow(/not mutable/i);
+  });
+
+  it('rejects draft status cancelled', async () => {
+    const { repo, state } = createPlanRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    state.drafts.push({ id: draftId, tenantId: ids.tenant, batchId, status: 'cancelled', createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' });
+
+    await expect(service.putDemandPlanningPlan({
+      tenantId: ids.tenant,
+      draftId,
+      buckets: [], allocations: []
+    })).rejects.toThrow(/not mutable/i);
+  });
+
+  it('rejects allocatedQuantity <= 0', async () => {
+    const { repo, state } = createPlanRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    state.drafts.push({ id: draftId, tenantId: ids.tenant, batchId, status: 'draft', createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' });
+    state.rows.push({ id: rowId1, tenantId: ids.tenant, batchId, sourceSheet: 'DataSheet', sourceRowNumber: 2, agent: null, orderDate: null, customerName: 'C1', orderNumber: 'O1', sku: 'SKU-1', description: null, category: null, quantity: 10, cost: null, notes: null, distributionArea: 'דרום', rawRouteLine: null, plannedDeliveryDate: null, plannedRouteLine: null, plannedWorkBucket: null, planningStatus: 'unplanned', routeFlow: 'unassigned', productHandlingFlow: 'regular', noteDateHints: [], issues: [], createdAt: '2026-06-25T00:00:00.000Z' });
+
+    await expect(service.putDemandPlanningPlan({
+      tenantId: ids.tenant,
+      draftId,
+      buckets: [{ distributionArea: 'דרום', planningLineName: 'כללי', bucketName: 'bucket' }],
+      allocations: [{ rawDemandRowId: rowId1, bucketKey: 'דרום|כללי|bucket', allocatedQuantity: 0 }]
+    })).rejects.toThrow(/positive/i);
+  });
+
+  it('rejects duplicate bucket keys', async () => {
+    const { repo, state } = createPlanRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    state.drafts.push({ id: draftId, tenantId: ids.tenant, batchId, status: 'draft', createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' });
+
+    await expect(service.putDemandPlanningPlan({
+      tenantId: ids.tenant,
+      draftId,
+      buckets: [
+        { distributionArea: 'דרום', planningLineName: 'כללי', bucketName: 'bucket' },
+        { distributionArea: 'דרום', planningLineName: 'כללי', bucketName: 'bucket' } // duplicate
+      ],
+      allocations: []
+    })).rejects.toThrow(/duplicate/i);
+  });
+
+  it('rejects allocation bucketKey not found', async () => {
+    const { repo, state } = createPlanRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    state.drafts.push({ id: draftId, tenantId: ids.tenant, batchId, status: 'draft', createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' });
+    state.rows.push({ id: rowId1, tenantId: ids.tenant, batchId, sourceSheet: 'DataSheet', sourceRowNumber: 2, agent: null, orderDate: null, customerName: 'C1', orderNumber: 'O1', sku: 'SKU-1', description: null, category: null, quantity: 10, cost: null, notes: null, distributionArea: 'דרום', rawRouteLine: null, plannedDeliveryDate: null, plannedRouteLine: null, plannedWorkBucket: null, planningStatus: 'unplanned', routeFlow: 'unassigned', productHandlingFlow: 'regular', noteDateHints: [], issues: [], createdAt: '2026-06-25T00:00:00.000Z' });
+
+    await expect(service.putDemandPlanningPlan({
+      tenantId: ids.tenant,
+      draftId,
+      buckets: [{ distributionArea: 'דרום', planningLineName: 'כללי', bucketName: 'bucket' }],
+      allocations: [{ rawDemandRowId: rowId1, bucketKey: 'דרום|כללי|NONEXISTENT', allocatedQuantity: 5 }]
+    })).rejects.toThrow(/not found/i);
+  });
+
+  it('rejects rawDemandRowId from another tenant', async () => {
+    const { repo, state } = createPlanRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    state.drafts.push({ id: draftId, tenantId: ids.tenant, batchId, status: 'draft', createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' });
+    // Row belongs to different tenant
+    state.rows.push({ id: rowId1, tenantId: ids.otherTenant, batchId, sourceSheet: 'DataSheet', sourceRowNumber: 2, agent: null, orderDate: null, customerName: 'C1', orderNumber: 'O1', sku: 'SKU-1', description: null, category: null, quantity: 10, cost: null, notes: null, distributionArea: 'דרום', rawRouteLine: null, plannedDeliveryDate: null, plannedRouteLine: null, plannedWorkBucket: null, planningStatus: 'unplanned', routeFlow: 'unassigned', productHandlingFlow: 'regular', noteDateHints: [], issues: [], createdAt: '2026-06-25T00:00:00.000Z' });
+
+    await expect(service.putDemandPlanningPlan({
+      tenantId: ids.tenant,
+      draftId,
+      buckets: [{ distributionArea: 'דרום', planningLineName: 'כללי', bucketName: 'bucket' }],
+      allocations: [{ rawDemandRowId: rowId1, bucketKey: 'דרום|כללי|bucket', allocatedQuantity: 5 }]
+    })).rejects.toThrow(/not found/i);
+  });
+
+  it('rejects sum allocatedQuantity > rawDemandRows.quantity', async () => {
+    const { repo, state } = createPlanRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    state.drafts.push({ id: draftId, tenantId: ids.tenant, batchId, status: 'draft', createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' });
+    state.rows.push({ id: rowId1, tenantId: ids.tenant, batchId, sourceSheet: 'DataSheet', sourceRowNumber: 2, agent: null, orderDate: null, customerName: 'C1', orderNumber: 'O1', sku: 'SKU-1', description: null, category: null, quantity: 10, cost: null, notes: null, distributionArea: 'דרום', rawRouteLine: null, plannedDeliveryDate: null, plannedRouteLine: null, plannedWorkBucket: null, planningStatus: 'unplanned', routeFlow: 'unassigned', productHandlingFlow: 'regular', noteDateHints: [], issues: [], createdAt: '2026-06-25T00:00:00.000Z' });
+
+    await expect(service.putDemandPlanningPlan({
+      tenantId: ids.tenant,
+      draftId,
+      buckets: [{ distributionArea: 'דרום', planningLineName: 'כללי', bucketName: 'bucket' }],
+      allocations: [{ rawDemandRowId: rowId1, bucketKey: 'דרום|כללי|bucket', allocatedQuantity: 15 }] // > 10
+    })).rejects.toThrow(/overflow/i);
+  });
+
+  it('rejects missing draft', async () => {
+    const { repo } = createPlanRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    await expect(service.putDemandPlanningPlan({
+      tenantId: ids.tenant,
+      draftId: '00000000-0000-0000-0000-000000000000',
+      buckets: [], allocations: []
+    })).rejects.toThrow(/not found/i);
+  });
+});
   return {
     rowNumber: overrides.rowNumber,
     sourceLabel: overrides.sourceLabel ?? null,

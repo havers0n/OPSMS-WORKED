@@ -32,7 +32,10 @@ import type {
   ManualShiftWorkHierarchyRouteGroup,
   ManualShiftWorkHierarchyWorkBucket,
   OpenAshlamaBoardItem,
-  BucketProductRollupRow
+  BucketProductRollupRow,
+  DemandPlanningDraft,
+  DemandPlanningBucket,
+  DemandPlanningAllocation
 } from '@wos/domain';
 
 export type ProductControlDemandRow = {
@@ -441,6 +444,84 @@ function mapRawDemandRow(row: RawDemandRowRow): RawDemandRow {
     noteDateHints: row.note_date_hints ?? [],
     issues: row.issues ?? [],
     createdAt: row.created_at
+  };
+}
+
+// --- Demand Planning Draft Row types and mappers ---
+
+type DemandPlanningDraftRow = {
+  id: string;
+  tenant_id: string;
+  batch_id: string;
+  status: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function mapDemandPlanningDraftRow(row: DemandPlanningDraftRow): DemandPlanningDraft {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    batchId: row.batch_id,
+    status: row.status as DemandPlanningDraft['status'],
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+type DemandPlanningBucketRow = {
+  id: string;
+  tenant_id: string;
+  draft_id: string;
+  batch_id: string;
+  distribution_area: string | null;
+  planning_line_name: string;
+  bucket_name: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+function mapDemandPlanningBucketRow(row: DemandPlanningBucketRow): DemandPlanningBucket {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    draftId: row.draft_id,
+    batchId: row.batch_id,
+    distributionArea: row.distribution_area,
+    planningLineName: row.planning_line_name,
+    bucketName: row.bucket_name,
+    sortOrder: row.sort_order,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+type DemandPlanningAllocationRow = {
+  id: string;
+  tenant_id: string;
+  draft_id: string;
+  batch_id: string;
+  raw_demand_row_id: string;
+  bucket_id: string;
+  allocated_quantity: number;
+  created_at: string;
+  updated_at: string;
+};
+
+function mapDemandPlanningAllocationRow(row: DemandPlanningAllocationRow): DemandPlanningAllocation {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    draftId: row.draft_id,
+    batchId: row.batch_id,
+    rawDemandRowId: row.raw_demand_row_id,
+    bucketId: row.bucket_id,
+    allocatedQuantity: Number(row.allocated_quantity),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
   };
 }
 
@@ -910,6 +991,63 @@ export type ManualShiftsRepo = {
   }): Promise<BucketProductRollupRow[]>;
   listProductControlDemand(shiftId: string): Promise<ProductControlDemandRow[]>;
   listWarehouseStockBySku(skus: string[], tenantId: string): Promise<Map<string, ProductControlWarehouseStockRow>>;
+
+  // Demand Planning Draft
+  createDemandPlanningDraft(input: {
+    tenantId: string;
+    batchId: string;
+    createdBy: string | null;
+  }): Promise<DemandPlanningDraft>;
+  getDemandPlanningDraft(input: {
+    tenantId: string;
+    draftId: string;
+  }): Promise<DemandPlanningDraft | null>;
+  updateDemandPlanningDraftStatus(input: {
+    tenantId: string;
+    draftId: string;
+    status: string;
+  }): Promise<DemandPlanningDraft | null>;
+  deleteDemandPlanningBucketsByDraft(input: {
+    tenantId: string;
+    draftId: string;
+  }): Promise<void>;
+  insertDemandPlanningBuckets(input: {
+    tenantId: string;
+    draftId: string;
+    batchId: string;
+    buckets: Array<{
+      distributionArea: string | null;
+      planningLineName: string;
+      bucketName: string;
+      sortOrder: number;
+    }>;
+  }): Promise<DemandPlanningBucket[]>;
+  listDemandPlanningBuckets(input: {
+    tenantId: string;
+    draftId: string;
+  }): Promise<DemandPlanningBucket[]>;
+  deleteDemandPlanningAllocationsByDraft(input: {
+    tenantId: string;
+    draftId: string;
+  }): Promise<void>;
+  insertDemandPlanningAllocations(input: {
+    tenantId: string;
+    draftId: string;
+    batchId: string;
+    allocations: Array<{
+      rawDemandRowId: string;
+      bucketId: string;
+      allocatedQuantity: number;
+    }>;
+  }): Promise<DemandPlanningAllocation[]>;
+  listDemandPlanningAllocations(input: {
+    tenantId: string;
+    draftId: string;
+  }): Promise<DemandPlanningAllocation[]>;
+  listRawDemandRowsByIds(input: {
+    tenantId: string;
+    rowIds: string[];
+  }): Promise<RawDemandRow[]>;
 };
 
 export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRepo {
@@ -2489,6 +2627,157 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       }
 
       return result;
+    },
+
+    // --- Demand Planning Draft methods ---
+
+    async createDemandPlanningDraft(input) {
+      const { data, error } = await supabase
+        .from('demand_planning_drafts')
+        .insert({
+          tenant_id: input.tenantId,
+          batch_id: input.batchId,
+          created_by: input.createdBy
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return mapDemandPlanningDraftRow(data as DemandPlanningDraftRow);
+    },
+
+    async getDemandPlanningDraft(input) {
+      const { data, error } = await supabase
+        .from('demand_planning_drafts')
+        .select('*')
+        .eq('tenant_id', input.tenantId)
+        .eq('id', input.draftId)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') return null;
+        throw error;
+      }
+
+      return data ? mapDemandPlanningDraftRow(data as DemandPlanningDraftRow) : null;
+    },
+
+    async updateDemandPlanningDraftStatus(input) {
+      const { data, error } = await supabase
+        .from('demand_planning_drafts')
+        .update({ status: input.status })
+        .eq('tenant_id', input.tenantId)
+        .eq('id', input.draftId)
+        .select()
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') return null;
+        throw error;
+      }
+
+      return data ? mapDemandPlanningDraftRow(data as DemandPlanningDraftRow) : null;
+    },
+
+    async deleteDemandPlanningBucketsByDraft(input) {
+      const { error } = await supabase
+        .from('demand_planning_buckets')
+        .delete()
+        .eq('tenant_id', input.tenantId)
+        .eq('draft_id', input.draftId);
+
+      if (error) throw error;
+    },
+
+    async insertDemandPlanningBuckets(input) {
+      if (input.buckets.length === 0) return [];
+
+      const { data, error } = await supabase
+        .from('demand_planning_buckets')
+        .insert(input.buckets.map((b, i) => ({
+          tenant_id: input.tenantId,
+          draft_id: input.draftId,
+          batch_id: input.batchId,
+          distribution_area: b.distributionArea,
+          planning_line_name: b.planningLineName,
+          bucket_name: b.bucketName,
+          sort_order: b.sortOrder
+        })))
+        .select();
+
+      if (error) throw error;
+
+      return ((data ?? []) as DemandPlanningBucketRow[]).map(mapDemandPlanningBucketRow);
+    },
+
+    async listDemandPlanningBuckets(input) {
+      const { data, error } = await supabase
+        .from('demand_planning_buckets')
+        .select('*')
+        .eq('tenant_id', input.tenantId)
+        .eq('draft_id', input.draftId)
+        .order('sort_order', { ascending: true });
+
+      if (error) throw error;
+
+      return ((data ?? []) as DemandPlanningBucketRow[]).map(mapDemandPlanningBucketRow);
+    },
+
+    async deleteDemandPlanningAllocationsByDraft(input) {
+      const { error } = await supabase
+        .from('demand_planning_allocations')
+        .delete()
+        .eq('tenant_id', input.tenantId)
+        .eq('draft_id', input.draftId);
+
+      if (error) throw error;
+    },
+
+    async insertDemandPlanningAllocations(input) {
+      if (input.allocations.length === 0) return [];
+
+      const { data, error } = await supabase
+        .from('demand_planning_allocations')
+        .insert(input.allocations.map((a) => ({
+          tenant_id: input.tenantId,
+          draft_id: input.draftId,
+          batch_id: input.batchId,
+          raw_demand_row_id: a.rawDemandRowId,
+          bucket_id: a.bucketId,
+          allocated_quantity: a.allocatedQuantity
+        })))
+        .select();
+
+      if (error) throw error;
+
+      return ((data ?? []) as DemandPlanningAllocationRow[]).map(mapDemandPlanningAllocationRow);
+    },
+
+    async listDemandPlanningAllocations(input) {
+      const { data, error } = await supabase
+        .from('demand_planning_allocations')
+        .select('*')
+        .eq('tenant_id', input.tenantId)
+        .eq('draft_id', input.draftId);
+
+      if (error) throw error;
+
+      return ((data ?? []) as DemandPlanningAllocationRow[]).map(mapDemandPlanningAllocationRow);
+    },
+
+    async listRawDemandRowsByIds(input) {
+      if (input.rowIds.length === 0) return [];
+
+      const { data, error } = await supabase
+        .from('raw_demand_rows')
+        .select(rawDemandRowColumns)
+        .eq('tenant_id', input.tenantId)
+        .in('id', input.rowIds);
+
+      if (error) throw error;
+
+      return ((data ?? []) as RawDemandRowRow[]).map(mapRawDemandRow);
     }
   };
 }

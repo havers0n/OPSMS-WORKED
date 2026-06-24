@@ -68,7 +68,9 @@ import {
   pickTaskDetailResponseSchema,
   openAshlamaBoardResponseSchema,
   productControlResponseSchema as manualShiftProductControlResponseSchema,
-  pickerSheetPrintDataSchema
+  pickerSheetPrintDataSchema,
+  demandPlanningDraftWithAssignmentsResponseSchema,
+  demandPlanningPutPlanRequestBodySchema
 } from '../../schemas.js';
 import { parseOrThrow } from '../../validation.js';
 import { generatePickerSheetPdf, type PickerSheetPdfParams } from './picker-sheet-pdf.js';
@@ -163,6 +165,10 @@ function mapManualShiftImportError(error: unknown) {
       default:
         return new ApiError(422, error.code, error.message);
     }
+  }
+
+  if (error instanceof ZodError) {
+    return new ApiError(400, 'VALIDATION_ERROR', 'Request validation failed.');
   }
 
   return new ApiError(500, 'INTERNAL_IMPORT_ERROR', error instanceof Error ? error.message : 'Unexpected import error');
@@ -802,6 +808,71 @@ export function registerManualShiftsRoutes(
       });
 
       return parseOrThrow(rawDemandPlanningPreviewResponseSchema, result);
+    });
+  });
+
+  // --- Demand Planning Draft endpoints ---
+
+  app.post('/api/demand-imports/:batchId/planning-drafts', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-imports/:batchId/planning-drafts', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      const tenantId = requireTenant(auth);
+      const { id: batchId } = parseOrThrow(idResponseSchema, {
+        id: request.params && typeof request.params === 'object' ? (request.params as Record<string, unknown>).batchId : null
+      });
+
+      const result = await getManualShiftsService(auth).createDemandPlanningDraft({
+        tenantId,
+        batchId,
+        createdBy: auth.user.id ?? null
+      });
+
+      void reply.code(201);
+      return parseOrThrow(demandPlanningDraftWithAssignmentsResponseSchema, result);
+    });
+  });
+
+  app.get('/api/demand-planning-drafts/:draftId', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-planning-drafts/:draftId', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      const tenantId = requireTenant(auth);
+      const { id: draftId } = parseOrThrow(idResponseSchema, {
+        id: request.params && typeof request.params === 'object' ? (request.params as Record<string, unknown>).draftId : null
+      });
+
+      const result = await getManualShiftsService(auth).getDemandPlanningDraft({
+        tenantId,
+        draftId
+      });
+
+      return parseOrThrow(demandPlanningDraftWithAssignmentsResponseSchema, result);
+    });
+  });
+
+  app.put('/api/demand-planning-drafts/:draftId/plan', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-planning-drafts/:draftId/plan', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      const tenantId = requireTenant(auth);
+      const { id: draftId } = parseOrThrow(idResponseSchema, {
+        id: request.params && typeof request.params === 'object' ? (request.params as Record<string, unknown>).draftId : null
+      });
+
+      const body = parseOrThrow(demandPlanningPutPlanRequestBodySchema, request.body);
+
+      const result = await getManualShiftsService(auth).putDemandPlanningPlan({
+        tenantId,
+        draftId,
+        buckets: body.buckets,
+        allocations: body.allocations
+      });
+
+      return parseOrThrow(demandPlanningDraftWithAssignmentsResponseSchema, result);
     });
   });
 

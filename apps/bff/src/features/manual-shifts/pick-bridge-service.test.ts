@@ -255,6 +255,16 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
         new Map<string, { sku: string; warehouseQty: number; canonicalProductIds: string[] }>()
     ),
     findLineByShiftAndName: vi.fn(async () => null),
+    createDemandPlanningDraft: vi.fn(async () => ({ id: '', tenantId: '', batchId: '', status: 'draft' as const, createdBy: null, createdAt: '', updatedAt: '' })),
+    getDemandPlanningDraft: vi.fn(async () => ({ id: '', tenantId: '', batchId: '', status: 'draft' as const, createdBy: null, createdAt: '', updatedAt: '' })),
+    updateDemandPlanningDraftStatus: vi.fn(async () => ({ id: '', tenantId: '', batchId: '', status: 'draft' as const, createdBy: null, createdAt: '', updatedAt: '' })),
+    deleteDemandPlanningBucketsByDraft: vi.fn(async () => undefined),
+    insertDemandPlanningBuckets: vi.fn(async () => []),
+    listDemandPlanningBuckets: vi.fn(async () => []),
+    deleteDemandPlanningAllocationsByDraft: vi.fn(async () => undefined),
+    insertDemandPlanningAllocations: vi.fn(async () => []),
+    listDemandPlanningAllocations: vi.fn(async () => []),
+    listRawDemandRowsByIds: vi.fn(async () => []),
   };
 }
 

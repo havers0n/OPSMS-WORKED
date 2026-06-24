@@ -35,7 +35,8 @@ import type {
   ProductControlResponse,
   PickerSheetPrintData,
   PickerSheetWorkGroup,
-  RawDemandPlanningPreview
+  RawDemandPlanningPreview,
+  DemandPlanningDraftWithAssignments
 } from '@wos/domain';
 import {
   buildProductControlRow,
@@ -89,8 +90,14 @@ import {
   manualShiftImportInvalidPreviewPayload,
   manualShiftImportForbidden,
   manualShiftMonthlyImportRequiresReplaceMode,
-  manualShiftMonthlyReplaceNotSafe
+  manualShiftMonthlyReplaceNotSafe,
+  demandPlanningDraftNotFound,
+  demandPlanningDraftNotMutable,
+  demandPlanningAllocationOverflow,
+  demandPlanningRawDemandRowNotFound,
+  demandPlanningBucketNotFound
 } from './errors.js';
+import { ApiError } from '../../errors.js';
 import type { ManualShiftsRepo, MonthlyImportShiftCounts } from './repo.js';
 import { createManualShiftsRepo } from './repo.js';
 import { mapManualShiftLineRowToDomain } from './repo.js';
@@ -325,6 +332,31 @@ export type ManualShiftsService = {
     distributionArea: string;
     planningLineName: string;
   }): Promise<PickerSheetPrintData>;
+
+  // Demand Planning Draft
+  createDemandPlanningDraft(input: {
+    tenantId: string;
+    batchId: string;
+    createdBy: string | null;
+  }): Promise<DemandPlanningDraftWithAssignments>;
+  getDemandPlanningDraft(input: {
+    tenantId: string;
+    draftId: string;
+  }): Promise<DemandPlanningDraftWithAssignments>;
+  putDemandPlanningPlan(input: {
+    tenantId: string;
+    draftId: string;
+    buckets: Array<{
+      distributionArea: string | null;
+      planningLineName: string;
+      bucketName: string;
+    }>;
+    allocations: Array<{
+      rawDemandRowId: string;
+      bucketKey: string;
+      allocatedQuantity: number;
+    }>;
+  }): Promise<DemandPlanningDraftWithAssignments>;
 };
 
 function formatLocalDate(date: Date, timeZone: string) {
@@ -2314,6 +2346,201 @@ export function createManualShiftsServiceFromRepo(
       };
 
       return processCollisions(data);
+    },
+
+    // --- Demand Planning Draft methods ---
+
+    async createDemandPlanningDraft(input) {
+      const [batch, rows] = await Promise.all([
+        repo.getDemandImportBatch({
+          tenantId: input.tenantId,
+          batchId: input.batchId
+        }),
+        repo.listRawDemandRowsByBatch({
+          tenantId: input.tenantId,
+          batchId: input.batchId
+        })
+      ]);
+
+      const preview = buildRawDemandPlanningPreview({ batch, rows });
+
+      const draft = await repo.createDemandPlanningDraft({
+        tenantId: input.tenantId,
+        batchId: input.batchId,
+        createdBy: input.createdBy
+      });
+
+      // Create initial bucket per area (one default "unassigned" bucket per area)
+      const initialBuckets = preview.distributionAreas.map((area, i) => ({
+        distributionArea: area.distributionArea,
+        planningLineName: 'default',
+        bucketName: 'unassigned',
+        sortOrder: i
+      }));
+
+      const buckets = await repo.insertDemandPlanningBuckets({
+        tenantId: input.tenantId,
+        draftId: draft.id,
+        batchId: input.batchId,
+        buckets: initialBuckets
+      });
+
+      // Build bucket key map: bucketKey = `${distributionArea}|${planningLineName}|${bucketName}`
+      const bucketByKey = new Map<string, typeof buckets[0]>();
+      for (const bucket of buckets) {
+        const key = [bucket.distributionArea ?? '', bucket.planningLineName, bucket.bucketName].join('|');
+        bucketByKey.set(key, bucket);
+      }
+
+      return {
+        draft,
+        buckets,
+        allocations: []
+      };
+    },
+
+    async getDemandPlanningDraft(input) {
+      const draft = await repo.getDemandPlanningDraft({
+        tenantId: input.tenantId,
+        draftId: input.draftId
+      });
+
+      if (!draft) {
+        throw demandPlanningDraftNotFound(input.draftId);
+      }
+
+      const [buckets, allocations] = await Promise.all([
+        repo.listDemandPlanningBuckets({
+          tenantId: input.tenantId,
+          draftId: input.draftId
+        }),
+        repo.listDemandPlanningAllocations({
+          tenantId: input.tenantId,
+          draftId: input.draftId
+        })
+      ]);
+
+      return { draft, buckets, allocations };
+    },
+
+    async putDemandPlanningPlan(input) {
+      const draft = await repo.getDemandPlanningDraft({
+        tenantId: input.tenantId,
+        draftId: input.draftId
+      });
+
+      if (!draft) {
+        throw demandPlanningDraftNotFound(input.draftId);
+      }
+
+      if (draft.status === 'applied' || draft.status === 'cancelled') {
+        throw demandPlanningDraftNotMutable(input.draftId, draft.status);
+      }
+
+      // Validate rawDemandRowIds belong to this tenant/batch
+      const rowIds = [...new Set(input.allocations.map((a) => a.rawDemandRowId))];
+      const rows = rowIds.length > 0
+        ? await repo.listRawDemandRowsByIds({
+            tenantId: input.tenantId,
+            rowIds
+          })
+        : [];
+
+      const rowsById = new Map(rows.map((r) => [r.id, r]));
+
+      for (const alloc of input.allocations) {
+        if (!rowsById.has(alloc.rawDemandRowId)) {
+          throw demandPlanningRawDemandRowNotFound(alloc.rawDemandRowId);
+        }
+      }
+
+      // Validate bucket keys are unique and well-formed
+      const bucketKeySet = new Set(input.buckets.map((b) =>
+        [b.distributionArea ?? '', b.planningLineName, b.bucketName].join('|')
+      ));
+      if (bucketKeySet.size !== input.buckets.length) {
+        throw new ApiError(422, 'DEMAND_PLANNING_DUPLICATE_BUCKET', 'Duplicate bucket keys in plan.');
+      }
+
+      // Execute in transaction: delete old, insert new
+      await repo.deleteDemandPlanningAllocationsByDraft({
+        tenantId: input.tenantId,
+        draftId: input.draftId
+      });
+
+      await repo.deleteDemandPlanningBucketsByDraft({
+        tenantId: input.tenantId,
+        draftId: input.draftId
+      });
+
+      const buckets = await repo.insertDemandPlanningBuckets({
+        tenantId: input.tenantId,
+        draftId: input.draftId,
+        batchId: draft.batchId,
+        buckets: input.buckets.map((b, i) => ({
+          distributionArea: b.distributionArea,
+          planningLineName: b.planningLineName,
+          bucketName: b.bucketName,
+          sortOrder: i
+        }))
+      });
+
+      // Build bucket key to ID map
+      const bucketByKey = new Map<string, string>();
+      for (const bucket of buckets) {
+        const key = [bucket.distributionArea ?? '', bucket.planningLineName, bucket.bucketName].join('|');
+        bucketByKey.set(key, bucket.id);
+      }
+
+      // Build allocations with validated quantities
+      const allocationInputs: Array<{
+        rawDemandRowId: string;
+        bucketId: string;
+        allocatedQuantity: number;
+      }> = [];
+
+      const perRowAllocated = new Map<string, number>();
+
+      for (const alloc of input.allocations) {
+        const bucketId = bucketByKey.get(alloc.bucketKey);
+        if (!bucketId) {
+          throw demandPlanningBucketNotFound(alloc.bucketKey);
+        }
+
+        if (alloc.allocatedQuantity <= 0) {
+          throw new ApiError(422, 'DEMAND_PLANNING_INVALID_QUANTITY',
+            `Allocated quantity must be positive.`);
+        }
+
+        const row = rowsById.get(alloc.rawDemandRowId)!;
+        const rowQty = row.quantity ?? 0;
+        const currentAllocated = perRowAllocated.get(alloc.rawDemandRowId) ?? 0;
+        const newTotal = currentAllocated + alloc.allocatedQuantity;
+
+        if (newTotal > rowQty) {
+          throw demandPlanningAllocationOverflow(
+            alloc.rawDemandRowId,
+            newTotal,
+            rowQty - currentAllocated
+          );
+        }
+
+        perRowAllocated.set(alloc.rawDemandRowId, newTotal);
+        allocationInputs.push({
+          rawDemandRowId: alloc.rawDemandRowId,
+          bucketId,
+          allocatedQuantity: alloc.allocatedQuantity
+        });
+      }
+
+      const allocations = await repo.insertDemandPlanningAllocations({
+        tenantId: input.tenantId,
+        draftId: input.draftId,
+        batchId: draft.batchId,
+        allocations: allocationInputs
+      });
+
+      return { draft, buckets, allocations };
     },
   };
 }

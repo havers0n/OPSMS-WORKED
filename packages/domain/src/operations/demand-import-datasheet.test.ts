@@ -279,6 +279,81 @@ describe('raw demand planning preview builder', () => {
     ]);
   });
 
+  it('includes order.items[] with rawDemandRowId in planning preview', () => {
+    const result = buildRawDemandPlanningPreview({
+      batch,
+      rows: [
+        buildPersistedRow({ sourceRowNumber: 2, distributionArea: 'דרום', orderNumber: 'SO-1', customerName: 'לקוח א', sku: 'SKU-1', quantity: 3, productHandlingFlow: 'regular', planningStatus: 'unplanned', issues: [] }),
+        buildPersistedRow({ sourceRowNumber: 3, distributionArea: 'דרום', orderNumber: 'SO-1', customerName: 'לקוח א', sku: 'SKU-2', quantity: 4, productHandlingFlow: 'cigarette', planningStatus: 'unplanned', issues: [{ severity: 'warning', code: 'LOW_STOCK', message: 'low stock' }] })
+      ]
+    });
+
+    const area = result.distributionAreas[0];
+    expect(area.orders).toHaveLength(1);
+
+    const order = area.orders[0];
+    expect(order.items).toHaveLength(2);
+
+    expect(order.items[0]).toMatchObject({
+      rawDemandRowId: expect.stringMatching(/^71000000-0000-4000-8000-/),
+      sku: 'SKU-1',
+      quantity: 3,
+      productHandlingFlow: 'regular',
+      planningStatus: 'unplanned',
+      issues: []
+    });
+
+    expect(order.items[1]).toMatchObject({
+      rawDemandRowId: expect.stringMatching(/^71000000-0000-4000-8000-/),
+      sku: 'SKU-2',
+      quantity: 4,
+      productHandlingFlow: 'cigarette',
+      planningStatus: 'unplanned',
+      issues: [{ severity: 'warning', code: 'LOW_STOCK', message: 'low stock' }]
+    });
+  });
+
+  it('multi-line same order produces one order with multiple items', () => {
+    const result = buildRawDemandPlanningPreview({
+      batch,
+      rows: [
+        buildPersistedRow({ sourceRowNumber: 2, distributionArea: 'דרום', orderNumber: 'SO-1', customerName: 'לקוח א', sku: 'SKU-1', quantity: 3 }),
+        buildPersistedRow({ sourceRowNumber: 3, distributionArea: 'דרום', orderNumber: 'SO-1', customerName: 'לקוח א', sku: 'SKU-2', quantity: 4 }),
+        buildPersistedRow({ sourceRowNumber: 4, distributionArea: 'דרום', orderNumber: 'SO-1', customerName: 'לקוח א', sku: 'SKU-3', quantity: 5 })
+      ]
+    });
+
+    const orders = result.distributionAreas[0].orders;
+    expect(orders).toHaveLength(1);
+    expect(orders[0]).toMatchObject({
+      orderNumber: 'SO-1',
+      rowsCount: 3,
+      skuCount: 3,
+      totalQuantity: 12
+    });
+    expect(orders[0].items).toHaveLength(3);
+    expect(orders[0].items.map((i) => i.sku)).toEqual(['SKU-1', 'SKU-2', 'SKU-3']);
+    expect(orders[0].items.map((i) => i.quantity)).toEqual([3, 4, 5]);
+  });
+
+  it('special_flow rows are not included in normal order items', () => {
+    const result = buildRawDemandPlanningPreview({
+      batch,
+      rows: [
+        buildPersistedRow({ sourceRowNumber: 2, distributionArea: 'דרום', orderNumber: 'SO-1', customerName: 'לקוח א', sku: 'SKU-1', quantity: 3 }),
+        buildPersistedRow({ sourceRowNumber: 3, distributionArea: 'דרום', orderNumber: 'SO-1', customerName: 'לקוח א', sku: 'SKU-2', quantity: 4, planningStatus: 'special_flow', routeFlow: 'pickup', issues: [] })
+      ]
+    });
+
+    const orders = result.distributionAreas[0].orders;
+    expect(orders).toHaveLength(1);
+    // Only the normal row should produce an order with items
+    expect(orders[0].items).toHaveLength(1);
+    expect(orders[0].items[0]).toMatchObject({ sku: 'SKU-1', quantity: 3 });
+    // Special flow should not contribute to normal order items
+    expect(result.specialFlows[0]).toMatchObject({ routeFlow: 'pickup', rowsCount: 1 });
+  });
+
   it('keeps error rows outside normal totals and exposes them separately', () => {
     const result = buildRawDemandPlanningPreview({
       batch,

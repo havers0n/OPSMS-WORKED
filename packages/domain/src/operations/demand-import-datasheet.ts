@@ -184,6 +184,18 @@ export const rawDemandPlanningPreviewSummarySchema = z.object({
 });
 export type RawDemandPlanningPreviewSummary = z.infer<typeof rawDemandPlanningPreviewSummarySchema>;
 
+export const rawDemandPlanningPreviewOrderItemSchema = z.object({
+  rawDemandRowId: z.string().uuid(),
+  sku: z.string().nullable(),
+  description: z.string().nullable(),
+  category: z.string().nullable(),
+  quantity: z.number().nullable(),
+  productHandlingFlow: rawDemandProductHandlingFlowSchema,
+  planningStatus: rawDemandPlanningStatusSchema,
+  issues: z.array(demandImportIssueSchema)
+});
+export type RawDemandPlanningPreviewOrderItem = z.infer<typeof rawDemandPlanningPreviewOrderItemSchema>;
+
 export const rawDemandPlanningPreviewOrderSchema = z.object({
   orderNumber: z.string().nullable(),
   customerName: z.string().nullable(),
@@ -191,7 +203,8 @@ export const rawDemandPlanningPreviewOrderSchema = z.object({
   skuCount: z.number().int().min(0),
   totalQuantity: z.number(),
   productHandlingFlows: z.array(rawDemandProductHandlingFlowSchema),
-  issues: z.array(demandImportIssueSummarySchema)
+  issues: z.array(demandImportIssueSummarySchema),
+  items: z.array(rawDemandPlanningPreviewOrderItemSchema)
 });
 export type RawDemandPlanningPreviewOrder = z.infer<typeof rawDemandPlanningPreviewOrderSchema>;
 
@@ -257,6 +270,74 @@ export const rawDemandPlanningPreviewSchema = z.object({
   errors: z.array(rawDemandPlanningPreviewErrorSchema)
 });
 export type RawDemandPlanningPreview = z.infer<typeof rawDemandPlanningPreviewSchema>;
+
+// --- Demand Planning Draft schemas ---
+
+export const demandPlanningDraftStatusSchema = z.enum(['draft', 'ready', 'cancelled', 'applied']);
+export type DemandPlanningDraftStatus = z.infer<typeof demandPlanningDraftStatusSchema>;
+
+export const demandPlanningDraftSchema = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  batchId: z.string().uuid(),
+  status: demandPlanningDraftStatusSchema,
+  createdBy: z.string().uuid().nullable(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime()
+});
+export type DemandPlanningDraft = z.infer<typeof demandPlanningDraftSchema>;
+
+export const demandPlanningBucketSchema = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  draftId: z.string().uuid(),
+  batchId: z.string().uuid(),
+  distributionArea: z.string().nullable(),
+  planningLineName: z.string().min(1),
+  bucketName: z.string().min(1),
+  sortOrder: z.number().int().min(0),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime()
+});
+export type DemandPlanningBucket = z.infer<typeof demandPlanningBucketSchema>;
+
+export const demandPlanningAllocationSchema = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  draftId: z.string().uuid(),
+  batchId: z.string().uuid(),
+  rawDemandRowId: z.string().uuid(),
+  bucketId: z.string().uuid(),
+  allocatedQuantity: z.number().min(0),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime()
+});
+export type DemandPlanningAllocation = z.infer<typeof demandPlanningAllocationSchema>;
+
+export const demandPlanningDraftWithAssignmentsSchema = z.object({
+  draft: demandPlanningDraftSchema,
+  buckets: z.array(demandPlanningBucketSchema),
+  allocations: z.array(demandPlanningAllocationSchema)
+});
+export type DemandPlanningDraftWithAssignments = z.infer<typeof demandPlanningDraftWithAssignmentsSchema>;
+
+export const demandPlanningPutPlanBucketSchema = z.object({
+  distributionArea: z.string().nullable(),
+  planningLineName: z.string().min(1),
+  bucketName: z.string().min(1)
+});
+
+export const demandPlanningPutPlanAllocationSchema = z.object({
+  rawDemandRowId: z.string().uuid(),
+  bucketKey: z.string().min(1),
+  allocatedQuantity: z.number().min(0)
+});
+
+export const demandPlanningPutPlanRequestSchema = z.object({
+  buckets: z.array(demandPlanningPutPlanBucketSchema),
+  allocations: z.array(demandPlanningPutPlanAllocationSchema)
+});
+export type DemandPlanningPutPlanRequest = z.infer<typeof demandPlanningPutPlanRequestSchema>;
 
 export const demandImportDataSheetParsedRowSchema = z.object({
   sourceRowNumber: z.number().int().min(1),
@@ -720,10 +801,12 @@ export function buildRawDemandPlanningPreview(input: {
             totalQuantity: 0,
             productHandlingFlows: new Set<RawDemandProductHandlingFlow>(),
             issues: [] as DemandImportIssue[],
-            issueRows: [] as number[]
+            issueRows: [] as number[],
+            rows: [] as RawDemandRow[]
           };
 
           entry.rowsCount += 1;
+          entry.rows.push(row);
           if (row.sku) entry.skus.add(row.sku);
           entry.totalQuantity += row.quantity ?? 0;
           entry.productHandlingFlows.add(row.productHandlingFlow);
@@ -742,6 +825,7 @@ export function buildRawDemandPlanningPreview(input: {
           productHandlingFlows: Set<RawDemandProductHandlingFlow>;
           issues: DemandImportIssue[];
           issueRows: number[];
+          rows: RawDemandRow[];
         }>())
       .values())
         .map((order) => ({
@@ -751,7 +835,17 @@ export function buildRawDemandPlanningPreview(input: {
           skuCount: order.skus.size,
           totalQuantity: order.totalQuantity,
           productHandlingFlows: Array.from(order.productHandlingFlows).sort((a, b) => a.localeCompare(b)),
-          issues: summarizeIssueList(order.issues, order.issueRows)
+          issues: summarizeIssueList(order.issues, order.issueRows),
+          items: order.rows.map((row) => ({
+            rawDemandRowId: row.id,
+            sku: row.sku,
+            description: row.description,
+            category: row.category,
+            quantity: row.quantity,
+            productHandlingFlow: row.productHandlingFlow,
+            planningStatus: row.planningStatus,
+            issues: row.issues
+          }))
         }))
         .sort((a, b) => (
           compareStrings(a.orderNumber, b.orderNumber) ||

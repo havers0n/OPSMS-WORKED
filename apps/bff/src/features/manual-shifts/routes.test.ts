@@ -389,7 +389,8 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
             skuCount: 1,
             totalQuantity: 3,
             productHandlingFlows: ['regular'],
-            issues: []
+            issues: [],
+            items: []
           }
         ],
         productSummary: [
@@ -617,6 +618,21 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
         unresolvedSkus: 0,
         dataIssueSkus: 0
       }
+    })),
+    createDemandPlanningDraft: vi.fn(async () => ({
+      draft: { id: ids.shift, tenantId: ids.tenant, batchId: ids.shift, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' },
+      buckets: [],
+      allocations: []
+    })),
+    getDemandPlanningDraft: vi.fn(async () => ({
+      draft: { id: ids.shift, tenantId: ids.tenant, batchId: ids.shift, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' },
+      buckets: [],
+      allocations: []
+    })),
+    putDemandPlanningPlan: vi.fn(async () => ({
+      draft: { id: ids.shift, tenantId: ids.tenant, batchId: ids.shift, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' },
+      buckets: [],
+      allocations: []
     })),
     ...overrides
   };
@@ -3520,5 +3536,134 @@ describe('manual shifts routes', () => {
     });
   });
 });
+
+describe('demand planning draft routes', () => {
+  const batchId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const draftId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const bucketId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+
+  const draftResponse = {
+    draft: { id: draftId, tenantId: ids.tenant, batchId, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' },
+    buckets: [{ id: bucketId, tenantId: ids.tenant, draftId, batchId, distributionArea: 'דרום', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 0, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' }],
+    allocations: []
+  };
+
+  const baseServiceMock = createServiceMock();
+
+  // Build a mock service with demand planning methods
+  function createDemandMock(overrides: Partial<ManualShiftsService> = {}): ManualShiftsService {
+    return {
+      ...baseServiceMock,
+      createDemandPlanningDraft: vi.fn(async () => draftResponse) as unknown as ManualShiftsService['createDemandPlanningDraft'],
+      getDemandPlanningDraft: vi.fn(async () => draftResponse) as unknown as ManualShiftsService['getDemandPlanningDraft'],
+      putDemandPlanningPlan: vi.fn(async () => draftResponse) as unknown as ManualShiftsService['putDemandPlanningPlan'],
+      ...overrides
+    };
+  }
+
+  it('POST /api/demand-imports/:batchId/planning-drafts returns 201', async () => {
+    const service = createDemandMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/demand-imports/${batchId}/planning-drafts`
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = JSON.parse(response.payload);
+    expect(body.draft.status).toBe('draft');
+    expect(body.buckets).toHaveLength(1);
+
+    await app.close();
+  });
+
+  it('GET /api/demand-planning-drafts/:draftId returns 200', async () => {
+    const service = createDemandMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/demand-planning-drafts/${draftId}`
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.payload);
+    expect(body.draft.id).toBe(draftId);
+
+    await app.close();
+  });
+
+  it('PUT /api/demand-planning-drafts/:draftId/plan returns 200', async () => {
+    const service = createDemandMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: `/api/demand-planning-drafts/${draftId}/plan`,
+      payload: {
+        buckets: [{ distributionArea: 'דרום', planningLineName: 'כללי', bucketName: 'סיגריות' }],
+        allocations: [{ rawDemandRowId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', bucketKey: 'דרום|כללי|סיגריות', allocatedQuantity: 5 }]
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    await app.close();
+  });
+
+  it('returns 401 without auth', async () => {
+    const app = await buildTestApp(createDemandMock(), null);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/demand-imports/${batchId}/planning-drafts`
+    });
+
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('returns 400 for invalid batchId uuid', async () => {
+    const app = await buildTestApp(createDemandMock());
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/demand-imports/not-a-uuid/planning-drafts'
+    });
+
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('PUT plan returns 400 for invalid body', async () => {
+    const app = await buildTestApp(createDemandMock());
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: `/api/demand-planning-drafts/${draftId}/plan`,
+      payload: { invalid: true }
+    });
+
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('service errors map to correct HTTP statuses', async () => {
+    const notFoundService = createDemandMock({
+      getDemandPlanningDraft: vi.fn(async () => { throw new ApiError(404, 'DEMAND_PLANNING_DRAFT_NOT_FOUND', 'not found'); }) as unknown as ManualShiftsService['getDemandPlanningDraft']
+    });
+    const app = await buildTestApp(notFoundService);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/demand-planning-drafts/${draftId}`
+    });
+
+    expect(response.statusCode).toBe(404);
+    await app.close();
+  });
+});
+
 
 
