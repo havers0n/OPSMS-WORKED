@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseDemandImportDataSheetPreview } from './demand-import-datasheet';
+import { buildRawDemandPlanningPreview, parseDemandImportDataSheetPreview } from './demand-import-datasheet';
 
 function buildRow(overrides: Partial<Parameters<typeof parseDemandImportDataSheetPreview>[0]['rows'][number]> = {}) {
   return {
@@ -155,5 +155,167 @@ describe('demand import DataSheet parser', () => {
       { raw: '25.06.26', normalized: '2026-06-25' }
     ]);
     expect(result.rows[0].plannedDeliveryDate).toBeNull();
+  });
+});
+
+describe('raw demand planning preview builder', () => {
+  const batch = {
+    id: '70000000-0000-4000-8000-000000000001',
+    tenantId: '11111111-1111-4111-8111-111111111111',
+    sourceFile: 'datasheet.xlsx',
+    sourceSheet: 'DataSheet' as const,
+    uploadedAt: '2026-06-24T08:00:00.000Z',
+    uploadedBy: '22222222-2222-4222-8222-222222222222',
+    status: 'ready' as const,
+    rowsCount: 5,
+    rawRowsCount: 3,
+    warningRowsCount: 1,
+    errorRowsCount: 1,
+    specialFlowRowsCount: 1,
+    distributionAreasCount: 2,
+    distinctOrdersCount: 4,
+    distinctSkuCount: 4
+  };
+
+  function buildPersistedRow(
+    overrides: Partial<ReturnType<typeof parseDemandImportDataSheetPreview>['rows'][number]> = {}
+  ) {
+    return {
+      id: `71000000-0000-4000-8000-${String(overrides.sourceRowNumber ?? 2).padStart(12, '0')}`,
+      tenantId: batch.tenantId,
+      batchId: batch.id,
+      createdAt: '2026-06-24T08:05:00.000Z',
+      ...parseDemandImportDataSheetPreview({
+        sourceFile: 'datasheet.xlsx',
+        sourceSheet: 'DataSheet',
+        rows: [buildRow(overrides as never)]
+      }).rows[0],
+      ...overrides
+    };
+  }
+
+  it('groups normal rows by distribution area and collapses same order into one order summary', () => {
+    const result = buildRawDemandPlanningPreview({
+      batch,
+      rows: [
+        buildPersistedRow({ sourceRowNumber: 2, distributionArea: 'דרום', orderNumber: 'SO-1', customerName: 'לקוח א', sku: 'SKU-1', quantity: 3 }),
+        buildPersistedRow({ sourceRowNumber: 3, distributionArea: 'דרום', orderNumber: 'SO-1', customerName: 'לקוח א', sku: 'SKU-2', quantity: 4 }),
+        buildPersistedRow({ sourceRowNumber: 4, distributionArea: 'צפון', orderNumber: 'SO-2', customerName: 'לקוח ב', sku: 'SKU-3', quantity: 2 })
+      ]
+    });
+
+    expect(result.summary).toMatchObject({
+      rowsCount: 3,
+      normalRowsCount: 3,
+      distributionAreasCount: 2,
+      ordersCount: 2,
+      skuCount: 3,
+      totalQuantity: 9
+    });
+    expect(result.distributionAreas[0]).toMatchObject({
+      distributionArea: 'דרום',
+      rowsCount: 2,
+      ordersCount: 1,
+      skuCount: 2,
+      totalQuantity: 7
+    });
+    expect(result.distributionAreas[0].orders).toEqual([
+      expect.objectContaining({
+        orderNumber: 'SO-1',
+        customerName: 'לקוח א',
+        rowsCount: 2,
+        skuCount: 2,
+        totalQuantity: 7
+      })
+    ]);
+  });
+
+  it('aggregates product quantity by sku within an area', () => {
+    const result = buildRawDemandPlanningPreview({
+      batch,
+      rows: [
+        buildPersistedRow({ sourceRowNumber: 2, distributionArea: 'דרום', orderNumber: 'SO-1', customerName: 'לקוח א', sku: 'SKU-1', quantity: 3 }),
+        buildPersistedRow({ sourceRowNumber: 3, distributionArea: 'דרום', orderNumber: 'SO-2', customerName: 'לקוח ב', sku: 'SKU-1', quantity: 5 })
+      ]
+    });
+
+    expect(result.distributionAreas[0].productSummary).toEqual([
+      expect.objectContaining({
+        sku: 'SKU-1',
+        totalQuantity: 8,
+        orderCount: 2
+      })
+    ]);
+  });
+
+  it('keeps special-flow rows outside normal totals and exposes them separately', () => {
+    const result = buildRawDemandPlanningPreview({
+      batch,
+      rows: [
+        buildPersistedRow({ sourceRowNumber: 2, distributionArea: 'דרום', orderNumber: 'SO-1', customerName: 'לקוח א', sku: 'SKU-1', quantity: 3 }),
+        buildPersistedRow({ sourceRowNumber: 3, distributionArea: 'דרום', orderNumber: 'SO-9', customerName: 'לקוח ט', sku: 'SKU-9', quantity: 7, planningStatus: 'special_flow', routeFlow: 'pickup', issues: [] })
+      ]
+    });
+
+    expect(result.summary).toMatchObject({
+      rowsCount: 2,
+      normalRowsCount: 1,
+      specialFlowRowsCount: 1,
+      totalQuantity: 3
+    });
+    expect(result.distributionAreas[0]).toMatchObject({
+      rowsCount: 2,
+      ordersCount: 1,
+      totalQuantity: 3,
+      specialFlowRowsCount: 1
+    });
+    expect(result.specialFlows).toEqual([
+      expect.objectContaining({
+        routeFlow: 'pickup',
+        rowsCount: 1,
+        ordersCount: 1,
+        totalQuantity: 7
+      })
+    ]);
+  });
+
+  it('keeps error rows outside normal totals and exposes them separately', () => {
+    const result = buildRawDemandPlanningPreview({
+      batch,
+      rows: [
+        buildPersistedRow({ sourceRowNumber: 2, distributionArea: 'דרום', orderNumber: 'SO-1', customerName: 'לקוח א', sku: 'SKU-1', quantity: 3 }),
+        buildPersistedRow({
+          sourceRowNumber: 3,
+          distributionArea: 'דרום',
+          orderNumber: 'SO-2',
+          customerName: 'לקוח ב',
+          sku: null,
+          quantity: 4,
+          planningStatus: 'error',
+          issues: [{ severity: 'error', code: 'MISSING_SKU', message: 'missing sku', field: 'sku' }]
+        })
+      ]
+    });
+
+    expect(result.summary).toMatchObject({
+      rowsCount: 2,
+      normalRowsCount: 1,
+      errorRowsCount: 1,
+      totalQuantity: 3
+    });
+    expect(result.distributionAreas[0]).toMatchObject({
+      rowsCount: 2,
+      ordersCount: 1,
+      totalQuantity: 3,
+      errorRowsCount: 1
+    });
+    expect(result.errors).toEqual([
+      expect.objectContaining({
+        sourceRowNumber: 3,
+        orderNumber: 'SO-2',
+        customerName: 'לקוח ב',
+        distributionArea: 'דרום'
+      })
+    ]);
   });
 });

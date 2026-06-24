@@ -155,6 +155,108 @@ export const demandImportDataSheetCreateResponseSchema = z.object({
 });
 export type DemandImportDataSheetCreateResponse = z.infer<typeof demandImportDataSheetCreateResponseSchema>;
 
+export const rawDemandPlanningPreviewBatchSchema = demandImportBatchSchema.pick({
+  id: true,
+  sourceFile: true,
+  sourceSheet: true,
+  uploadedAt: true,
+  status: true,
+  rowsCount: true,
+  rawRowsCount: true,
+  warningRowsCount: true,
+  errorRowsCount: true,
+  specialFlowRowsCount: true,
+  distributionAreasCount: true,
+  distinctOrdersCount: true,
+  distinctSkuCount: true
+});
+export type RawDemandPlanningPreviewBatch = z.infer<typeof rawDemandPlanningPreviewBatchSchema>;
+
+export const rawDemandPlanningPreviewSummarySchema = z.object({
+  rowsCount: z.number().int().min(0),
+  normalRowsCount: z.number().int().min(0),
+  specialFlowRowsCount: z.number().int().min(0),
+  errorRowsCount: z.number().int().min(0),
+  distributionAreasCount: z.number().int().min(0),
+  ordersCount: z.number().int().min(0),
+  skuCount: z.number().int().min(0),
+  totalQuantity: z.number()
+});
+export type RawDemandPlanningPreviewSummary = z.infer<typeof rawDemandPlanningPreviewSummarySchema>;
+
+export const rawDemandPlanningPreviewOrderSchema = z.object({
+  orderNumber: z.string().nullable(),
+  customerName: z.string().nullable(),
+  rowsCount: z.number().int().min(0),
+  skuCount: z.number().int().min(0),
+  totalQuantity: z.number(),
+  productHandlingFlows: z.array(rawDemandProductHandlingFlowSchema),
+  issues: z.array(demandImportIssueSummarySchema)
+});
+export type RawDemandPlanningPreviewOrder = z.infer<typeof rawDemandPlanningPreviewOrderSchema>;
+
+export const rawDemandPlanningPreviewProductSummarySchema = z.object({
+  sku: z.string().nullable(),
+  description: z.string().nullable(),
+  category: z.string().nullable(),
+  totalQuantity: z.number(),
+  orderCount: z.number().int().min(0),
+  productHandlingFlow: rawDemandProductHandlingFlowSchema
+});
+export type RawDemandPlanningPreviewProductSummary = z.infer<typeof rawDemandPlanningPreviewProductSummarySchema>;
+
+export const rawDemandPlanningPreviewAreaSchema = z.object({
+  distributionArea: z.string().nullable(),
+  rowsCount: z.number().int().min(0),
+  ordersCount: z.number().int().min(0),
+  skuCount: z.number().int().min(0),
+  totalQuantity: z.number(),
+  specialFlowRowsCount: z.number().int().min(0),
+  errorRowsCount: z.number().int().min(0),
+  orders: z.array(rawDemandPlanningPreviewOrderSchema),
+  productSummary: z.array(rawDemandPlanningPreviewProductSummarySchema),
+  issues: z.array(demandImportIssueSummarySchema)
+});
+export type RawDemandPlanningPreviewArea = z.infer<typeof rawDemandPlanningPreviewAreaSchema>;
+
+export const rawDemandPlanningPreviewSpecialFlowSampleSchema = z.object({
+  sourceRowNumber: z.number().int().min(1),
+  orderNumber: z.string().nullable(),
+  customerName: z.string().nullable(),
+  sku: z.string().nullable(),
+  distributionArea: z.string().nullable(),
+  quantity: z.number().nullable(),
+  issues: z.array(demandImportIssueSchema)
+});
+export type RawDemandPlanningPreviewSpecialFlowSample = z.infer<typeof rawDemandPlanningPreviewSpecialFlowSampleSchema>;
+
+export const rawDemandPlanningPreviewSpecialFlowSchema = z.object({
+  routeFlow: rawDemandRouteFlowSchema,
+  rowsCount: z.number().int().min(0),
+  ordersCount: z.number().int().min(0),
+  totalQuantity: z.number(),
+  sampleRows: z.array(rawDemandPlanningPreviewSpecialFlowSampleSchema)
+});
+export type RawDemandPlanningPreviewSpecialFlow = z.infer<typeof rawDemandPlanningPreviewSpecialFlowSchema>;
+
+export const rawDemandPlanningPreviewErrorSchema = z.object({
+  sourceRowNumber: z.number().int().min(1),
+  orderNumber: z.string().nullable(),
+  customerName: z.string().nullable(),
+  sku: z.string().nullable(),
+  distributionArea: z.string().nullable(),
+  issues: z.array(demandImportIssueSchema)
+});
+export type RawDemandPlanningPreviewError = z.infer<typeof rawDemandPlanningPreviewErrorSchema>;
+
+export const rawDemandPlanningPreviewSchema = z.object({
+  batch: rawDemandPlanningPreviewBatchSchema,
+  summary: rawDemandPlanningPreviewSummarySchema,
+  distributionAreas: z.array(rawDemandPlanningPreviewAreaSchema),
+  specialFlows: z.array(rawDemandPlanningPreviewSpecialFlowSchema),
+  errors: z.array(rawDemandPlanningPreviewErrorSchema)
+});
+export type RawDemandPlanningPreview = z.infer<typeof rawDemandPlanningPreviewSchema>;
 
 export const demandImportDataSheetParsedRowSchema = z.object({
   sourceRowNumber: z.number().int().min(1),
@@ -304,6 +406,43 @@ function compareStrings(a: string | null, b: string | null): number {
   return a.localeCompare(b, 'he');
 }
 
+function summarizeIssueList(issues: DemandImportIssue[], sourceRowNumbers?: number[]): DemandImportIssueSummary[] {
+  const groups = new Map<string, { severity: DemandImportIssueSeverity; code: string; message: string; rows: number[] }>();
+
+  for (const [index, issue] of issues.entries()) {
+    const key = `${issue.severity}\u0001${issue.code}\u0001${issue.message}`;
+    const entry = groups.get(key) ?? {
+      severity: issue.severity,
+      code: issue.code,
+      message: issue.message,
+      rows: []
+    };
+    const sourceRowNumber = sourceRowNumbers?.[index];
+    if (sourceRowNumber !== undefined) {
+      entry.rows.push(sourceRowNumber);
+    }
+    groups.set(key, entry);
+  }
+
+  return Array.from(groups.values())
+    .map((entry) => ({
+      severity: entry.severity,
+      code: entry.code,
+      message: entry.message,
+      count: entry.rows.length > 0 ? entry.rows.length : issues.filter(
+        (issue) =>
+          issue.severity === entry.severity &&
+          issue.code === entry.code &&
+          issue.message === entry.message
+      ).length,
+      ...(entry.rows.length > 0 ? { rows: Array.from(new Set(entry.rows)).sort((a, b) => a - b) } : {})
+    }))
+    .sort((a, b) => (
+      a.severity.localeCompare(b.severity) ||
+      a.code.localeCompare(b.code) ||
+      a.message.localeCompare(b.message)
+    ));
+}
 
 export function parseDemandImportDataSheetPreview(
   input: ParseDemandImportDataSheetPreviewInput
@@ -529,5 +668,234 @@ export function parseDemandImportDataSheetPreview(
     sampleRows: rows.slice(0, 20),
     issues: summarizeIssues(rows),
     rows
+  });
+}
+
+export function buildRawDemandPlanningPreview(input: {
+  batch: DemandImportBatch;
+  rows: RawDemandRow[];
+}): RawDemandPlanningPreview {
+  const { batch, rows } = input;
+  const normalRows = rows.filter((row) => row.planningStatus === 'unplanned');
+  const specialFlowRows = rows.filter((row) => row.planningStatus === 'special_flow');
+  const errorRows = rows.filter((row) => row.planningStatus === 'error');
+
+  const distributionAreas = Array.from(
+    rows.reduce((acc, row) => {
+      const key = row.distributionArea ?? '__missing__';
+      const entry = acc.get(key) ?? {
+        distributionArea: row.distributionArea,
+        rows: [] as RawDemandRow[],
+        normalRows: [] as RawDemandRow[],
+        issues: [] as DemandImportIssue[],
+        issueRows: [] as number[]
+      };
+      entry.rows.push(row);
+      if (row.planningStatus === 'unplanned') {
+        entry.normalRows.push(row);
+      }
+      for (const issue of row.issues) {
+        entry.issues.push(issue);
+        entry.issueRows.push(row.sourceRowNumber);
+      }
+      acc.set(key, entry);
+      return acc;
+    }, new Map<string, {
+      distributionArea: string | null;
+      rows: RawDemandRow[];
+      normalRows: RawDemandRow[];
+      issues: DemandImportIssue[];
+      issueRows: number[];
+    }>())
+  .values())
+    .map((area) => {
+      const orders = Array.from(
+        area.normalRows.reduce((acc, row) => {
+          const key = `${row.orderNumber ?? ''}\u0001${row.customerName ?? ''}`;
+          const entry = acc.get(key) ?? {
+            orderNumber: row.orderNumber,
+            customerName: row.customerName,
+            rowsCount: 0,
+            skus: new Set<string>(),
+            totalQuantity: 0,
+            productHandlingFlows: new Set<RawDemandProductHandlingFlow>(),
+            issues: [] as DemandImportIssue[],
+            issueRows: [] as number[]
+          };
+
+          entry.rowsCount += 1;
+          if (row.sku) entry.skus.add(row.sku);
+          entry.totalQuantity += row.quantity ?? 0;
+          entry.productHandlingFlows.add(row.productHandlingFlow);
+          for (const issue of row.issues) {
+            entry.issues.push(issue);
+            entry.issueRows.push(row.sourceRowNumber);
+          }
+          acc.set(key, entry);
+          return acc;
+        }, new Map<string, {
+          orderNumber: string | null;
+          customerName: string | null;
+          rowsCount: number;
+          skus: Set<string>;
+          totalQuantity: number;
+          productHandlingFlows: Set<RawDemandProductHandlingFlow>;
+          issues: DemandImportIssue[];
+          issueRows: number[];
+        }>())
+      .values())
+        .map((order) => ({
+          orderNumber: order.orderNumber,
+          customerName: order.customerName,
+          rowsCount: order.rowsCount,
+          skuCount: order.skus.size,
+          totalQuantity: order.totalQuantity,
+          productHandlingFlows: Array.from(order.productHandlingFlows).sort((a, b) => a.localeCompare(b)),
+          issues: summarizeIssueList(order.issues, order.issueRows)
+        }))
+        .sort((a, b) => (
+          compareStrings(a.orderNumber, b.orderNumber) ||
+          compareStrings(a.customerName, b.customerName)
+        ));
+
+      const productSummary = Array.from(
+        area.normalRows.reduce((acc, row) => {
+          const key = [
+            row.sku ?? '',
+            row.description ?? '',
+            row.category ?? '',
+            row.productHandlingFlow
+          ].join('\u0001');
+          const entry = acc.get(key) ?? {
+            sku: row.sku,
+            description: row.description,
+            category: row.category,
+            totalQuantity: 0,
+            orders: new Set<string>(),
+            productHandlingFlow: row.productHandlingFlow
+          };
+          entry.totalQuantity += row.quantity ?? 0;
+          entry.orders.add(`${row.orderNumber ?? ''}\u0001${row.customerName ?? ''}`);
+          acc.set(key, entry);
+          return acc;
+        }, new Map<string, {
+          sku: string | null;
+          description: string | null;
+          category: string | null;
+          totalQuantity: number;
+          orders: Set<string>;
+          productHandlingFlow: RawDemandProductHandlingFlow;
+        }>())
+      .values())
+        .map((product) => ({
+          sku: product.sku,
+          description: product.description,
+          category: product.category,
+          totalQuantity: product.totalQuantity,
+          orderCount: product.orders.size,
+          productHandlingFlow: product.productHandlingFlow
+        }))
+        .sort((a, b) => (
+          compareStrings(a.sku, b.sku) ||
+          compareStrings(a.description, b.description) ||
+          compareStrings(a.category, b.category)
+        ));
+
+      return {
+        distributionArea: area.distributionArea,
+        rowsCount: area.rows.length,
+        ordersCount: new Set(
+          area.normalRows
+            .map((row) => `${row.orderNumber ?? ''}\u0001${row.customerName ?? ''}`)
+        ).size,
+        skuCount: new Set(
+          area.normalRows
+            .map((row) => row.sku)
+            .filter((value): value is string => value !== null)
+        ).size,
+        totalQuantity: area.normalRows.reduce((sum, row) => sum + (row.quantity ?? 0), 0),
+        specialFlowRowsCount: area.rows.filter((row) => row.planningStatus === 'special_flow').length,
+        errorRowsCount: area.rows.filter((row) => row.planningStatus === 'error').length,
+        orders,
+        productSummary,
+        issues: summarizeIssueList(area.issues, area.issueRows)
+      };
+    })
+    .sort((a, b) => compareStrings(a.distributionArea, b.distributionArea));
+
+  const specialFlows = Array.from(
+    specialFlowRows.reduce((acc, row) => {
+      const entry = acc.get(row.routeFlow) ?? {
+        routeFlow: row.routeFlow,
+        rows: [] as RawDemandRow[],
+        orders: new Set<string>(),
+        totalQuantity: 0
+      };
+      entry.rows.push(row);
+      entry.orders.add(`${row.orderNumber ?? ''}\u0001${row.customerName ?? ''}`);
+      entry.totalQuantity += row.quantity ?? 0;
+      acc.set(row.routeFlow, entry);
+      return acc;
+    }, new Map<RawDemandRouteFlow, {
+      routeFlow: RawDemandRouteFlow;
+      rows: RawDemandRow[];
+      orders: Set<string>;
+      totalQuantity: number;
+    }>())
+  .values())
+    .map((entry) => ({
+      routeFlow: entry.routeFlow,
+      rowsCount: entry.rows.length,
+      ordersCount: entry.orders.size,
+      totalQuantity: entry.totalQuantity,
+      sampleRows: entry.rows.slice(0, 10).map((row) => ({
+        sourceRowNumber: row.sourceRowNumber,
+        orderNumber: row.orderNumber,
+        customerName: row.customerName,
+        sku: row.sku,
+        distributionArea: row.distributionArea,
+        quantity: row.quantity,
+        issues: row.issues
+      }))
+    }))
+    .sort((a, b) => a.routeFlow.localeCompare(b.routeFlow));
+
+  const errors = errorRows
+    .map((row) => ({
+      sourceRowNumber: row.sourceRowNumber,
+      orderNumber: row.orderNumber,
+      customerName: row.customerName,
+      sku: row.sku,
+      distributionArea: row.distributionArea,
+      issues: row.issues
+    }))
+    .sort((a, b) => a.sourceRowNumber - b.sourceRowNumber);
+
+  return rawDemandPlanningPreviewSchema.parse({
+    batch: rawDemandPlanningPreviewBatchSchema.parse(batch),
+    summary: {
+      rowsCount: rows.length,
+      normalRowsCount: normalRows.length,
+      specialFlowRowsCount: specialFlowRows.length,
+      errorRowsCount: errorRows.length,
+      distributionAreasCount: new Set(
+        rows
+          .map((row) => row.distributionArea)
+          .filter((value): value is string => value !== null)
+      ).size,
+      ordersCount: new Set(
+        normalRows
+          .map((row) => `${row.orderNumber ?? ''}\u0001${row.customerName ?? ''}`)
+      ).size,
+      skuCount: new Set(
+        normalRows
+          .map((row) => row.sku)
+          .filter((value): value is string => value !== null)
+      ).size,
+      totalQuantity: normalRows.reduce((sum, row) => sum + (row.quantity ?? 0), 0)
+    },
+    distributionAreas,
+    specialFlows,
+    errors
   });
 }

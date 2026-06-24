@@ -46,6 +46,7 @@ import {
   manualShiftImportPreviewResponseSchema,
   demandImportDataSheetCreateResponseSchema,
   demandImportDataSheetPreviewResponseSchema,
+  rawDemandPlanningPreviewResponseSchema,
   manualShiftMonthlyImportPreviewResponseSchema,
   manualShiftMonthlyApplyResponseSchema,
   manualShiftMonthlyReplaceSafetySchema,
@@ -773,6 +774,34 @@ export function registerManualShiftsRoutes(
 
       void reply.code(201);
       return parseOrThrow(demandImportDataSheetCreateResponseSchema, result);
+    });
+  });
+
+  app.get('/api/demand-imports/:batchId/planning-preview', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-imports/:batchId/planning-preview', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      logImportStage(request, '/api/demand-imports/:batchId/planning-preview', 'auth_resolved', {
+        userId: auth.user.id ?? null
+      });
+
+      const tenantId = requireTenant(auth);
+      const { id: batchId } = parseOrThrow(idResponseSchema, {
+        id: request.params && typeof request.params === 'object' ? (request.params as Record<string, unknown>).batchId : null
+      });
+
+      logImportStage(request, '/api/demand-imports/:batchId/planning-preview', 'tenant_resolved', {
+        tenantId,
+        batchId
+      });
+
+      const result = await getManualShiftsService(auth).getDemandPlanningPreview({
+        tenantId,
+        batchId
+      });
+
+      return parseOrThrow(rawDemandPlanningPreviewResponseSchema, result);
     });
   });
 

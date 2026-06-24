@@ -12,6 +12,7 @@ import type {
   DailyManualShiftImportPreview,
   DemandImportDataSheetCreateResponse,
   DemandImportDataSheetPreview,
+  RawDemandPlanningPreview,
   ManualShiftBulkAddResult,
   ManualShiftDaySummary,
   ManualShiftLine,
@@ -345,6 +346,92 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     },
     preview: dataSheetPreview
   };
+  const planningPreview: RawDemandPlanningPreview = {
+    batch: {
+      id: '77777777-7777-4777-8777-777777777777',
+      sourceFile: 'datasheet.xlsx',
+      sourceSheet: 'DataSheet',
+      uploadedAt: '2026-06-24T08:00:00.000Z',
+      status: 'ready',
+      rowsCount: 2,
+      rawRowsCount: 1,
+      warningRowsCount: 0,
+      errorRowsCount: 1,
+      specialFlowRowsCount: 0,
+      distributionAreasCount: 1,
+      distinctOrdersCount: 2,
+      distinctSkuCount: 1
+    },
+    summary: {
+      rowsCount: 2,
+      normalRowsCount: 1,
+      specialFlowRowsCount: 0,
+      errorRowsCount: 1,
+      distributionAreasCount: 1,
+      ordersCount: 1,
+      skuCount: 1,
+      totalQuantity: 3
+    },
+    distributionAreas: [
+      {
+        distributionArea: 'דרום',
+        rowsCount: 2,
+        ordersCount: 1,
+        skuCount: 1,
+        totalQuantity: 3,
+        specialFlowRowsCount: 0,
+        errorRowsCount: 1,
+        orders: [
+          {
+            orderNumber: 'SO-1',
+            customerName: 'לקוח א',
+            rowsCount: 1,
+            skuCount: 1,
+            totalQuantity: 3,
+            productHandlingFlows: ['regular'],
+            issues: []
+          }
+        ],
+        productSummary: [
+          {
+            sku: 'SKU-1',
+            description: 'מוצר',
+            category: 'cat',
+            totalQuantity: 3,
+            orderCount: 1,
+            productHandlingFlow: 'regular'
+          }
+        ],
+        issues: [
+          {
+            severity: 'error',
+            code: 'MISSING_SKU',
+            message: 'missing sku',
+            count: 1,
+            rows: [3]
+          }
+        ]
+      }
+    ],
+    specialFlows: [],
+    errors: [
+      {
+        sourceRowNumber: 3,
+        orderNumber: 'SO-2',
+        customerName: 'לקוח ב',
+        sku: null,
+        distributionArea: 'דרום',
+        issues: [
+          {
+            severity: 'error',
+            code: 'MISSING_SKU',
+            message: 'missing sku',
+            field: 'sku'
+          }
+        ]
+      }
+    ]
+  };
 
   return {
     listShiftWorkers: vi.fn(async () => [createWorker()]),
@@ -420,6 +507,7 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     applyDailyImport: vi.fn(async () => applyResponse),
     previewDemandImportDataSheet: vi.fn(async () => dataSheetPreview),
     createDemandImportDataSheet: vi.fn(async () => dataSheetCreateResponse),
+    getDemandPlanningPreview: vi.fn(async () => planningPreview),
     applyMonthlyImport: vi.fn(async (input: Parameters<ManualShiftsService['applyMonthlyImport']>[0]) => ({
       shiftId: input.shiftId,
       selectedDate: input.selectedDate,
@@ -1587,6 +1675,54 @@ describe('manual shifts routes', () => {
     await app.close();
   });
 
+  it('returns read-only planning preview for a staged demand batch', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/demand-imports/77777777-7777-4777-8777-777777777777/planning-preview'
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      batch: {
+        id: '77777777-7777-4777-8777-777777777777',
+        sourceSheet: 'DataSheet',
+        status: 'ready'
+      },
+      summary: {
+        rowsCount: 2,
+        normalRowsCount: 1,
+        errorRowsCount: 1,
+        totalQuantity: 3
+      },
+      distributionAreas: [
+        {
+          distributionArea: 'דרום',
+          rowsCount: 2,
+          orders: [
+            {
+              orderNumber: 'SO-1',
+              rowsCount: 1
+            }
+          ]
+        }
+      ],
+      errors: [
+        {
+          sourceRowNumber: 3,
+          orderNumber: 'SO-2'
+        }
+      ]
+    });
+    expect(service.getDemandPlanningPreview).toHaveBeenCalledWith({
+      tenantId: ids.tenant,
+      batchId: '77777777-7777-4777-8777-777777777777'
+    });
+
+    await app.close();
+  });
 
   it('returns monthly preview for selected date with metrics and warnings', async () => {
     const service = createServiceMock();

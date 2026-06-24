@@ -3777,6 +3777,239 @@ describe('DataSheet demand staging', () => {
     }));
   });
 
+  it('builds a read-only planning preview from staged raw rows without manual shift writes', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    const batch: DemandImportBatch = {
+      id: '70000000-0000-4000-8000-000000000999',
+      tenantId: ids.tenant,
+      sourceFile: 'datasheet.xlsx',
+      sourceSheet: 'DataSheet',
+      uploadedAt: nowIso,
+      uploadedBy: ids.actor,
+      status: 'ready',
+      rowsCount: 4,
+      rawRowsCount: 2,
+      warningRowsCount: 0,
+      errorRowsCount: 1,
+      specialFlowRowsCount: 1,
+      distributionAreasCount: 1,
+      distinctOrdersCount: 4,
+      distinctSkuCount: 3
+    };
+    state.demandImportBatches.push(batch);
+    state.rawDemandRows.push(
+      {
+        id: '71000000-0000-4000-8000-000000000001',
+        tenantId: ids.tenant,
+        batchId: batch.id,
+        sourceSheet: 'DataSheet',
+        sourceRowNumber: 2,
+        agent: 'agent',
+        orderDate: '2026-06-24',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: 'SKU-1',
+        description: 'מוצר 1',
+        category: 'cat',
+        quantity: 3,
+        cost: 10,
+        notes: null,
+        distributionArea: 'דרום',
+        rawRouteLine: null,
+        plannedDeliveryDate: null,
+        plannedRouteLine: null,
+        plannedWorkBucket: null,
+        planningStatus: 'unplanned',
+        routeFlow: 'unassigned',
+        productHandlingFlow: 'regular',
+        noteDateHints: [],
+        issues: [],
+        createdAt: nowIso
+      },
+      {
+        id: '71000000-0000-4000-8000-000000000002',
+        tenantId: ids.tenant,
+        batchId: batch.id,
+        sourceSheet: 'DataSheet',
+        sourceRowNumber: 3,
+        agent: 'agent',
+        orderDate: '2026-06-24',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: 'SKU-2',
+        description: 'מוצר 2',
+        category: 'cat',
+        quantity: 5,
+        cost: 12,
+        notes: null,
+        distributionArea: 'דרום',
+        rawRouteLine: null,
+        plannedDeliveryDate: null,
+        plannedRouteLine: null,
+        plannedWorkBucket: null,
+        planningStatus: 'unplanned',
+        routeFlow: 'unassigned',
+        productHandlingFlow: 'regular',
+        noteDateHints: [],
+        issues: [],
+        createdAt: nowIso
+      },
+      {
+        id: '71000000-0000-4000-8000-000000000003',
+        tenantId: ids.tenant,
+        batchId: batch.id,
+        sourceSheet: 'DataSheet',
+        sourceRowNumber: 4,
+        agent: 'agent',
+        orderDate: '2026-06-24',
+        customerName: 'לקוח ב',
+        orderNumber: 'SO-2',
+        sku: 'SKU-3',
+        description: 'איסוף',
+        category: 'cat',
+        quantity: 7,
+        cost: 14,
+        notes: 'pickup',
+        distributionArea: 'דרום',
+        rawRouteLine: null,
+        plannedDeliveryDate: null,
+        plannedRouteLine: null,
+        plannedWorkBucket: null,
+        planningStatus: 'special_flow',
+        routeFlow: 'pickup',
+        productHandlingFlow: 'regular',
+        noteDateHints: [],
+        issues: [],
+        createdAt: nowIso
+      },
+      {
+        id: '71000000-0000-4000-8000-000000000004',
+        tenantId: ids.tenant,
+        batchId: batch.id,
+        sourceSheet: 'DataSheet',
+        sourceRowNumber: 5,
+        agent: 'agent',
+        orderDate: '2026-06-24',
+        customerName: 'לקוח ג',
+        orderNumber: 'SO-3',
+        sku: null,
+        description: 'שגוי',
+        category: 'cat',
+        quantity: 9,
+        cost: 16,
+        notes: null,
+        distributionArea: 'דרום',
+        rawRouteLine: null,
+        plannedDeliveryDate: null,
+        plannedRouteLine: null,
+        plannedWorkBucket: null,
+        planningStatus: 'error',
+        routeFlow: 'unassigned',
+        productHandlingFlow: 'unknown',
+        noteDateHints: [],
+        issues: [{ severity: 'error', code: 'MISSING_SKU', message: 'missing sku', field: 'sku' }],
+        createdAt: nowIso
+      }
+    );
+
+    const result = await service.getDemandPlanningPreview({
+      tenantId: ids.tenant,
+      batchId: batch.id
+    });
+
+    expect(result.summary).toMatchObject({
+      rowsCount: 4,
+      normalRowsCount: 2,
+      specialFlowRowsCount: 1,
+      errorRowsCount: 1,
+      ordersCount: 1,
+      skuCount: 2,
+      totalQuantity: 8
+    });
+    expect(result.distributionAreas).toEqual([
+      expect.objectContaining({
+        distributionArea: 'דרום',
+        rowsCount: 4,
+        ordersCount: 1,
+        skuCount: 2,
+        totalQuantity: 8,
+        specialFlowRowsCount: 1,
+        errorRowsCount: 1,
+        orders: [
+          expect.objectContaining({
+            orderNumber: 'SO-1',
+            customerName: 'לקוח א',
+            rowsCount: 2,
+            skuCount: 2,
+            totalQuantity: 8
+          })
+        ],
+        productSummary: [
+          expect.objectContaining({ sku: 'SKU-1', totalQuantity: 3, orderCount: 1 }),
+          expect.objectContaining({ sku: 'SKU-2', totalQuantity: 5, orderCount: 1 })
+        ]
+      })
+    ]);
+    expect(result.specialFlows).toEqual([
+      expect.objectContaining({
+        routeFlow: 'pickup',
+        rowsCount: 1,
+        ordersCount: 1,
+        totalQuantity: 7
+      })
+    ]);
+    expect(result.errors).toEqual([
+      expect.objectContaining({
+        sourceRowNumber: 5,
+        orderNumber: 'SO-3',
+        customerName: 'לקוח ג',
+        distributionArea: 'דרום'
+      })
+    ]);
+    expect(repo.createDemandImportBatch).not.toHaveBeenCalled();
+    expect(repo.insertRawDemandRows).not.toHaveBeenCalled();
+    expect(repo.listRawDemandRowsByBatch).toHaveBeenCalledWith({
+      tenantId: ids.tenant,
+      batchId: batch.id
+    });
+  });
+
+  it('preserves tenant scoping for staged planning preview reads', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    state.demandImportBatches.push({
+      id: '70000000-0000-4000-8000-000000000998',
+      tenantId: ids.otherTenant,
+      sourceFile: 'datasheet.xlsx',
+      sourceSheet: 'DataSheet',
+      uploadedAt: nowIso,
+      uploadedBy: ids.actor,
+      status: 'ready',
+      rowsCount: 1,
+      rawRowsCount: 1,
+      warningRowsCount: 0,
+      errorRowsCount: 0,
+      specialFlowRowsCount: 0,
+      distributionAreasCount: 1,
+      distinctOrdersCount: 1,
+      distinctSkuCount: 1
+    });
+
+    await expect(
+      service.getDemandPlanningPreview({
+        tenantId: ids.tenant,
+        batchId: '70000000-0000-4000-8000-000000000998'
+      })
+    ).rejects.toThrow('batch not found');
+
+    expect(repo.getDemandImportBatch).toHaveBeenCalledWith({
+      tenantId: ids.tenant,
+      batchId: '70000000-0000-4000-8000-000000000998'
+    });
+  });
 });
 
 describe('getProductControl', () => {

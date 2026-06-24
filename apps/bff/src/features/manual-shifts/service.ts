@@ -34,10 +34,12 @@ import type {
   BucketProductRollupResponse,
   ProductControlResponse,
   PickerSheetPrintData,
-  PickerSheetWorkGroup
+  PickerSheetWorkGroup,
+  RawDemandPlanningPreview
 } from '@wos/domain';
 import {
   buildProductControlRow,
+  buildRawDemandPlanningPreview,
   calculateSizeFromLineCount,
   canTransitionManualShiftOrderToDoneWithCheckUnits,
   canTransitionManualShiftOrderStatus,
@@ -279,6 +281,10 @@ export type ManualShiftsService = {
     preview: DemandImportDataSheetPreview;
     uploadedBy: string | null;
   }): Promise<DemandImportDataSheetCreateResponse>;
+  getDemandPlanningPreview(input: {
+    tenantId: string;
+    batchId: string;
+  }): Promise<RawDemandPlanningPreview>;
   applyMonthlyImport(input: {
     tenantId: string;
     shiftId: string;
@@ -1400,6 +1406,24 @@ export function createManualShiftsServiceFromRepo(
           }))
         }
       };
+    },
+
+    async getDemandPlanningPreview(input) {
+      const [batch, rows] = await Promise.all([
+        repo.getDemandImportBatch({
+          tenantId: input.tenantId,
+          batchId: input.batchId
+        }),
+        repo.listRawDemandRowsByBatch({
+          tenantId: input.tenantId,
+          batchId: input.batchId
+        })
+      ]);
+
+      return buildRawDemandPlanningPreview({
+        batch,
+        rows
+      });
     },
 
     async applyMonthlyImport(input) {

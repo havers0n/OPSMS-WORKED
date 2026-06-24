@@ -106,9 +106,11 @@ Storage preset domain in product context:
 - `POST /api/manual-shifts/import/monthly-apply`
 - `POST /api/demand-imports/datasheet/preview`
 - `POST /api/demand-imports/datasheet`
+- `GET /api/demand-imports/:batchId/planning-preview`
 - Month-sheet import remains the routed/apply flow for distributed sheets such as `יוני 26` and `מאי 26`.
 - `DataSheet` is a staging-only flow: blank `תאריך הפצה` and blank `קו הפצה` are accepted, rows are stored as raw demand by `איזור הפצה`, and no `manual_shift_*` apply happens in this flow.
 
+- `GET /api/demand-imports/:batchId/planning-preview` is read-only: it reads staged `raw_demand_rows`, groups normal rows by `distributionArea` and `orderNumber + customerName`, and keeps `special_flow` and `error` rows visible without applying anything to `manual_shift_*`.
 
 ## Warehouse labels
 
