@@ -8,6 +8,7 @@ import { WarehouseStockImportPanel } from './warehouse-stock-import-panel';
 import { WarehouseStockImportSheet } from './warehouse-stock-import-sheet';
 import { ImportExcelSheet } from './import-excel-sheet';
 import { MonthlyImportPreviewSheet } from './monthly-import-preview-sheet';
+import { DatasheetImportPanel } from './datasheet-import-panel';
 
 interface ManualOperatorImportSectionProps {
   shift: ManualShiftSession | null;
@@ -106,11 +107,11 @@ export function ManualOperatorImportSection({
             onClick={() => setShowImportExcel(true)}
           />
           <ImportEntryCard
-            title={hasExistingWork ? 'ייבוא חודשי והחלפת עבודה קיימת' : 'תצוגה מקדימה חודשית'}
-            description="בדיקת קובץ אקסל חודשי לפני ייבוא או החלפת עבודה קיימת."
-            actionLabel={hasExistingWork ? 'פתיחת החלפה חודשית' : 'פתיחת תצוגה חודשית'}
+            title={hasExistingWork ? 'ייבוא הזמנות לתאריך נבחר - החלפת עבודה קיימת' : 'ייבוא הזמנות לתאריך נבחר'}
+            description="בדיקת קובץ אקסל חודשי לפי תאריך נבחר לפני ייבוא."
+            actionLabel={hasExistingWork ? 'פתיחת החלפת ייבוא לפי תאריך' : 'פתיחת ייבוא הזמנות לתאריך נבחר'}
             disabled={!canMonthlyImport}
-            disabledMessage="נדרשת משמרת פעילה עם הרשאת ייבוא כדי לבצע ייבוא חודשי."
+            disabledMessage="נדרשת משמרת פעילה עם הרשאת ייבוא כדי לבצע ייבוא הזמנות."
             onClick={() => setShowMonthlyPreview(true)}
           />
         </div>
@@ -133,6 +134,16 @@ export function ManualOperatorImportSection({
             </p>
           </div>
           <WarehouseStockImportPanel shiftId={shift?.id ?? null} selectedDate={selectedDate} />
+        </section>
+
+        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm" data-testid="datasheet-import-section">
+          <div className="mb-4 space-y-2">
+            <h2 className="text-xl font-semibold text-gray-900">ייבוא ביקוש גולמי מ-DataSheet</h2>
+            <p className="text-sm text-gray-600">
+              הנתונים יישמרו לתכנון לפי אזור הפצה ולא ייכנסו עדיין למשמרת
+            </p>
+          </div>
+          <DatasheetImportPanel />
         </section>
       </div>
 
@@ -171,9 +182,10 @@ export function ManualOperatorImportSection({
           hasExistingWork={hasExistingWork}
           replaceSafety={replaceSafety ?? null}
           onClose={() => setShowMonthlyPreview(false)}
-          onSuccess={({ linesCreated, ordersCreated, orderItemsCreated }) => {
+          onSuccess={({ linesCreated, ordersCreated, orderItemsCreated, excludedRowsCount }) => {
+            const excluded = excludedRowsCount ? ` (${excludedRowsCount} שורות לא יובאו)` : '';
             setImportSuccessMessage(
-              `ייבוא חודשי הושלם: ${linesCreated} קווים, ${ordersCreated} הזמנות, ${orderItemsCreated} פריטים`
+              `ייבוא הזמנות הושלם: ${linesCreated} קווים, ${ordersCreated} הזמנות, ${orderItemsCreated} פריטים${excluded}`
             );
           }}
         />
