@@ -10,6 +10,8 @@ import type {
   ApplyDailyManualShiftImportResponse,
   BindableUser,
   DailyManualShiftImportPreview,
+  DemandImportDataSheetCreateResponse,
+  DemandImportDataSheetPreview,
   ManualShiftBulkAddResult,
   ManualShiftDaySummary,
   ManualShiftLine,
@@ -243,6 +245,106 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     linesCreated: 1,
     ordersCreated: 2
   };
+  const dataSheetPreview: DemandImportDataSheetPreview = {
+    sourceFile: 'datasheet.xlsx',
+    sourceSheet: 'DataSheet',
+    rowsCount: 1,
+    rawRowsCount: 1,
+    warningRowsCount: 0,
+    errorRowsCount: 0,
+    specialFlowRowsCount: 0,
+    distributionAreasCount: 1,
+    distinctOrdersCount: 1,
+    distinctSkuCount: 1,
+    distributionAreaSummary: [
+      {
+        distributionArea: 'דרום',
+        rowsCount: 1,
+        ordersCount: 1,
+        skuCount: 1,
+        totalQty: 3,
+        specialFlowRowsCount: 0,
+        errorRowsCount: 0
+      }
+    ],
+    productHandlingSummary: [
+      { productHandlingFlow: 'regular', rowsCount: 1, totalQty: 3 }
+    ],
+    specialFlowSummary: [],
+    sampleRows: [
+      {
+        sourceSheet: 'DataSheet',
+        sourceRowNumber: 2,
+        agent: 'agent',
+        orderDate: '2026-06-24',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: 'SKU-1',
+        description: 'מוצר',
+        category: 'cat',
+        quantity: 3,
+        cost: 10,
+        notes: null,
+        distributionArea: 'דרום',
+        rawRouteLine: null,
+        plannedDeliveryDate: null,
+        plannedRouteLine: null,
+        plannedWorkBucket: null,
+        planningStatus: 'unplanned',
+        routeFlow: 'unassigned',
+        productHandlingFlow: 'regular',
+        noteDateHints: [],
+        issues: []
+      }
+    ],
+    issues: [],
+    rows: [
+      {
+        sourceSheet: 'DataSheet',
+        sourceRowNumber: 2,
+        agent: 'agent',
+        orderDate: '2026-06-24',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: 'SKU-1',
+        description: 'מוצר',
+        category: 'cat',
+        quantity: 3,
+        cost: 10,
+        notes: null,
+        distributionArea: 'דרום',
+        rawRouteLine: null,
+        plannedDeliveryDate: null,
+        plannedRouteLine: null,
+        plannedWorkBucket: null,
+        planningStatus: 'unplanned',
+        routeFlow: 'unassigned',
+        productHandlingFlow: 'regular',
+        noteDateHints: [],
+        issues: []
+      }
+    ]
+  };
+  const dataSheetCreateResponse: DemandImportDataSheetCreateResponse = {
+    batch: {
+      id: '77777777-7777-4777-8777-777777777777',
+      tenantId: ids.tenant,
+      sourceFile: 'datasheet.xlsx',
+      sourceSheet: 'DataSheet',
+      uploadedAt: '2026-06-24T08:00:00.000Z',
+      uploadedBy: ids.user,
+      status: 'ready',
+      rowsCount: 1,
+      rawRowsCount: 1,
+      warningRowsCount: 0,
+      errorRowsCount: 0,
+      specialFlowRowsCount: 0,
+      distributionAreasCount: 1,
+      distinctOrdersCount: 1,
+      distinctSkuCount: 1
+    },
+    preview: dataSheetPreview
+  };
 
   return {
     listShiftWorkers: vi.fn(async () => [createWorker()]),
@@ -316,6 +418,8 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     createOrder: vi.fn(async () => createOrder('queued')),
     bulkCreateOrders: vi.fn(async () => bulkResult),
     applyDailyImport: vi.fn(async () => applyResponse),
+    previewDemandImportDataSheet: vi.fn(async () => dataSheetPreview),
+    createDemandImportDataSheet: vi.fn(async () => dataSheetCreateResponse),
     applyMonthlyImport: vi.fn(async (input: Parameters<ManualShiftsService['applyMonthlyImport']>[0]) => ({
       shiftId: input.shiftId,
       selectedDate: input.selectedDate,
@@ -331,6 +435,7 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
       skippedZeroQuantityRows: input.plan.skippedZeroQuantityRows,
       appliedTotalQuantity: input.plan.appliedTotalQuantity,
       appliedItemLines: input.plan.appliedItemLines,
+      excludedRowsCount: input.plan.preview.excludedRows.length,
       warningSummary: input.plan.warningSummary,
       warnings: input.plan.preview.warnings,
       previewTotals: input.plan.preview.totals,
@@ -516,6 +621,17 @@ function buildMonthlyPreviewWorkbookBuffer(): Buffer {
     ['27.5.26', 'לקוח ג', 'SO-3', '1003', 'מוצר ג', 'cat', 1, 'קו דרום/נקודה ג', '5.6.26', null, 'south']
   ]);
   XLSX.utils.book_append_sheet(workbook, sheet, 'יוני 26');
+  const output = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+  return Buffer.isBuffer(output) ? output : Buffer.from(output);
+}
+
+function buildDataSheetWorkbookBuffer(): Buffer {
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ['סוכן', 'תאריך הזמנה', 'שם לקוח', 'הזמנה', "מק''ט", 'תיאור', 'קטגוריה', 'כמות', 'שווי', 'קו הפצה', 'תאריך הפצה', 'הערות', 'איזור הפצה'],
+    ['agent', '24.6.26', 'לקוח א', 'SO-1', 'SKU-1', 'מוצר', 'cat', 3, 10, null, null, null, 'דרום']
+  ]);
+  XLSX.utils.book_append_sheet(workbook, sheet, 'DataSheet');
   const output = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
   return Buffer.isBuffer(output) ? output : Buffer.from(output);
 }
@@ -1396,6 +1512,82 @@ describe('manual shifts routes', () => {
     await app.close();
   });
 
+  it('returns DataSheet preview for raw demand upload', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const multipartPayload = buildMultipartBody(
+      'file',
+      'datasheet.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buildDataSheetWorkbookBuffer()
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/demand-imports/datasheet/preview',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      preview: {
+        sourceFile: 'datasheet.xlsx',
+        sourceSheet: 'DataSheet',
+        rowsCount: 1,
+        rawRowsCount: 1,
+        errorRowsCount: 0,
+        specialFlowRowsCount: 0
+      }
+    });
+
+    await app.close();
+  });
+
+  it('creates a DataSheet staging batch without shift apply', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const multipartPayload = buildMultipartBody(
+      'file',
+      'datasheet.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buildDataSheetWorkbookBuffer()
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/demand-imports/datasheet',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      batch: {
+        sourceFile: 'datasheet.xlsx',
+        sourceSheet: 'DataSheet',
+        status: 'ready',
+        rowsCount: 1
+      },
+      preview: {
+        sourceSheet: 'DataSheet',
+        rawRowsCount: 1
+      }
+    });
+    expect(service.createDemandImportDataSheet).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: ids.tenant,
+      sourceFile: 'datasheet.xlsx',
+      uploadedBy: ids.user
+    }));
+
+    await app.close();
+  });
+
+
   it('returns monthly preview for selected date with metrics and warnings', async () => {
     const service = createServiceMock();
     const app = await buildTestApp(service);
@@ -1421,7 +1613,8 @@ describe('manual shifts routes', () => {
       preview: {
         source: {
           fileName: 'monthly.xlsx',
-          sheetName: 'יוני 26'
+          sheetName: 'יוני 26',
+          availableSheets: ['יוני 26']
         },
         selectedDate: {
           raw: '14.06.26',
@@ -1431,6 +1624,7 @@ describe('manual shifts routes', () => {
           totalRows: 4,
           matchingRows: 3,
           skippedOtherDateRows: 1,
+          normalRows: 0,
           availableDates: [
             { raw: '5.6.26', normalized: '2026-06-05', rows: 1 },
             { raw: '14.06.26', normalized: '2026-06-14', rows: 3 }

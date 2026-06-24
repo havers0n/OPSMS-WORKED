@@ -171,6 +171,12 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
     updateOrderAshlama: vi.fn(async () => null),
     createOrder: vi.fn(async () => { throw new Error('not used'); }),
     applyDailyImport: vi.fn(async () => ({ shiftId: ids.shift, linesCreated: 0, ordersCreated: 0 })),
+    createDemandImportBatch: vi.fn(async () => { throw new Error('not used'); }),
+    insertRawDemandRows: vi.fn(async () => undefined),
+    getDemandImportBatch: vi.fn(async () => { throw new Error('not used'); }),
+    listRawDemandRowsByBatch: vi.fn(async () => []),
+    listDemandBatchDistributionAreaSummary: vi.fn(async () => []),
+    insertMonthlyImportExcludedRows: vi.fn(async () => {}),
     applyMonthlyImport: vi.fn(async () => ({
       shiftId: ids.shift,
       selectedDate: '2026-05-27',
@@ -183,6 +189,7 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
       skippedZeroQuantityRows: 0,
       appliedTotalQuantity: 0,
       appliedItemLines: 0,
+      excludedRowsCount: 0,
       warningSummary: {
         info: 0,
         warning: 0,

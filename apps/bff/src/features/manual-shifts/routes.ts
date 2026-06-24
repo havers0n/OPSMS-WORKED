@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { ZodError } from 'zod';
 import {
   ManualShiftImportError,
+  parseDemandImportDataSheetPreview,
   parseDailyManualShiftImport,
   parseManualShiftMonthlyPreview,
   planManualShiftMonthlyImportApply
@@ -11,6 +12,7 @@ import type { AuthenticatedRequestContext } from '../../auth.js';
 import type { ManualShiftsService } from './service.js';
 import { ApiError, sendApiError } from '../../errors.js';
 import { parseManualShiftImportWorkbook } from './import-adapter.js';
+import { parseDemandImportDataSheetWorkbook } from './datasheet-import-adapter.js';
 import { parseManualShiftMonthlyImportWorkbook } from './monthly-import-adapter.js';
 import { manualShiftMonthlyImportBlockingWarnings } from './errors.js';
 import {
@@ -42,6 +44,8 @@ import {
   manualShiftTodayResponseSchema,
   manualShiftBulkAddResponseSchema,
   manualShiftImportPreviewResponseSchema,
+  demandImportDataSheetCreateResponseSchema,
+  demandImportDataSheetPreviewResponseSchema,
   manualShiftMonthlyImportPreviewResponseSchema,
   manualShiftMonthlyApplyResponseSchema,
   manualShiftMonthlyReplaceSafetySchema,
@@ -689,6 +693,89 @@ export function registerManualShiftsRoutes(
     });
   });
 
+  app.post('/api/demand-imports/datasheet/preview', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-imports/datasheet/preview', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      logImportStage(request, '/api/demand-imports/datasheet/preview', 'auth_resolved', {
+        userId: auth.user.id ?? null
+      });
+
+      const tenantId = requireTenant(auth);
+      logImportStage(request, '/api/demand-imports/datasheet/preview', 'tenant_resolved', { tenantId });
+
+      const { fileName, fileBuffer } = await readMultipartUpload(request, {
+        route: '/api/demand-imports/datasheet/preview'
+      });
+
+      const workbook = parseDemandImportDataSheetWorkbook({
+        fileName,
+        buffer: fileBuffer
+      });
+      logImportStage(request, '/api/demand-imports/datasheet/preview', 'workbook_parse_done', {
+        fileName,
+        sheetName: workbook.sourceSheet,
+        rowCount: workbook.rows.length
+      });
+
+      const preview = parseDemandImportDataSheetPreview(workbook);
+      logImportStage(request, '/api/demand-imports/datasheet/preview', 'preview_result', {
+        rowsCount: preview.rowsCount,
+        rawRowsCount: preview.rawRowsCount,
+        warningRowsCount: preview.warningRowsCount,
+        errorRowsCount: preview.errorRowsCount,
+        specialFlowRowsCount: preview.specialFlowRowsCount
+      });
+
+      return parseOrThrow(demandImportDataSheetPreviewResponseSchema, { preview });
+    });
+  });
+
+  app.post('/api/demand-imports/datasheet', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-imports/datasheet', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      logImportStage(request, '/api/demand-imports/datasheet', 'auth_resolved', {
+        userId: auth.user.id ?? null
+      });
+
+      const tenantId = requireTenant(auth);
+      logImportStage(request, '/api/demand-imports/datasheet', 'tenant_resolved', { tenantId });
+
+      const { fileName, fileBuffer } = await readMultipartUpload(request, {
+        route: '/api/demand-imports/datasheet'
+      });
+
+      const workbook = parseDemandImportDataSheetWorkbook({
+        fileName,
+        buffer: fileBuffer
+      });
+      logImportStage(request, '/api/demand-imports/datasheet', 'workbook_parse_done', {
+        fileName,
+        sheetName: workbook.sourceSheet,
+        rowCount: workbook.rows.length
+      });
+
+      const preview = parseDemandImportDataSheetPreview(workbook);
+      const result = await getManualShiftsService(auth).createDemandImportDataSheet({
+        tenantId,
+        sourceFile: fileName,
+        preview,
+        uploadedBy: auth.user.id ?? null
+      });
+      logImportStage(request, '/api/demand-imports/datasheet', 'service_result', {
+        batchId: result.batch.id,
+        rowsCount: result.batch.rowsCount,
+        status: result.batch.status
+      });
+
+      void reply.code(201);
+      return parseOrThrow(demandImportDataSheetCreateResponseSchema, result);
+    });
+  });
+
   app.post('/api/manual-shifts/import/monthly-preview', async (request, reply) => {
     return handleManualShiftImportRoute(request, reply, '/api/manual-shifts/import/monthly-preview', async () => {
       const auth = await getAuthContext(request, reply);
@@ -808,7 +895,8 @@ export function registerManualShiftsRoutes(
         shiftId,
         selectedDate,
         plan,
-        mode
+        mode,
+        excludedRows: parsed.preview.excludedRows
       });
 
       logImportStage(request, '/api/manual-shifts/import/monthly-apply', 'service_result', {

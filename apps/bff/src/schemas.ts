@@ -88,6 +88,9 @@ import {
   bindableUserSchema
   ,
   dailyManualShiftImportPreviewSchema,
+  demandImportBatchSchema,
+  demandImportDataSheetCreateResponseSchema as demandImportDataSheetCreateDtoSchema,
+  demandImportDataSheetPreviewSchema,
   manualShiftMonthlyPreviewSchema,
   manualShiftMonthlyApplyResponseSchema as manualShiftMonthlyApplyResponseDtoSchema,
   manualShiftMonthlyReplaceSafetySchema as manualShiftMonthlyReplaceSafetyDtoSchema,
@@ -571,6 +574,11 @@ export const bindableUsersResponseSchema = z.array(bindableUserSchema);
 export const manualShiftImportPreviewResponseSchema = z.object({
   preview: dailyManualShiftImportPreviewSchema
 });
+export const demandImportDataSheetPreviewResponseSchema = z.object({
+  preview: demandImportDataSheetPreviewSchema
+});
+export const demandImportDataSheetCreateResponseSchema = demandImportDataSheetCreateDtoSchema;
+export const demandImportBatchResponseSchema = demandImportBatchSchema;
 export const manualShiftMonthlyImportPreviewResponseSchema = z.object({
   preview: manualShiftMonthlyPreviewSchema
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
+  DemandImportBatch,
   ManualShiftLineSummary,
   ManualShiftOrder,
   ManualShiftOrderCheckUnit,
@@ -7,6 +8,7 @@ import type {
   ManualShiftOrderItem,
   ManualShiftOrderError,
   ManualShiftSession,
+  RawDemandRow,
   ManualShiftWorker
 } from '@wos/domain';
 import {
@@ -161,7 +163,9 @@ function createRepo() {
     ashlamot: [] as ManualShiftOrderAshlama[],
     items: [] as ManualShiftOrderItem[],
     events: [] as Array<Record<string, unknown>>,
-    errors: [] as ManualShiftOrderError[]
+    errors: [] as ManualShiftOrderError[],
+    demandImportBatches: [] as DemandImportBatch[],
+    rawDemandRows: [] as RawDemandRow[]
   };
 
   let eventCounter = 0;
@@ -170,6 +174,8 @@ function createRepo() {
   let orderCounter = 0;
   let workerCounter = 0;
   let checkUnitCounter = 0;
+  let demandImportBatchCounter = 0;
+  let rawDemandRowCounter = 0;
 
   const repo: ManualShiftsRepo = {
     listShiftWorkers: vi.fn(async (shiftId: string) => {
@@ -601,6 +607,89 @@ function createRepo() {
       linesCreated: 0,
       ordersCreated: 0
     })),
+    createDemandImportBatch: vi.fn(async (input) => {
+      demandImportBatchCounter += 1;
+      const batch: DemandImportBatch = {
+        id: `70000000-0000-4000-8000-${String(demandImportBatchCounter).padStart(12, '0')}`,
+        tenantId: input.tenantId,
+        sourceFile: input.sourceFile,
+        sourceSheet: input.sourceSheet,
+        uploadedAt: nowIso,
+        uploadedBy: input.uploadedBy,
+        status: input.status,
+        rowsCount: input.rowsCount,
+        rawRowsCount: input.rawRowsCount,
+        warningRowsCount: input.warningRowsCount,
+        errorRowsCount: input.errorRowsCount,
+        specialFlowRowsCount: input.specialFlowRowsCount,
+        distributionAreasCount: input.distributionAreasCount,
+        distinctOrdersCount: input.distinctOrdersCount,
+        distinctSkuCount: input.distinctSkuCount
+      };
+      state.demandImportBatches.push(batch);
+      return batch;
+    }),
+    insertRawDemandRows: vi.fn(async (input) => {
+      for (const row of input.rows) {
+        rawDemandRowCounter += 1;
+        state.rawDemandRows.push({
+          id: `71000000-0000-4000-8000-${String(rawDemandRowCounter).padStart(12, '0')}`,
+          tenantId: input.tenantId,
+          batchId: input.batchId,
+          sourceSheet: row.sourceSheet,
+          sourceRowNumber: row.sourceRowNumber,
+          agent: row.agent,
+          orderDate: row.orderDate,
+          customerName: row.customerName,
+          orderNumber: row.orderNumber,
+          sku: row.sku,
+          description: row.description,
+          category: row.category,
+          quantity: row.quantity,
+          cost: row.cost,
+          notes: row.notes,
+          distributionArea: row.distributionArea,
+          rawRouteLine: row.rawRouteLine,
+          plannedDeliveryDate: row.plannedDeliveryDate,
+          plannedRouteLine: row.plannedRouteLine,
+          plannedWorkBucket: row.plannedWorkBucket,
+          planningStatus: row.planningStatus,
+          routeFlow: row.routeFlow,
+          productHandlingFlow: row.productHandlingFlow,
+          noteDateHints: row.noteDateHints,
+          issues: row.issues,
+          createdAt: nowIso
+        });
+      }
+    }),
+    getDemandImportBatch: vi.fn(async (input) => {
+      const batch = state.demandImportBatches.find((entry) => entry.id === input.batchId && entry.tenantId === input.tenantId);
+      if (!batch) {
+        throw new Error('batch not found');
+      }
+      return batch;
+    }),
+    listRawDemandRowsByBatch: vi.fn(async (input) => {
+      return state.rawDemandRows
+        .filter((row) => row.batchId === input.batchId && row.tenantId === input.tenantId)
+        .slice(0, input.limit ?? Number.MAX_SAFE_INTEGER);
+    }),
+    listDemandBatchDistributionAreaSummary: vi.fn(async (input) => {
+      const rows = state.rawDemandRows.filter((row) => row.batchId === input.batchId && row.tenantId === input.tenantId);
+      if (rows.length === 0) return [];
+      return [
+        {
+          distributionArea: rows[0].distributionArea,
+          rowsCount: rows.length,
+          ordersCount: new Set(rows.map((row) => row.orderNumber).filter(Boolean)).size,
+          skuCount: new Set(rows.map((row) => row.sku).filter(Boolean)).size,
+          totalQty: rows.reduce((sum, row) => sum + (row.quantity ?? 0), 0),
+          specialFlowRowsCount: rows.filter((row) => row.planningStatus === 'special_flow').length,
+          errorRowsCount: rows.filter((row) => row.planningStatus === 'error').length
+        }
+      ];
+    }),
+    insertMonthlyImportExcludedRows: vi.fn(async () => {}),
     applyMonthlyImport: vi.fn(async (input) => ({
       shiftId: input.shiftId,
       selectedDate: input.selectedDate,
@@ -613,6 +702,7 @@ function createRepo() {
       skippedZeroQuantityRows: input.plan.skippedZeroQuantityRows,
       appliedTotalQuantity: input.plan.appliedTotalQuantity,
       appliedItemLines: input.plan.appliedItemLines,
+      excludedRowsCount: input.plan.preview.excludedRows.length,
       warningSummary: input.plan.warningSummary,
       warnings: input.plan.preview.warnings,
       previewTotals: input.plan.preview.totals,
@@ -1478,7 +1568,10 @@ describe('manual shift workers service', () => {
               k !== 'countMonthlyImportShiftRows' &&
               k !== 'applyMonthlyImport' &&
               k !== 'checkMonthlyReplaceSafety' &&
-              k !== 'setWorkerAuthUser'
+              k !== 'setWorkerAuthUser' &&
+              k !== 'insertMonthlyImportExcludedRows' &&
+              k !== 'insertRawDemandRows' &&
+              k !== 'getDemandImportBatch'
     );
     expect(canonicalKeys).toEqual([]);
   });
@@ -3447,7 +3540,8 @@ describe('manual shift monthly import apply', () => {
     return parseManualShiftMonthlyPreview({
       source: {
         fileName: 'monthly.xlsx',
-        sheetName: 'יוני 26'
+        sheetName: 'יוני 26',
+        availableSheets: ['יוני 26']
       },
       selectedDate: '2026-06-14',
       rows: [
@@ -3611,6 +3705,78 @@ describe('manual shift monthly import apply', () => {
     expect(repo.countMonthlyImportShiftRows).toHaveBeenCalledTimes(1);
     expect(repo.applyMonthlyImport).not.toHaveBeenCalled();
   });
+});
+
+describe('DataSheet demand staging', () => {
+  it('creates a batch without shiftId and keeps plannedDeliveryDate null on inserted rows', async () => {
+    const { repo } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    const preview = {
+      sourceFile: 'datasheet.xlsx',
+      sourceSheet: 'DataSheet' as const,
+      rowsCount: 1,
+      rawRowsCount: 1,
+      warningRowsCount: 0,
+      errorRowsCount: 0,
+      specialFlowRowsCount: 0,
+      distributionAreasCount: 1,
+      distinctOrdersCount: 1,
+      distinctSkuCount: 1,
+      distributionAreaSummary: [],
+      productHandlingSummary: [],
+      specialFlowSummary: [],
+      sampleRows: [],
+      issues: [],
+      rows: [
+        {
+          sourceSheet: 'DataSheet' as const,
+          sourceRowNumber: 2,
+          agent: 'agent',
+          orderDate: '2026-06-24',
+          customerName: 'לקוח א',
+          orderNumber: 'SO-1',
+          sku: 'SKU-1',
+          description: 'מוצר',
+          category: 'cat',
+          quantity: 3,
+          cost: 10,
+          notes: null,
+          distributionArea: 'דרום',
+          rawRouteLine: null,
+          plannedDeliveryDate: null,
+          plannedRouteLine: null,
+          plannedWorkBucket: null,
+          planningStatus: 'unplanned' as const,
+          routeFlow: 'unassigned' as const,
+          productHandlingFlow: 'regular' as const,
+          noteDateHints: [],
+          issues: []
+        }
+      ]
+    };
+
+    const result = await service.createDemandImportDataSheet({
+      tenantId: ids.tenant,
+      sourceFile: 'datasheet.xlsx',
+      preview,
+      uploadedBy: ids.actor
+    });
+
+    expect(result.batch.sourceSheet).toBe('DataSheet');
+    expect(result.batch.status).toBe('ready');
+    expect(repo.createDemandImportBatch).toHaveBeenCalledWith(expect.not.objectContaining({ shiftId: expect.anything() }));
+    expect(repo.insertRawDemandRows).toHaveBeenCalledWith(expect.objectContaining({
+      rows: [
+        expect.objectContaining({
+          plannedDeliveryDate: null,
+          plannedRouteLine: null,
+          plannedWorkBucket: null
+        })
+      ]
+    }));
+  });
+
 });
 
 describe('getProductControl', () => {

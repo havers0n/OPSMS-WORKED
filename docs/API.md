@@ -98,6 +98,18 @@ Storage preset domain in product context:
 - `POST /api/picking-planning/preview/orders`
 - `POST /api/picking-planning/preview/wave`
 
+## Demand imports
+
+- `POST /api/manual-shifts/import/preview`
+- `POST /api/manual-shifts/import/apply`
+- `POST /api/manual-shifts/import/monthly-preview`
+- `POST /api/manual-shifts/import/monthly-apply`
+- `POST /api/demand-imports/datasheet/preview`
+- `POST /api/demand-imports/datasheet`
+- Month-sheet import remains the routed/apply flow for distributed sheets such as `יוני 26` and `מאי 26`.
+- `DataSheet` is a staging-only flow: blank `תאריך הפצה` and blank `קו הפצה` are accepted, rows are stored as raw demand by `איזור הפצה`, and no `manual_shift_*` apply happens in this flow.
+
+
 ## Warehouse labels
 
 - `GET /api/floors/:floorId/rack-slot-location-refs`

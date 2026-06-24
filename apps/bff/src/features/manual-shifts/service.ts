@@ -2,8 +2,11 @@ import type {
   ApplyDailyManualShiftImportResponse,
   BindableUser,
   DailyManualShiftImportPreview,
+  DemandImportDataSheetCreateResponse,
+  DemandImportDataSheetPreview,
   ManualShiftMonthlyApplyPlan,
   ManualShiftMonthlyApplyResponse,
+  ManualShiftMonthlyExcludedRow,
   ManualShiftMonthlyReplaceSafety,
   ManualShiftBulkAddInputRow,
   ManualShiftBulkAddResult,
@@ -267,11 +270,21 @@ export type ManualShiftsService = {
     preview: DailyManualShiftImportPreview;
     actor: ActorContext;
   }): Promise<ApplyDailyManualShiftImportResponse>;
+  previewDemandImportDataSheet(input: {
+    preview: DemandImportDataSheetPreview;
+  }): Promise<DemandImportDataSheetPreview>;
+  createDemandImportDataSheet(input: {
+    tenantId: string;
+    sourceFile: string;
+    preview: DemandImportDataSheetPreview;
+    uploadedBy: string | null;
+  }): Promise<DemandImportDataSheetCreateResponse>;
   applyMonthlyImport(input: {
     tenantId: string;
     shiftId: string;
     selectedDate: string;
     plan: ManualShiftMonthlyApplyPlan;
+    excludedRows?: ManualShiftMonthlyExcludedRow[];
     mode?: 'initial' | 'replace';
   }): Promise<ManualShiftMonthlyApplyResponse>;
   checkMonthlyReplaceSafety(input: {
@@ -1312,6 +1325,83 @@ export function createManualShiftsServiceFromRepo(
       }
     },
 
+    async previewDemandImportDataSheet(input) {
+      return input.preview;
+    },
+
+    async createDemandImportDataSheet(input) {
+      const batch = await repo.createDemandImportBatch({
+        tenantId: input.tenantId,
+        sourceFile: input.sourceFile,
+        sourceSheet: input.preview.sourceSheet,
+        uploadedBy: input.uploadedBy,
+        status: 'ready',
+        rowsCount: input.preview.rowsCount,
+        rawRowsCount: input.preview.rawRowsCount,
+        warningRowsCount: input.preview.warningRowsCount,
+        errorRowsCount: input.preview.errorRowsCount,
+        specialFlowRowsCount: input.preview.specialFlowRowsCount,
+        distributionAreasCount: input.preview.distributionAreasCount,
+        distinctOrdersCount: input.preview.distinctOrdersCount,
+        distinctSkuCount: input.preview.distinctSkuCount
+      });
+
+      await repo.insertRawDemandRows({
+        tenantId: input.tenantId,
+        batchId: batch.id,
+        sourceSheet: input.preview.sourceSheet,
+        rows: input.preview.rows
+      });
+
+      const [persistedBatch, distributionAreaSummary, sampleRows] = await Promise.all([
+        repo.getDemandImportBatch({
+          tenantId: input.tenantId,
+          batchId: batch.id
+        }),
+        repo.listDemandBatchDistributionAreaSummary({
+          tenantId: input.tenantId,
+          batchId: batch.id
+        }),
+        repo.listRawDemandRowsByBatch({
+          tenantId: input.tenantId,
+          batchId: batch.id,
+          limit: 20
+        })
+      ]);
+
+      return {
+        batch: persistedBatch,
+        preview: {
+          ...input.preview,
+          distributionAreaSummary,
+          sampleRows: sampleRows.map((row) => ({
+            sourceSheet: row.sourceSheet,
+            sourceRowNumber: row.sourceRowNumber,
+            agent: row.agent,
+            orderDate: row.orderDate,
+            customerName: row.customerName,
+            orderNumber: row.orderNumber,
+            sku: row.sku,
+            description: row.description,
+            category: row.category,
+            quantity: row.quantity,
+            cost: row.cost,
+            notes: row.notes,
+            distributionArea: row.distributionArea,
+            rawRouteLine: row.rawRouteLine,
+            plannedDeliveryDate: row.plannedDeliveryDate,
+            plannedRouteLine: row.plannedRouteLine,
+            plannedWorkBucket: row.plannedWorkBucket,
+            planningStatus: row.planningStatus,
+            routeFlow: row.routeFlow,
+            productHandlingFlow: row.productHandlingFlow,
+            noteDateHints: row.noteDateHints,
+            issues: row.issues
+          }))
+        }
+      };
+    },
+
     async applyMonthlyImport(input) {
       const shift = await requireShift(input.shiftId);
       if (shift.tenantId !== input.tenantId) {
@@ -1344,13 +1434,37 @@ export function createManualShiftsServiceFromRepo(
       }
 
       try {
-        return await repo.applyMonthlyImport({
+        const result = await repo.applyMonthlyImport({
           tenantId: input.tenantId,
           shiftId: input.shiftId,
           selectedDate: input.selectedDate,
           plan: input.plan,
           mode: input.mode
         });
+
+        if (input.excludedRows && input.excludedRows.length > 0) {
+          await repo.insertMonthlyImportExcludedRows({
+            tenantId: input.tenantId,
+            shiftId: input.shiftId,
+            sourceFile: input.plan.preview.source.fileName,
+            sourceSheet: input.plan.preview.source.sheetName,
+            rows: input.excludedRows.map((row) => ({
+              sourceRowNumber: row.sourceRowNumber,
+              exclusionReason: row.exclusionReason,
+              orderNumber: row.orderNumber,
+              customerName: row.customerName,
+              sku: row.sku,
+              description: row.description,
+              category: row.category,
+              quantity: row.quantity,
+              rawRouteLine: row.rawRouteLine,
+              deliveryDate: row.deliveryDate,
+              notes: row.notes
+            }))
+          });
+        }
+
+        return result;
       } catch (error) {
         const dbError = error as { code?: string; message?: string; hint?: string };
         if (dbError?.code === 'P0001') {

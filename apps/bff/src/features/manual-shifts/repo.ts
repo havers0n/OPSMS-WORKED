@@ -1,9 +1,15 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   ApplyDailyManualShiftImportResponse,
+  DemandImportBatch,
+  DemandImportBatchStatus,
+  DemandImportDistributionAreaSummary,
   DailyManualShiftImportPreview,
+  RawDemandRow,
+  RawDemandRowStaging,
   ManualShiftMonthlyApplyPlan,
   ManualShiftMonthlyApplyResponse,
+  ManualShiftMonthlyExcludedRow,
   ManualShiftMonthlyReplaceSafety,
   ManualShiftDaySummaryByError,
   ManualShiftLine,
@@ -248,6 +254,53 @@ type ManualShiftLineSummaryAggRow = {
   error_count: number;
 };
 
+type DemandImportBatchRow = {
+  id: string;
+  tenant_id: string;
+  source_file: string;
+  source_sheet: string;
+  uploaded_by: string | null;
+  uploaded_at: string;
+  status: DemandImportBatchStatus;
+  rows_count: number;
+  raw_rows_count: number;
+  warning_rows_count: number;
+  error_rows_count: number;
+  special_flow_rows_count: number;
+  distribution_areas_count: number;
+  distinct_orders_count: number;
+  distinct_sku_count: number;
+};
+
+type RawDemandRowRow = {
+  id: string;
+  tenant_id: string;
+  batch_id: string;
+  source_sheet: string;
+  source_row_number: number;
+  agent: string | null;
+  order_date: string | null;
+  customer_name: string | null;
+  order_number: string | null;
+  sku: string | null;
+  description: string | null;
+  category: string | null;
+  quantity: number | null;
+  cost: number | null;
+  notes: string | null;
+  distribution_area: string | null;
+  raw_route_line: string | null;
+  planned_delivery_date: string | null;
+  planned_route_line: string | null;
+  planned_work_bucket: string | null;
+  planning_status: RawDemandRow['planningStatus'];
+  route_flow: RawDemandRow['routeFlow'];
+  product_handling_flow: RawDemandRow['productHandlingFlow'];
+  note_date_hints: RawDemandRow['noteDateHints'] | null;
+  issues: RawDemandRow['issues'] | null;
+  created_at: string;
+};
+
 const sessionColumns =
   'id,tenant_id,date,name,status,created_by_name,created_at,closed_at';
 const lineColumns =
@@ -262,6 +315,10 @@ const ashlamaColumns =
   'id,tenant_id,shift_id,line_id,order_id,check_unit_id,source,status,text,created_at,updated_at';
 const itemColumns =
   'id,tenant_id,shift_id,line_id,order_id,sku,description,category,quantity,notes,zone,source_sheet,source_rows,source_file,sort_order,created_at';
+const demandImportBatchColumns =
+  'id,tenant_id,source_file,source_sheet,uploaded_by,uploaded_at,status,rows_count,raw_rows_count,warning_rows_count,error_rows_count,special_flow_rows_count,distribution_areas_count,distinct_orders_count,distinct_sku_count';
+const rawDemandRowColumns =
+  'id,tenant_id,batch_id,source_sheet,source_row_number,agent,order_date,customer_name,order_number,sku,description,category,quantity,cost,notes,distribution_area,raw_route_line,planned_delivery_date,planned_route_line,planned_work_bucket,planning_status,route_flow,product_handling_flow,note_date_hints,issues,created_at';
 const lineEventColumns =
   'id,tenant_id,shift_id,line_id,event_type,actor_name,actor_profile_id,payload,created_at';
 const eventColumns =
@@ -333,6 +390,57 @@ function mapLineSummaryAggRow(row: ManualShiftLineSummaryAggRow): ManualShiftLin
     returnedOrders: Number(row.returned_orders ?? 0),
     doneOrders: Number(row.done_orders ?? 0),
     errorCount: Number(row.error_count ?? 0)
+  };
+}
+
+function mapDemandImportBatchRow(row: DemandImportBatchRow): DemandImportBatch {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    sourceFile: row.source_file,
+    sourceSheet: row.source_sheet,
+    uploadedBy: row.uploaded_by,
+    uploadedAt: row.uploaded_at,
+    status: row.status,
+    rowsCount: Number(row.rows_count ?? 0),
+    rawRowsCount: Number(row.raw_rows_count ?? 0),
+    warningRowsCount: Number(row.warning_rows_count ?? 0),
+    errorRowsCount: Number(row.error_rows_count ?? 0),
+    specialFlowRowsCount: Number(row.special_flow_rows_count ?? 0),
+    distributionAreasCount: Number(row.distribution_areas_count ?? 0),
+    distinctOrdersCount: Number(row.distinct_orders_count ?? 0),
+    distinctSkuCount: Number(row.distinct_sku_count ?? 0)
+  };
+}
+
+function mapRawDemandRow(row: RawDemandRowRow): RawDemandRow {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    batchId: row.batch_id,
+    sourceSheet: row.source_sheet,
+    sourceRowNumber: Number(row.source_row_number),
+    agent: row.agent,
+    orderDate: row.order_date,
+    customerName: row.customer_name,
+    orderNumber: row.order_number,
+    sku: row.sku,
+    description: row.description,
+    category: row.category,
+    quantity: row.quantity !== null ? Number(row.quantity) : null,
+    cost: row.cost !== null ? Number(row.cost) : null,
+    notes: row.notes,
+    distributionArea: row.distribution_area,
+    rawRouteLine: row.raw_route_line,
+    plannedDeliveryDate: row.planned_delivery_date,
+    plannedRouteLine: row.planned_route_line,
+    plannedWorkBucket: row.planned_work_bucket,
+    planningStatus: row.planning_status,
+    routeFlow: row.route_flow,
+    productHandlingFlow: row.product_handling_flow,
+    noteDateHints: row.note_date_hints ?? [],
+    issues: row.issues ?? [],
+    createdAt: row.created_at
   };
 }
 
@@ -690,6 +798,40 @@ export type ManualShiftsRepo = {
     shiftId: string;
     preview: DailyManualShiftImportPreview;
   }): Promise<ApplyDailyManualShiftImportResponse>;
+  createDemandImportBatch(input: {
+    tenantId: string;
+    sourceFile: string;
+    sourceSheet: string;
+    uploadedBy: string | null;
+    status: DemandImportBatchStatus;
+    rowsCount: number;
+    rawRowsCount: number;
+    warningRowsCount: number;
+    errorRowsCount: number;
+    specialFlowRowsCount: number;
+    distributionAreasCount: number;
+    distinctOrdersCount: number;
+    distinctSkuCount: number;
+  }): Promise<DemandImportBatch>;
+  insertRawDemandRows(input: {
+    tenantId: string;
+    batchId: string;
+    sourceSheet: string;
+    rows: RawDemandRowStaging[];
+  }): Promise<void>;
+  getDemandImportBatch(input: {
+    tenantId: string;
+    batchId: string;
+  }): Promise<DemandImportBatch>;
+  listRawDemandRowsByBatch(input: {
+    tenantId: string;
+    batchId: string;
+    limit?: number;
+  }): Promise<RawDemandRow[]>;
+  listDemandBatchDistributionAreaSummary(input: {
+    tenantId: string;
+    batchId: string;
+  }): Promise<DemandImportDistributionAreaSummary[]>;
   applyMonthlyImport(input: {
     tenantId: string;
     shiftId: string;
@@ -697,6 +839,25 @@ export type ManualShiftsRepo = {
     plan: ManualShiftMonthlyApplyPlan;
     mode?: 'initial' | 'replace';
   }): Promise<ManualShiftMonthlyApplyResponse>;
+  insertMonthlyImportExcludedRows(input: {
+    tenantId: string;
+    shiftId: string;
+    sourceFile: string;
+    sourceSheet: string;
+    rows: Array<{
+      sourceRowNumber: number;
+      exclusionReason: string;
+      orderNumber: string | null;
+      customerName: string | null;
+      sku: string | null;
+      description: string | null;
+      category: string | null;
+      quantity: number | null;
+      rawRouteLine: string | null;
+      deliveryDate: string | null;
+      notes: string | null;
+    }>;
+  }): Promise<void>;
   checkMonthlyReplaceSafety(input: {
     tenantId: string;
     shiftId: string;
@@ -1617,6 +1778,170 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       };
     },
 
+    async createDemandImportBatch(input) {
+      const { data, error } = await supabase
+        .from('demand_import_batches')
+        .insert({
+          tenant_id: input.tenantId,
+          source_file: input.sourceFile,
+          source_sheet: input.sourceSheet,
+          uploaded_by: input.uploadedBy,
+          status: input.status,
+          rows_count: input.rowsCount,
+          raw_rows_count: input.rawRowsCount,
+          warning_rows_count: input.warningRowsCount,
+          error_rows_count: input.errorRowsCount,
+          special_flow_rows_count: input.specialFlowRowsCount,
+          distribution_areas_count: input.distributionAreasCount,
+          distinct_orders_count: input.distinctOrdersCount,
+          distinct_sku_count: input.distinctSkuCount
+        })
+        .select(demandImportBatchColumns)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return mapDemandImportBatchRow(data as DemandImportBatchRow);
+    },
+
+    async insertRawDemandRows(input) {
+      if (input.rows.length === 0) return;
+      const { error } = await supabase
+        .from('raw_demand_rows')
+        .insert(input.rows.map((row) => ({
+          tenant_id: input.tenantId,
+          batch_id: input.batchId,
+          source_sheet: input.sourceSheet,
+          source_row_number: row.sourceRowNumber,
+          agent: row.agent,
+          order_date: row.orderDate,
+          customer_name: row.customerName,
+          order_number: row.orderNumber,
+          sku: row.sku,
+          description: row.description,
+          category: row.category,
+          quantity: row.quantity,
+          cost: row.cost,
+          notes: row.notes,
+          distribution_area: row.distributionArea,
+          raw_route_line: row.rawRouteLine,
+          planned_delivery_date: row.plannedDeliveryDate,
+          planned_route_line: row.plannedRouteLine,
+          planned_work_bucket: row.plannedWorkBucket,
+          planning_status: row.planningStatus,
+          route_flow: row.routeFlow,
+          product_handling_flow: row.productHandlingFlow,
+          note_date_hints: row.noteDateHints,
+          issues: row.issues
+        })));
+
+      if (error) {
+        throw error;
+      }
+    },
+
+    async getDemandImportBatch(input) {
+      const { data, error } = await supabase
+        .from('demand_import_batches')
+        .select(demandImportBatchColumns)
+        .eq('tenant_id', input.tenantId)
+        .eq('id', input.batchId)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return mapDemandImportBatchRow(data as DemandImportBatchRow);
+    },
+
+    async listRawDemandRowsByBatch(input) {
+      let query = supabase
+        .from('raw_demand_rows')
+        .select(rawDemandRowColumns)
+        .eq('tenant_id', input.tenantId)
+        .eq('batch_id', input.batchId)
+        .order('source_row_number', { ascending: true });
+
+      if (input.limit !== undefined) {
+        query = query.limit(input.limit);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        throw error;
+      }
+
+      return ((data ?? []) as RawDemandRowRow[]).map(mapRawDemandRow);
+    },
+
+    async listDemandBatchDistributionAreaSummary(input) {
+      const { data, error } = await supabase
+        .from('raw_demand_rows')
+        .select('distribution_area,order_number,sku,quantity,planning_status')
+        .eq('tenant_id', input.tenantId)
+        .eq('batch_id', input.batchId)
+        .order('distribution_area', { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      const summary = new Map<string, {
+        distributionArea: string | null;
+        rowsCount: number;
+        orders: Set<string>;
+        skus: Set<string>;
+        totalQty: number;
+        specialFlowRowsCount: number;
+        errorRowsCount: number;
+      }>();
+
+      for (const row of (data ?? []) as Array<{
+        distribution_area: string | null;
+        order_number: string | null;
+        sku: string | null;
+        quantity: number | null;
+        planning_status: RawDemandRow['planningStatus'];
+      }>) {
+        const key = row.distribution_area ?? '__missing__';
+        const entry = summary.get(key) ?? {
+          distributionArea: row.distribution_area,
+          rowsCount: 0,
+          orders: new Set<string>(),
+          skus: new Set<string>(),
+          totalQty: 0,
+          specialFlowRowsCount: 0,
+          errorRowsCount: 0
+        };
+        entry.rowsCount += 1;
+        if (row.order_number) entry.orders.add(row.order_number);
+        if (row.sku) entry.skus.add(row.sku);
+        entry.totalQty += row.quantity ?? 0;
+        if (row.planning_status === 'special_flow') entry.specialFlowRowsCount += 1;
+        if (row.planning_status === 'error') entry.errorRowsCount += 1;
+        summary.set(key, entry);
+      }
+
+      return Array.from(summary.values())
+        .map((entry) => ({
+          distributionArea: entry.distributionArea,
+          rowsCount: entry.rowsCount,
+          ordersCount: entry.orders.size,
+          skuCount: entry.skus.size,
+          totalQty: entry.totalQty,
+          specialFlowRowsCount: entry.specialFlowRowsCount,
+          errorRowsCount: entry.errorRowsCount
+        }))
+        .sort((a, b) => {
+          if (a.distributionArea === null) return 1;
+          if (b.distributionArea === null) return -1;
+          return a.distributionArea.localeCompare(b.distributionArea, 'he');
+        });
+    },
+
     async applyMonthlyImport(input) {
       const { data, error } = await supabase.rpc('manual_shift_apply_monthly_import', {
         p_tenant_id: input.tenantId,
@@ -1646,11 +1971,39 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         skippedZeroQuantityRows: Number(row.skipped_zero_quantity_rows ?? input.plan.skippedZeroQuantityRows),
         appliedTotalQuantity: input.plan.appliedTotalQuantity,
         appliedItemLines: input.plan.appliedItemLines,
+        excludedRowsCount: input.plan.preview.excludedRows.length,
         warningSummary: input.plan.warningSummary,
         warnings: input.plan.preview.warnings,
         previewTotals: input.plan.preview.totals,
         previewAnomalies: input.plan.preview.anomalies
       };
+    },
+
+    async insertMonthlyImportExcludedRows(input) {
+      if (input.rows.length === 0) return;
+      const dbRows = input.rows.map((row) => ({
+        tenant_id: input.tenantId,
+        shift_id: input.shiftId,
+        source_file: input.sourceFile,
+        source_sheet: input.sourceSheet,
+        source_row_number: row.sourceRowNumber,
+        exclusion_reason: row.exclusionReason,
+        order_number: row.orderNumber,
+        customer_name: row.customerName,
+        sku: row.sku,
+        description: row.description,
+        category: row.category,
+        quantity: row.quantity,
+        raw_route_line: row.rawRouteLine,
+        delivery_date: row.deliveryDate,
+        notes: row.notes
+      }));
+      const { error } = await supabase
+        .from('manual_shift_import_excluded_rows')
+        .insert(dbRows);
+      if (error) {
+        throw error;
+      }
     },
 
     async updateOrder(orderId, patch) {
