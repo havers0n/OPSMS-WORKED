@@ -1166,6 +1166,36 @@ describe('buildManualShiftSourceZoneDiagnostics', () => {
     expect(Array.isArray(line.routeGroups!)).toBe(true);
   });
 
+  // ── Test: Alias fields (Stage 1) ──────────────────────────────────────────
+  it('emits distributionGroup* and workGroup* alias fields alongside legacy fields', () => {
+    const O1 = 'o1-base'; const O2 = 'o2-slr';
+    const lineRows = [makeLine('קו דרום', 'דרום')];
+    const orders = [
+      makeOrder({ id: O1, orderNumber: 'SO-1', pointName: null, rawRouteLine: 'דרום', routeBase: 'דרום', workBucketName: null }),
+      makeOrder({ id: O2, orderNumber: 'SO-1', pointName: 'סלולר', rawRouteLine: 'דרום/סלולר', routeBase: 'דרום', workBucketName: 'סלולר' }),
+    ];
+    const rollups = new Map([rollup(O1, 2, 10), rollup(O2, 3, 15)]);
+
+    const result = buildShiftWorkHierarchy(SHIFT, lineRows, orders, rollups, [], []);
+    const line = result.areas[0].lines[0];
+
+    // lineName alias
+    expect(line.lineName).toBe(line.lineGroupName);
+
+    // routeGroup → distributionGroup alias
+    const rg = line.routeGroups![0];
+    expect(rg.distributionGroupName).toBe(rg.routeGroupName);
+    expect(rg.distributionGroupKind).toBe(rg.routeGroupKind);
+
+    // workBucket → workGroup alias
+    for (const wb of rg.workBuckets) {
+      expect(wb.workGroupKey).toBe(wb.workBucketKey);
+      expect(wb.workGroupName).toBe(wb.workBucketName);
+      expect(wb.workGroupDisplayName).toBe(wb.workBucketDisplayName);
+      expect(wb.workGroupKind).toBe(wb.workBucketKind);
+    }
+  });
+
   // ── Test 6: Metrics aggregation ──────────────────────────────────────────
   it('route group totals equal sum of their work buckets; line totals unchanged', () => {
     const O1 = 'o1-base'; const O2 = 'o2-slr';

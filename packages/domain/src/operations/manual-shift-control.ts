@@ -575,6 +575,11 @@ export const manualShiftWorkHierarchyWorkBucketSchema = z.object({
   workBucketName: z.string().nullable(),
   workBucketDisplayName: z.string(),
   workBucketKind: workBucketKindSchema,
+  // @deprecated — use distributionGroup* / workGroup* aliases
+  workGroupKey: z.string().optional(),
+  workGroupName: z.string().nullable().optional(),
+  workGroupDisplayName: z.string().optional(),
+  workGroupKind: workBucketKindSchema.optional(),
   classificationConfidence: classificationConfidenceSchema,
   classificationReasons: z.array(z.string()),
   orderCount: z.number().int().min(0),
@@ -589,6 +594,9 @@ export const manualShiftWorkHierarchyRouteGroupSchema = z.object({
   routeGroupKey: z.string(),
   routeGroupName: z.string(),
   routeGroupKind: routeGroupKindSchema,
+  // @deprecated — use distributionGroup* aliases
+  distributionGroupName: z.string().optional(),
+  distributionGroupKind: routeGroupKindSchema.optional(),
   classificationConfidence: classificationConfidenceSchema,
   classificationReasons: z.array(z.string()),
   orderCount: z.number().int().min(0),
@@ -603,6 +611,8 @@ export const manualShiftWorkHierarchyLineSchema = z.object({
   lineId: z.string().uuid(),
   areaLineKey: z.string().optional(),
   lineGroupName: z.string(),
+  // @deprecated — use lineName alias
+  lineName: z.string().optional(),
   distributionArea: z.string().nullable(),
   sourceZone: z.string().nullable().optional(),
   lineKind: z.enum(['route', 'delivery_channel']).optional(),

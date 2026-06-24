@@ -88,6 +88,7 @@ const mockLineHierarchySummaries: LineHierarchySummary[] = [
 const mockWorkBucketSummaries: WorkBucketSummary[] = [
   {
     workBucketName: 'Point A',
+    workGroupName: 'Point A',
     ordersCount: 2,
     itemLinesCount: 2,
     totalQuantity: 32,
@@ -121,6 +122,7 @@ const mockWorkBucketSummaries: WorkBucketSummary[] = [
   },
   {
     workBucketName: 'No Point',
+    workGroupName: 'No Point',
     ordersCount: 1,
     itemLinesCount: 1,
     totalQuantity: 10,
@@ -411,6 +413,7 @@ describe('DesktopHierarchyPanel', () => {
       const workBucketSummaries: WorkBucketSummary[] = [
         {
           workBucketName: 'Line South',
+          workGroupName: 'Line South',
           ordersCount: 1,
           itemLinesCount: 3,
           totalQuantity: 15,
@@ -461,6 +464,7 @@ describe('DesktopHierarchyPanel', () => {
       const workBucketSummaries: WorkBucketSummary[] = [
         {
           workBucketName: 'Line South',
+          workGroupName: 'Line South',
           ordersCount: 1,
           itemLinesCount: 3,
           totalQuantity: 15,
@@ -595,8 +599,9 @@ describe('DesktopHierarchyPanel', () => {
         selectedWorkBucketName: 'Empty Bucket',
         lineHierarchySummaries: mockLineHierarchySummaries,
         workBucketSummaries: [{
-          workBucketName: 'Empty Bucket',
-          ordersCount: 0,
+      workBucketName: 'Empty Bucket',
+      workGroupName: 'Empty Bucket',
+      ordersCount: 0,
           itemLinesCount: 0,
           totalQuantity: 0,
           statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
@@ -626,6 +631,7 @@ describe('DesktopHierarchyPanel', () => {
       const workBucketSummaries: WorkBucketSummary[] = [
         {
           workBucketName: 'Line South',
+          workGroupName: 'Line South',
           ordersCount: 1,
           itemLinesCount: 3,
           totalQuantity: 15,
@@ -686,6 +692,7 @@ describe('DesktopHierarchyPanel', () => {
       const workBucketSummaries: WorkBucketSummary[] = [
         {
           workBucketName: 'Bucket B',
+          workGroupName: 'Bucket B',
           ordersCount: 1,
           itemLinesCount: 4,
           totalQuantity: 20,
@@ -722,8 +729,9 @@ describe('DesktopHierarchyPanel', () => {
     it('does not render 0 פריטים / שורות on work bucket cards', () => {
       const workBucketSummaries: WorkBucketSummary[] = [
         {
-          workBucketName: 'Empty Bucket',
-          ordersCount: 0,
+      workBucketName: 'Empty Bucket',
+      workGroupName: 'Empty Bucket',
+      ordersCount: 0,
           itemLinesCount: 0,
           totalQuantity: 0,
           statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
@@ -747,6 +755,7 @@ describe('DesktopHierarchyPanel', () => {
       {
         routeGroupKey: 'galil-general',
         routeGroupName: 'גליל כללי',
+        distributionGroupName: 'גליל כללי',
         classificationConfidence: 'high',
         orderCount: 4,
         itemLinesCount: 10,
@@ -761,6 +770,9 @@ describe('DesktopHierarchyPanel', () => {
         workBucketKey: 'wb-klali',
         workBucketName: 'כללי',
         workBucketDisplayName: 'כללי',
+        workGroupKey: 'wb-klali',
+        workGroupName: 'כללי',
+        workGroupDisplayName: 'כללי',
         classificationConfidence: 'high',
         orderCount: 3,
         itemLinesCount: 7,
@@ -776,6 +788,9 @@ describe('DesktopHierarchyPanel', () => {
         workBucketKey: 'wb-sellular',
         workBucketName: 'סלולר',
         workBucketDisplayName: 'סלולר',
+        workGroupKey: 'wb-sellular',
+        workGroupName: 'סלולר',
+        workGroupDisplayName: 'סלולר',
         classificationConfidence: 'high',
         orderCount: 1,
         itemLinesCount: 3,
@@ -875,6 +890,9 @@ describe('DesktopHierarchyPanel', () => {
         workBucketKey: 'wb-dabach',
         workBucketName: 'כללי',
         workBucketDisplayName: 'כללי',
+        workGroupKey: 'wb-dabach',
+        workGroupName: 'כללי',
+        workGroupDisplayName: 'כללי',
         classificationConfidence: 'high',
         orderCount: 1,
         itemLinesCount: 2,
@@ -897,7 +915,7 @@ describe('DesktopHierarchyPanel', () => {
         lineHierarchySummaries: [{ lineId: 'line-galil', lineName: 'גליל', distributionArea: 'גליל', lineStatus: 'open', ordersCount: 1, itemLinesCount: 2, totalQuantity: 20, statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 } }],
         hasRouteGroups: true,
         routeGroupSummaries: [
-          { routeGroupKey: 'dbeach', routeGroupName: 'דבאח עין המפרץ', classificationConfidence: 'high', orderCount: 1, itemLinesCount: 2, totalQuantity: 20, statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, workBucketCount: 1 }
+          { routeGroupKey: 'dbeach', routeGroupName: 'דבאח עין המפרץ', distributionGroupName: 'דבאח עין המפרץ', classificationConfidence: 'high', orderCount: 1, itemLinesCount: 2, totalQuantity: 20, statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, workBucketCount: 1 }
         ],
         routeGroupWorkBucketSummaries: [standaloneBucket],
         showProductRollupDeferred: false,
@@ -922,7 +940,7 @@ describe('DesktopHierarchyPanel', () => {
     };
 
     const mockGalilRouteGroup: RouteGroupSummary = {
-      routeGroupKey: 'galil-general', routeGroupName: 'גליל כללי',
+      routeGroupKey: 'galil-general', routeGroupName: 'גליל כללי', distributionGroupName: 'גליל כללי',
       classificationConfidence: 'high', orderCount: 4, itemLinesCount: 10, totalQuantity: 100,
       statusBreakdown: { queued: 4, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
       workBucketCount: 2
@@ -930,6 +948,7 @@ describe('DesktopHierarchyPanel', () => {
 
     const mockRouteGroupWBKlali: RouteGroupWorkBucketSummary = {
       workBucketKey: 'wb-galil-klali', workBucketName: 'כללי', workBucketDisplayName: 'כללי',
+      workGroupKey: 'wb-galil-klali', workGroupName: 'כללי', workGroupDisplayName: 'כללי',
       classificationConfidence: 'high', orderCount: 3, itemLinesCount: 7, totalQuantity: 60,
       statusBreakdown: { queued: 3, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
       orders: [
@@ -941,6 +960,7 @@ describe('DesktopHierarchyPanel', () => {
 
     const mockRouteGroupWBSellular: RouteGroupWorkBucketSummary = {
       workBucketKey: 'wb-galil-sellular', workBucketName: 'סלולר', workBucketDisplayName: 'סלולר',
+      workGroupKey: 'wb-galil-sellular', workGroupName: 'סלולר', workGroupDisplayName: 'סלולר',
       classificationConfidence: 'high', orderCount: 1, itemLinesCount: 3, totalQuantity: 40,
       statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
       orders: [
@@ -949,7 +969,7 @@ describe('DesktopHierarchyPanel', () => {
     };
 
     const mockDabachRouteGroup: RouteGroupSummary = {
-      routeGroupKey: 'dbeach', routeGroupName: 'דבאח עין המפרץ',
+      routeGroupKey: 'dbeach', routeGroupName: 'דבאח עין המפרץ', distributionGroupName: 'דבאח עין המפרץ',
       classificationConfidence: 'high', orderCount: 2, itemLinesCount: 5, totalQuantity: 60,
       statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
       workBucketCount: 1
@@ -957,6 +977,7 @@ describe('DesktopHierarchyPanel', () => {
 
     const mockDabachBucket: RouteGroupWorkBucketSummary = {
       workBucketKey: 'wb-dbeach-klali', workBucketName: 'כללי', workBucketDisplayName: 'כללי',
+      workGroupKey: 'wb-dbeach-klali', workGroupName: 'כללי', workGroupDisplayName: 'כללי',
       classificationConfidence: 'high', orderCount: 2, itemLinesCount: 5, totalQuantity: 60,
       statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
       orders: [
@@ -966,7 +987,7 @@ describe('DesktopHierarchyPanel', () => {
     };
 
     const mockMultiSourceRouteGroup: RouteGroupSummary = {
-      routeGroupKey: 'multi-src', routeGroupName: 'מעורב',
+      routeGroupKey: 'multi-src', routeGroupName: 'מעורב', distributionGroupName: 'מעורב',
       classificationConfidence: 'high', orderCount: 2, itemLinesCount: 5, totalQuantity: 30,
       statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
       workBucketCount: 1
@@ -974,6 +995,7 @@ describe('DesktopHierarchyPanel', () => {
 
     const mockMultiSourceBucket: RouteGroupWorkBucketSummary = {
       workBucketKey: 'wb-mixed', workBucketName: 'מעורב', workBucketDisplayName: 'מעורב',
+      workGroupKey: 'wb-mixed', workGroupName: 'מעורב', workGroupDisplayName: 'מעורב',
       classificationConfidence: 'high', orderCount: 2, itemLinesCount: 5, totalQuantity: 30,
       statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
       orders: [
@@ -1065,6 +1087,7 @@ describe('DesktopHierarchyPanel', () => {
     it('Case 3 — route group category bucket with single pointName renders product table', () => {
       const rechevBucket: RouteGroupWorkBucketSummary = {
         workBucketKey: 'wb-rechev', workBucketName: 'רכב-פז נהריה', workBucketDisplayName: 'רכב-פז נהריה',
+        workGroupKey: 'wb-rechev', workGroupName: 'רכב-פז נהריה', workGroupDisplayName: 'רכב-פז נהריה',
         classificationConfidence: 'high', orderCount: 1, itemLinesCount: 2, totalQuantity: 25,
         statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
         orders: [
@@ -1210,6 +1233,7 @@ describe('DesktopHierarchyPanel', () => {
     it('work bucket with zero orders renders empty state', () => {
       const emptyBucket: RouteGroupWorkBucketSummary = {
         workBucketKey: 'wb-empty', workBucketName: 'ריק', workBucketDisplayName: 'ריק',
+        workGroupKey: 'wb-empty', workGroupName: 'ריק', workGroupDisplayName: 'ריק',
         classificationConfidence: 'high', orderCount: 0, itemLinesCount: 0, totalQuantity: 0,
         statusBreakdown: { queued: 0, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
         orders: []
@@ -1240,6 +1264,7 @@ describe('DesktopHierarchyPanel', () => {
       // Provide a bucket via selectedRouteGroupWorkBucket that is NOT in routeGroupWorkBucketSummaries
       const standaloneBucket: RouteGroupWorkBucketSummary = {
         workBucketKey: 'wb-standalone', workBucketName: 'עצמאי', workBucketDisplayName: 'עצמאי',
+        workGroupKey: 'wb-standalone', workGroupName: 'עצמאי', workGroupDisplayName: 'עצמאי',
         classificationConfidence: 'high', orderCount: 1, itemLinesCount: 1, totalQuantity: 10,
         statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
         orders: [

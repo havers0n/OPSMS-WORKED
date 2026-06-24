@@ -705,6 +705,7 @@ export interface HierarchyOrder {
 
 export interface WorkBucketSummary {
   workBucketName: string;
+  workGroupName: string;
   ordersCount: number;
   itemLinesCount: number;
   totalQuantity: number;
@@ -788,6 +789,7 @@ export function selectWorkBucketSummaries(
     }
     result.push({
       workBucketName,
+      workGroupName: workBucketName,
       ordersCount: bucketOrders.length,
       itemLinesCount,
       totalQuantity,
@@ -879,7 +881,7 @@ export function selectWorkHierarchyLineSummariesByArea(
   return area.lines.map((line) => ({
     areaLineKey: resolveAreaLineKey(line),
     lineId: line.lineId,
-    lineName: line.lineGroupName,
+    lineName: line.lineName ?? line.lineGroupName,
     lineKind: line.lineKind,
     distributionArea: line.distributionArea,
     lineStatus: line.status,
@@ -904,7 +906,7 @@ export function selectWorkHierarchyLineSummaries(
       result.push({
         areaLineKey: resolveAreaLineKey(line),
         lineId: line.lineId,
-        lineName: line.lineGroupName,
+        lineName: line.lineName ?? line.lineGroupName,
         lineKind: line.lineKind,
         distributionArea: line.distributionArea,
         lineStatus: line.status,
@@ -947,6 +949,7 @@ export function selectWorkHierarchyBucketSummaries(
     }));
     return {
       workBucketName: bucket.displayName,
+      workGroupName: bucket.displayName,
       ordersCount: bucket.totalOrders,
       itemLinesCount: orders.reduce((sum, o) => sum + o.lineCount, 0),
       totalQuantity: bucket.totalQuantity,
@@ -963,6 +966,7 @@ export function selectWorkHierarchyBucketSummaries(
 export interface RouteGroupSummary {
   routeGroupKey: string;
   routeGroupName: string;
+  distributionGroupName: string;
   classificationConfidence: ClassificationConfidence;
   orderCount: number;
   itemLinesCount: number;
@@ -975,6 +979,9 @@ export interface RouteGroupWorkBucketSummary {
   workBucketKey: string;
   workBucketName: string | null;
   workBucketDisplayName: string;
+  workGroupKey: string;
+  workGroupName: string | null;
+  workGroupDisplayName: string;
   classificationConfidence: ClassificationConfidence;
   orderCount: number;
   itemLinesCount: number;
@@ -999,6 +1006,7 @@ export function selectLineRouteGroupSummaries(
   return groups.map((rg: ManualShiftWorkHierarchyRouteGroup): RouteGroupSummary => ({
     routeGroupKey: rg.routeGroupKey,
     routeGroupName: rg.routeGroupName,
+    distributionGroupName: rg.distributionGroupName ?? rg.routeGroupName,
     classificationConfidence: rg.classificationConfidence,
     orderCount: rg.orderCount,
     itemLinesCount: rg.itemLinesCount,
@@ -1046,6 +1054,9 @@ export function selectRouteGroupWorkBucketSummaries(
       workBucketKey: wb.workBucketKey,
       workBucketName: wb.workBucketName,
       workBucketDisplayName: wb.workBucketDisplayName,
+      workGroupKey: wb.workGroupKey ?? wb.workBucketKey,
+      workGroupName: wb.workGroupName ?? wb.workBucketName,
+      workGroupDisplayName: wb.workGroupDisplayName ?? wb.workBucketDisplayName,
       classificationConfidence: wb.classificationConfidence,
       orderCount: wb.orderCount,
       itemLinesCount: wb.itemLinesCount,

@@ -3265,11 +3265,17 @@ function buildRouteGroupsForLine(
         };
       });
 
+      const wbClassification = wbEntries[0].classification;
       workBuckets.push({
-        workBucketKey: wbEntries[0].classification.workBucketKey,
-        workBucketName: wbEntries[0].classification.workBucketDisplayName,
-        workBucketDisplayName: wbEntries[0].classification.workBucketDisplayName,
-        workBucketKind: wbEntries[0].classification.workBucketKind,
+        workBucketKey: wbClassification.workBucketKey,
+        workBucketName: wbClassification.workBucketDisplayName,
+        workBucketDisplayName: wbClassification.workBucketDisplayName,
+        workBucketKind: wbClassification.workBucketKind,
+        // @deprecated aliases — business-correct names
+        workGroupKey: wbClassification.workGroupKey,
+        workGroupName: wbClassification.workBucketDisplayName,
+        workGroupDisplayName: wbClassification.workGroupDisplayName,
+        workGroupKind: wbClassification.workBucketKind,
         classificationConfidence: lowestConfidence(confidenceLevels),
         classificationReasons: Array.from(reasonSet),
         orderCount: wbEntries.length,
@@ -3287,10 +3293,14 @@ function buildRouteGroupsForLine(
     const rgReasonSet = new Set(rgEntries.map((e) => e.classification.classificationReason));
     const rgConfidenceLevels = rgEntries.map((e) => e.classification.classificationConfidence);
 
+    const rgClassification = rgEntries[0].classification;
     routeGroups.push({
-      routeGroupKey: rgEntries[0].classification.routeGroupKey,
-      routeGroupName: rgEntries[0].classification.routeGroupName,
-      routeGroupKind: rgEntries[0].classification.routeGroupKind,
+      routeGroupKey: rgClassification.routeGroupKey,
+      routeGroupName: rgClassification.routeGroupName,
+      routeGroupKind: rgClassification.routeGroupKind,
+      // @deprecated aliases — business-correct names
+      distributionGroupName: rgClassification.distributionGroupName,
+      distributionGroupKind: rgClassification.routeGroupKind,
       classificationConfidence: lowestConfidence(rgConfidenceLevels),
       classificationReasons: Array.from(rgReasonSet),
       orderCount: workBuckets.reduce((s, wb) => s + wb.orderCount, 0),
@@ -3476,6 +3486,8 @@ export function buildShiftWorkHierarchy(
       lineId: row.id,
       areaLineKey: row.id,
       lineGroupName: row.name,
+      // @deprecated alias — use lineName
+      lineName: row.name,
       distributionArea: row.distribution_area,
       sourceZone: uniqueSourceZones.length === 1 ? uniqueSourceZones[0] : null,
       lineKind,

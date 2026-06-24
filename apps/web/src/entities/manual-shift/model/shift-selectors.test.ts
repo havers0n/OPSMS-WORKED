@@ -2202,6 +2202,7 @@ describe('selectLineRouteGroupSummaries', () => {
             {
               lineId: LINE_GALIL,
               lineGroupName: 'גליל',
+              lineName: 'גליל',
               distributionArea: 'גליל',
               status: 'open',
               totalBuckets: 4,
@@ -2214,6 +2215,8 @@ describe('selectLineRouteGroupSummaries', () => {
                   routeGroupKey: 'galil-general',
                   routeGroupName: 'גליל כללי',
                   routeGroupKind: 'general',
+                  distributionGroupName: 'גליל כללי',
+                  distributionGroupKind: 'general',
                   classificationConfidence: 'high',
                   classificationReasons: [],
                   orderCount: 4,
@@ -2226,6 +2229,10 @@ describe('selectLineRouteGroupSummaries', () => {
                       workBucketName: 'כללי',
                       workBucketDisplayName: 'כללי',
                       workBucketKind: 'general',
+                      workGroupKey: 'wb-klali',
+                      workGroupName: 'כללי',
+                      workGroupDisplayName: 'כללי',
+                      workGroupKind: 'general',
                       classificationConfidence: 'high',
                       classificationReasons: [],
                       orderCount: 1,
@@ -2239,6 +2246,10 @@ describe('selectLineRouteGroupSummaries', () => {
                       workBucketName: 'סלולר',
                       workBucketDisplayName: 'סלולר',
                       workBucketKind: 'category',
+                      workGroupKey: 'wb-sellular',
+                      workGroupName: 'סלולר',
+                      workGroupDisplayName: 'סלולר',
+                      workGroupKind: 'category',
                       classificationConfidence: 'high',
                       classificationReasons: [],
                       orderCount: 1,
@@ -2252,6 +2263,10 @@ describe('selectLineRouteGroupSummaries', () => {
                       workBucketName: 'רכב-פז נהריה',
                       workBucketDisplayName: 'רכב-פז נהריה',
                       workBucketKind: 'category',
+                      workGroupKey: 'wb-rechev-paz-nahariya',
+                      workGroupName: 'רכב-פז נהריה',
+                      workGroupDisplayName: 'רכב-פז נהריה',
+                      workGroupKind: 'category',
                       classificationConfidence: 'high',
                       classificationReasons: [],
                       orderCount: 1,
@@ -2265,6 +2280,10 @@ describe('selectLineRouteGroupSummaries', () => {
                       workBucketName: 'רכב-פז מכר',
                       workBucketDisplayName: 'רכב-פז מכר',
                       workBucketKind: 'category',
+                      workGroupKey: 'wb-rechev-paz-maker',
+                      workGroupName: 'רכב-פז מכר',
+                      workGroupDisplayName: 'רכב-פז מכר',
+                      workGroupKind: 'category',
                       classificationConfidence: 'high',
                       classificationReasons: [],
                       orderCount: 1,
@@ -2279,6 +2298,8 @@ describe('selectLineRouteGroupSummaries', () => {
                   routeGroupKey: 'dbeach',
                   routeGroupName: 'דבאח עין המפרץ',
                   routeGroupKind: 'standalone',
+                  distributionGroupName: 'דבאח עין המפרץ',
+                  distributionGroupKind: 'standalone',
                   classificationConfidence: 'high',
                   classificationReasons: [],
                   orderCount: 2,
@@ -2291,6 +2312,10 @@ describe('selectLineRouteGroupSummaries', () => {
                       workBucketName: 'כללי',
                       workBucketDisplayName: 'כללי',
                       workBucketKind: 'standalone-general',
+                      workGroupKey: 'wb-klali-dbeach',
+                      workGroupName: 'כללי',
+                      workGroupDisplayName: 'כללי',
+                      workGroupKind: 'standalone-general',
                       classificationConfidence: 'high',
                       classificationReasons: [],
                       orderCount: 2,
@@ -2305,6 +2330,8 @@ describe('selectLineRouteGroupSummaries', () => {
                   routeGroupKey: 'sonol',
                   routeGroupName: 'סונול צומת עדי',
                   routeGroupKind: 'standalone',
+                  distributionGroupName: 'סונול צומת עדי',
+                  distributionGroupKind: 'standalone',
                   classificationConfidence: 'medium',
                   classificationReasons: ['ambiguous-route-base'],
                   orderCount: 1,
@@ -2317,6 +2344,10 @@ describe('selectLineRouteGroupSummaries', () => {
                       workBucketName: 'כללי',
                       workBucketDisplayName: 'כללי',
                       workBucketKind: 'standalone-general',
+                      workGroupKey: 'wb-klali-sonol',
+                      workGroupName: 'כללי',
+                      workGroupDisplayName: 'כללי',
+                      workGroupKind: 'standalone-general',
                       classificationConfidence: 'medium',
                       classificationReasons: ['ambiguous-route-base'],
                       orderCount: 1,
@@ -2331,6 +2362,8 @@ describe('selectLineRouteGroupSummaries', () => {
                   routeGroupKey: 'paz-lohamei',
                   routeGroupName: 'פז לוחמי הגטאות',
                   routeGroupKind: 'standalone',
+                  distributionGroupName: 'פז לוחמי הגטאות',
+                  distributionGroupKind: 'standalone',
                   classificationConfidence: 'high',
                   classificationReasons: [],
                   orderCount: 1,
@@ -2343,6 +2376,10 @@ describe('selectLineRouteGroupSummaries', () => {
                       workBucketName: 'כללי',
                       workBucketDisplayName: 'כללי',
                       workBucketKind: 'standalone-general',
+                      workGroupKey: 'wb-klali-paz',
+                      workGroupName: 'כללי',
+                      workGroupDisplayName: 'כללי',
+                      workGroupKind: 'standalone-general',
                       classificationConfidence: 'high',
                       classificationReasons: [],
                       orderCount: 1,
@@ -2369,6 +2406,10 @@ describe('selectLineRouteGroupSummaries', () => {
     expect(result[1].routeGroupName).toBe('דבאח עין המפרץ');
     expect(result[2].routeGroupName).toBe('סונול צומת עדי');
     expect(result[3].routeGroupName).toBe('פז לוחמי הגטאות');
+    // verify alias fields match old fields
+    result.forEach((rg) => {
+      expect(rg.distributionGroupName).toBe(rg.routeGroupName);
+    });
   });
 
   it('returns correct summary metrics per route group', () => {
@@ -2380,10 +2421,12 @@ describe('selectLineRouteGroupSummaries', () => {
     expect(galilGeneral.totalQuantity).toBe(100);
     expect(galilGeneral.workBucketCount).toBe(4);
     expect(galilGeneral.classificationConfidence).toBe('high');
+    expect(galilGeneral.distributionGroupName).toBe('גליל כללי');
 
     const dbeach = result.find((rg) => rg.routeGroupKey === 'dbeach')!;
     expect(dbeach.orderCount).toBe(2);
     expect(dbeach.workBucketCount).toBe(1);
+    expect(dbeach.distributionGroupName).toBe('דבאח עין המפרץ');
   });
 
   it('preserves classificationConfidence on route group summary', () => {
@@ -2490,6 +2533,7 @@ describe('selectRouteGroupWorkBucketSummaries', () => {
             {
               lineId: LINE_GALIL,
               lineGroupName: 'גליל',
+              lineName: 'גליל',
               distributionArea: 'גליל',
               status: 'open',
               totalBuckets: 4,
@@ -2502,6 +2546,8 @@ describe('selectRouteGroupWorkBucketSummaries', () => {
                   routeGroupKey: 'galil-general',
                   routeGroupName: 'גליל כללי',
                   routeGroupKind: 'general',
+                  distributionGroupName: 'גליל כללי',
+                  distributionGroupKind: 'general',
                   classificationConfidence: 'high',
                   classificationReasons: [],
                   orderCount: 4,
@@ -2514,6 +2560,10 @@ describe('selectRouteGroupWorkBucketSummaries', () => {
                       workBucketName: 'כללי',
                       workBucketDisplayName: 'כללי',
                       workBucketKind: 'general',
+                      workGroupKey: 'wb-klali',
+                      workGroupName: 'כללי',
+                      workGroupDisplayName: 'כללי',
+                      workGroupKind: 'general',
                       classificationConfidence: 'high',
                       classificationReasons: [],
                       orderCount: 1,
@@ -2529,6 +2579,10 @@ describe('selectRouteGroupWorkBucketSummaries', () => {
                       workBucketName: 'סלולר',
                       workBucketDisplayName: 'סלולר',
                       workBucketKind: 'category',
+                      workGroupKey: 'wb-sellular',
+                      workGroupName: 'סלולר',
+                      workGroupDisplayName: 'סלולר',
+                      workGroupKind: 'category',
                       classificationConfidence: 'high',
                       classificationReasons: [],
                       orderCount: 1,
@@ -2544,6 +2598,10 @@ describe('selectRouteGroupWorkBucketSummaries', () => {
                       workBucketName: 'רכב-פז נהריה',
                       workBucketDisplayName: 'רכב-פז נהריה',
                       workBucketKind: 'category',
+                      workGroupKey: 'wb-rechev-paz-nahariya',
+                      workGroupName: 'רכב-פז נהריה',
+                      workGroupDisplayName: 'רכב-פז נהריה',
+                      workGroupKind: 'category',
                       classificationConfidence: 'high',
                       classificationReasons: [],
                       orderCount: 1,
@@ -2559,6 +2617,10 @@ describe('selectRouteGroupWorkBucketSummaries', () => {
                       workBucketName: 'רכב-פז מכר',
                       workBucketDisplayName: 'רכב-פז מכר',
                       workBucketKind: 'category',
+                      workGroupKey: 'wb-rechev-paz-maker',
+                      workGroupName: 'רכב-פז מכר',
+                      workGroupDisplayName: 'רכב-פז מכר',
+                      workGroupKind: 'category',
                       classificationConfidence: 'high',
                       classificationReasons: [],
                       orderCount: 1,
@@ -2575,6 +2637,8 @@ describe('selectRouteGroupWorkBucketSummaries', () => {
                   routeGroupKey: 'dbeach',
                   routeGroupName: 'דבאח עין המפרץ',
                   routeGroupKind: 'standalone',
+                  distributionGroupName: 'דבאח עין המפרץ',
+                  distributionGroupKind: 'standalone',
                   classificationConfidence: 'high',
                   classificationReasons: [],
                   orderCount: 2,
@@ -2587,6 +2651,10 @@ describe('selectRouteGroupWorkBucketSummaries', () => {
                       workBucketName: 'כללי',
                       workBucketDisplayName: 'כללי',
                       workBucketKind: 'standalone-general',
+                      workGroupKey: 'wb-klali-dbeach',
+                      workGroupName: 'כללי',
+                      workGroupDisplayName: 'כללי',
+                      workGroupKind: 'standalone-general',
                       classificationConfidence: 'high',
                       classificationReasons: [],
                       orderCount: 2,
@@ -2617,6 +2685,12 @@ describe('selectRouteGroupWorkBucketSummaries', () => {
     expect(names).toContain('סלולר');
     expect(names).toContain('רכב-פז נהריה');
     expect(names).toContain('רכב-פז מכר');
+    // verify alias fields match old fields
+    result.forEach((wb) => {
+      expect(wb.workGroupKey).toBe(wb.workBucketKey);
+      expect(wb.workGroupName).toBe(wb.workBucketName);
+      expect(wb.workGroupDisplayName).toBe(wb.workBucketDisplayName);
+    });
   });
 
   it('גליל כללי contains work buckets כללי, סלולר, רכב-פז נהריה, רכב-פז מכר', () => {
@@ -2624,9 +2698,13 @@ describe('selectRouteGroupWorkBucketSummaries', () => {
     const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'galil-general');
     expect(result).toHaveLength(4);
     expect(result[0].workBucketDisplayName).toBe('כללי');
+    expect(result[0].workGroupDisplayName).toBe('כללי');
     expect(result[1].workBucketDisplayName).toBe('סלולר');
+    expect(result[1].workGroupDisplayName).toBe('סלולר');
     expect(result[2].workBucketDisplayName).toBe('רכב-פז נהריה');
+    expect(result[2].workGroupDisplayName).toBe('רכב-פז נהריה');
     expect(result[3].workBucketDisplayName).toBe('רכב-פז מכר');
+    expect(result[3].workGroupDisplayName).toBe('רכב-פז מכר');
   });
 
   it('דבאח עין המפרץ contains work bucket כללי (standalone)', () => {
@@ -2634,6 +2712,7 @@ describe('selectRouteGroupWorkBucketSummaries', () => {
     const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'dbeach');
     expect(result).toHaveLength(1);
     expect(result[0].workBucketDisplayName).toBe('כללי');
+    expect(result[0].workGroupDisplayName).toBe('כללי');
     expect(result[0].orderCount).toBe(2);
     expect(result[0].itemLinesCount).toBe(5);
   });
@@ -2715,6 +2794,7 @@ describe('selectedWorkBucketRawName derivation (diagnostic — inline logic repl
         lines: [{
           lineId: LINE_GALIL,
           lineGroupName: 'גליל',
+          lineName: 'גליל',
           distributionArea: 'גליל',
           status: 'open',
           totalBuckets: 4,
@@ -2727,6 +2807,8 @@ describe('selectedWorkBucketRawName derivation (diagnostic — inline logic repl
               routeGroupKey: 'galil-general',
               routeGroupName: 'גליל כללי',
               routeGroupKind: 'general',
+              distributionGroupName: 'גליל כללי',
+              distributionGroupKind: 'general',
               classificationConfidence: 'high',
               classificationReasons: [],
               orderCount: 4,
@@ -2739,6 +2821,10 @@ describe('selectedWorkBucketRawName derivation (diagnostic — inline logic repl
                   workBucketName: 'כללי',
                   workBucketDisplayName: 'כללי',
                   workBucketKind: 'general',
+                  workGroupKey: 'wb-klali',
+                  workGroupName: 'כללי',
+                  workGroupDisplayName: 'כללי',
+                  workGroupKind: 'general',
                   classificationConfidence: 'high',
                   classificationReasons: [],
                   orderCount: 3,
@@ -2756,6 +2842,10 @@ describe('selectedWorkBucketRawName derivation (diagnostic — inline logic repl
                   workBucketName: 'סלולר',
                   workBucketDisplayName: 'סלולר',
                   workBucketKind: 'category',
+                  workGroupKey: 'wb-sellular',
+                  workGroupName: 'סלולר',
+                  workGroupDisplayName: 'סלולר',
+                  workGroupKind: 'category',
                   classificationConfidence: 'high',
                   classificationReasons: [],
                   orderCount: 1,
@@ -2772,6 +2862,8 @@ describe('selectedWorkBucketRawName derivation (diagnostic — inline logic repl
               routeGroupKey: 'dbeach',
               routeGroupName: 'דבאח עין המפרץ',
               routeGroupKind: 'standalone',
+              distributionGroupName: 'דבאח עין המפרץ',
+              distributionGroupKind: 'standalone',
               classificationConfidence: 'high',
               classificationReasons: [],
               orderCount: 2,
@@ -2784,6 +2876,10 @@ describe('selectedWorkBucketRawName derivation (diagnostic — inline logic repl
                   workBucketName: 'כללי',
                   workBucketDisplayName: 'כללי',
                   workBucketKind: 'standalone-general',
+                  workGroupKey: 'wb-klali-dbeach',
+                  workGroupName: 'כללי',
+                  workGroupDisplayName: 'כללי',
+                  workGroupKind: 'standalone-general',
                   classificationConfidence: 'high',
                   classificationReasons: [],
                   orderCount: 2,
@@ -2845,6 +2941,7 @@ describe('selectedWorkBucketRawName derivation (diagnostic — inline logic repl
           lines: [{
             lineId: LINE_GALIL,
             lineGroupName: 'גליל',
+            lineName: 'גליל',
             distributionArea: 'גליל',
             status: 'open',
             totalBuckets: 1,
@@ -2856,6 +2953,8 @@ describe('selectedWorkBucketRawName derivation (diagnostic — inline logic repl
               routeGroupKey: 'multi-source',
               routeGroupName: 'מעורב',
               routeGroupKind: 'general',
+              distributionGroupName: 'מעורב',
+              distributionGroupKind: 'general',
               classificationConfidence: 'high',
               classificationReasons: [],
               orderCount: 2,
@@ -2867,6 +2966,10 @@ describe('selectedWorkBucketRawName derivation (diagnostic — inline logic repl
                 workBucketName: 'מעורב',
                 workBucketDisplayName: 'מעורב',
                 workBucketKind: 'general',
+                workGroupKey: 'wb-mixed',
+                workGroupName: 'מעורב',
+                workGroupDisplayName: 'מעורב',
+                workGroupKind: 'general',
                 classificationConfidence: 'high',
                 classificationReasons: [],
                 orderCount: 2,
@@ -2904,6 +3007,7 @@ describe('selectedWorkBucketRawName derivation (diagnostic — inline logic repl
         lines: [{
           lineId: LINE_GALIL,
           lineGroupName: 'גליל',
+          lineName: 'גליל',
           distributionArea: 'גליל',
           status: 'open',
           totalBuckets: 1,

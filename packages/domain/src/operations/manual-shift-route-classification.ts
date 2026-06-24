@@ -36,8 +36,13 @@ export type RouteFragmentInput = {
 export type ClassifiedRouteFragment = RouteFragmentInput & {
   routeGroupName: string;
   routeGroupKey: string;
+  // @deprecated — use distributionGroup* / workGroup* aliases
+  distributionGroupName: string;
+  distributionGroupKey: string;
   workBucketDisplayName: string;
   workBucketKey: string;
+  workGroupDisplayName: string;
+  workGroupKey: string;
   routeGroupKind: RouteGroupKind;
   workBucketKind: WorkBucketKind;
   classificationReason: string;
@@ -100,7 +105,11 @@ function buildResult(
     pointName: fragment.pointName ?? null,
     ...overrides,
     routeGroupKey: makeRouteGroupKey(overrides.routeGroupName),
+    distributionGroupKey: makeRouteGroupKey(overrides.routeGroupName),
+    distributionGroupName: overrides.routeGroupName,
     workBucketKey: makeWorkBucketKey(overrides.routeGroupName, overrides.workBucketDisplayName),
+    workGroupKey: makeWorkBucketKey(overrides.routeGroupName, overrides.workBucketDisplayName),
+    workGroupDisplayName: overrides.workBucketDisplayName,
   };
 }
 

@@ -178,6 +178,7 @@ export const mockLineHierarchySummaries: LineHierarchySummary[] = [
 export const mockWorkBucketSummaries: WorkBucketSummary[] = [
   {
     workBucketName: 'Point A',
+    workGroupName: 'Point A',
     ordersCount: 2,
     itemLinesCount: 8,
     totalQuantity: 32,
