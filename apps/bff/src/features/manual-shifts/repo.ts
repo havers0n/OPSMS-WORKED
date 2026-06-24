@@ -3221,27 +3221,27 @@ function buildRouteGroupsForLine(
   }
 
   // Group by routeGroupKey
-  const rgMap = new Map<string, typeof classifiedOrders>();
+  const distributionGroupMap = new Map<string, typeof classifiedOrders>();
   for (const co of classifiedOrders) {
     const key = co.classification.routeGroupKey;
-    const list = rgMap.get(key) ?? [];
+    const list = distributionGroupMap.get(key) ?? [];
     list.push(co);
-    rgMap.set(key, list);
+    distributionGroupMap.set(key, list);
   }
 
   const routeGroups: ManualShiftWorkHierarchyRouteGroup[] = [];
-  for (const [, rgEntries] of rgMap) {
+  for (const [, rgEntries] of distributionGroupMap) {
     // Group by workBucketKey within this route group
-    const wbMap = new Map<string, typeof rgEntries>();
+    const workGroupMap = new Map<string, typeof rgEntries>();
     for (const entry of rgEntries) {
       const key = entry.classification.workBucketKey;
-      const list = wbMap.get(key) ?? [];
+      const list = workGroupMap.get(key) ?? [];
       list.push(entry);
-      wbMap.set(key, list);
+      workGroupMap.set(key, list);
     }
 
     const workBuckets: ManualShiftWorkHierarchyWorkBucket[] = [];
-    for (const [, wbEntries] of wbMap) {
+    for (const [, wbEntries] of workGroupMap) {
       const reasonSet = new Set(wbEntries.map((e) => e.classification.classificationReason));
       const confidenceLevels = wbEntries.map((e) => e.classification.classificationConfidence);
 

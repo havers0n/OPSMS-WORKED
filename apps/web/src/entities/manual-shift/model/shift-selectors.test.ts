@@ -18,7 +18,9 @@ import {
   selectWorkHierarchyBucketSummaries,
   selectWorkHierarchyAreaSummaries,
   selectWorkHierarchyLineSummariesByArea,
+  selectLineDistributionGroupSummaries,
   selectLineRouteGroupSummaries,
+  selectDistributionGroupWorkGroupSummaries,
   selectRouteGroupWorkBucketSummaries,
   NO_DISTRIBUTION_AREA_KEY,
   normalizePointName,
@@ -2179,10 +2181,10 @@ describe('selectWorkHierarchyLineSummariesByArea', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// selectLineRouteGroupSummaries
+// selectLineDistributionGroupSummaries
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('selectLineRouteGroupSummaries', () => {
+describe('selectLineDistributionGroupSummaries', () => {
   const SHIFT_ID = 'shift-0000-0000-0000-000000000000';
   const LINE_GALIL = 'line-galil-1111-1111-111111111111';
 
@@ -2398,9 +2400,17 @@ describe('selectLineRouteGroupSummaries', () => {
     };
   }
 
-  it('returns route group summaries when routeGroups present on line', () => {
+  it('routes through legacy alias selectLineRouteGroupSummaries unchanged', () => {
     const hierarchy = makeRouteGroupFixture();
-    const result = selectLineRouteGroupSummaries(hierarchy, LINE_GALIL);
+    const newResult = selectLineDistributionGroupSummaries(hierarchy, LINE_GALIL);
+    const legacyResult = selectLineRouteGroupSummaries(hierarchy, LINE_GALIL);
+    expect(legacyResult).toEqual(newResult);
+    expect(selectLineRouteGroupSummaries).toBe(selectLineDistributionGroupSummaries);
+  });
+
+  it('returns distribution group summaries when routeGroups present on line', () => {
+    const hierarchy = makeRouteGroupFixture();
+    const result = selectLineDistributionGroupSummaries(hierarchy, LINE_GALIL);
     expect(result).toHaveLength(4);
     expect(result[0].routeGroupName).toBe('גליל כללי');
     expect(result[1].routeGroupName).toBe('דבאח עין המפרץ');
@@ -2414,7 +2424,7 @@ describe('selectLineRouteGroupSummaries', () => {
 
   it('returns correct summary metrics per route group', () => {
     const hierarchy = makeRouteGroupFixture();
-    const result = selectLineRouteGroupSummaries(hierarchy, LINE_GALIL);
+    const result = selectLineDistributionGroupSummaries(hierarchy, LINE_GALIL);
     const galilGeneral = result.find((rg) => rg.routeGroupKey === 'galil-general')!;
     expect(galilGeneral.orderCount).toBe(4);
     expect(galilGeneral.itemLinesCount).toBe(10);
@@ -2431,7 +2441,7 @@ describe('selectLineRouteGroupSummaries', () => {
 
   it('preserves classificationConfidence on route group summary', () => {
     const hierarchy = makeRouteGroupFixture();
-    const result = selectLineRouteGroupSummaries(hierarchy, LINE_GALIL);
+    const result = selectLineDistributionGroupSummaries(hierarchy, LINE_GALIL);
     const sonol = result.find((rg) => rg.routeGroupKey === 'sonol')!;
     expect(sonol.classificationConfidence).toBe('medium');
   });
@@ -2462,7 +2472,7 @@ describe('selectLineRouteGroupSummaries', () => {
         }
       ]
     };
-    const result = selectLineRouteGroupSummaries(hierarchy, LINE_GALIL);
+    const result = selectLineDistributionGroupSummaries(hierarchy, LINE_GALIL);
     expect(result).toEqual([]);
   });
 
@@ -2493,27 +2503,27 @@ describe('selectLineRouteGroupSummaries', () => {
         }
       ]
     };
-    const result = selectLineRouteGroupSummaries(hierarchy, LINE_GALIL);
+    const result = selectLineDistributionGroupSummaries(hierarchy, LINE_GALIL);
     expect(result).toEqual([]);
   });
 
   it('returns empty array for unknown lineId', () => {
     const hierarchy = makeRouteGroupFixture();
-    const result = selectLineRouteGroupSummaries(hierarchy, 'unknown-line');
+    const result = selectLineDistributionGroupSummaries(hierarchy, 'unknown-line');
     expect(result).toEqual([]);
   });
 
   it('returns empty array for undefined hierarchy', () => {
-    const result = selectLineRouteGroupSummaries(undefined, LINE_GALIL);
+    const result = selectLineDistributionGroupSummaries(undefined, LINE_GALIL);
     expect(result).toEqual([]);
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// selectRouteGroupWorkBucketSummaries
+// selectDistributionGroupWorkGroupSummaries
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('selectRouteGroupWorkBucketSummaries', () => {
+describe('selectDistributionGroupWorkGroupSummaries', () => {
   const SHIFT_ID = 'shift-0000-0000-0000-000000000000';
   const LINE_GALIL = 'line-galil-1111-1111-111111111111';
 
@@ -2676,9 +2686,17 @@ describe('selectRouteGroupWorkBucketSummaries', () => {
     };
   }
 
+  it('routes through legacy alias selectRouteGroupWorkBucketSummaries unchanged', () => {
+    const hierarchy = makeHierarchyWithOrders();
+    const newResult = selectDistributionGroupWorkGroupSummaries(hierarchy, LINE_GALIL, 'galil-general');
+    const legacyResult = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'galil-general');
+    expect(legacyResult).toEqual(newResult);
+    expect(selectRouteGroupWorkBucketSummaries).toBe(selectDistributionGroupWorkGroupSummaries);
+  });
+
   it('returns work bucket summaries for a given routeGroupKey', () => {
     const hierarchy = makeHierarchyWithOrders();
-    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'galil-general');
+    const result = selectDistributionGroupWorkGroupSummaries(hierarchy, LINE_GALIL, 'galil-general');
     expect(result).toHaveLength(4);
     const names = result.map((wb) => wb.workBucketDisplayName);
     expect(names).toContain('כללי');
@@ -2695,7 +2713,7 @@ describe('selectRouteGroupWorkBucketSummaries', () => {
 
   it('גליל כללי contains work buckets כללי, סלולר, רכב-פז נהריה, רכב-פז מכר', () => {
     const hierarchy = makeHierarchyWithOrders();
-    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'galil-general');
+    const result = selectDistributionGroupWorkGroupSummaries(hierarchy, LINE_GALIL, 'galil-general');
     expect(result).toHaveLength(4);
     expect(result[0].workBucketDisplayName).toBe('כללי');
     expect(result[0].workGroupDisplayName).toBe('כללי');
@@ -2709,7 +2727,7 @@ describe('selectRouteGroupWorkBucketSummaries', () => {
 
   it('דבאח עין המפרץ contains work bucket כללי (standalone)', () => {
     const hierarchy = makeHierarchyWithOrders();
-    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'dbeach');
+    const result = selectDistributionGroupWorkGroupSummaries(hierarchy, LINE_GALIL, 'dbeach');
     expect(result).toHaveLength(1);
     expect(result[0].workBucketDisplayName).toBe('כללי');
     expect(result[0].workGroupDisplayName).toBe('כללי');
@@ -2719,7 +2737,7 @@ describe('selectRouteGroupWorkBucketSummaries', () => {
 
   it('preserves pointName on each order', () => {
     const hierarchy = makeHierarchyWithOrders();
-    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'dbeach');
+    const result = selectDistributionGroupWorkGroupSummaries(hierarchy, LINE_GALIL, 'dbeach');
     const wb = result[0];
     expect(wb.orders).toHaveLength(2);
     expect(wb.orders[0].pointName).toBe('דבאח עין המפרץ');
@@ -2728,31 +2746,31 @@ describe('selectRouteGroupWorkBucketSummaries', () => {
 
   it('returns empty array for unknown routeGroupKey', () => {
     const hierarchy = makeHierarchyWithOrders();
-    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'nonexistent');
+    const result = selectDistributionGroupWorkGroupSummaries(hierarchy, LINE_GALIL, 'nonexistent');
     expect(result).toEqual([]);
   });
 
   it('returns empty array for unknown lineId', () => {
     const hierarchy = makeHierarchyWithOrders();
-    const result = selectRouteGroupWorkBucketSummaries(hierarchy, 'unknown-line', 'galil-general');
+    const result = selectDistributionGroupWorkGroupSummaries(hierarchy, 'unknown-line', 'galil-general');
     expect(result).toEqual([]);
   });
 
   it('returns empty array for undefined hierarchy', () => {
-    const result = selectRouteGroupWorkBucketSummaries(undefined, LINE_GALIL, 'galil-general');
+    const result = selectDistributionGroupWorkGroupSummaries(undefined, LINE_GALIL, 'galil-general');
     expect(result).toEqual([]);
   });
 
   it('workBucketName maps to workBucketDisplayName on each work bucket', () => {
     const hierarchy = makeHierarchyWithOrders();
-    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'galil-general');
+    const result = selectDistributionGroupWorkGroupSummaries(hierarchy, LINE_GALIL, 'galil-general');
     expect(result[0].workBucketName).toBe('כללי');
     expect(result[0].workBucketDisplayName).toBe('כללי');
   });
 
   it('sets workBucketName on each order to workBucketDisplayName', () => {
     const hierarchy = makeHierarchyWithOrders();
-    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'galil-general');
+    const result = selectDistributionGroupWorkGroupSummaries(hierarchy, LINE_GALIL, 'galil-general');
     const wb = result[0];
     expect(wb.orders[0].workBucketName).toBe('כללי');
   });
@@ -2903,7 +2921,7 @@ describe('selectedWorkBucketRawName derivation (diagnostic — inline logic repl
   // Fixture: work bucket 'כללי' in 'galil-general' has 3 orders, all pointName='גליל'
   it('גליל כללי > כללי: derives pointName=גליל from work bucket orders, not semantic כללי', () => {
     const hierarchy = makeGalilFixture();
-    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'galil-general');
+    const result = selectDistributionGroupWorkGroupSummaries(hierarchy, LINE_GALIL, 'galil-general');
     const rawName = deriveRawName(result, 'כללי');
     // All 3 orders share pointName='גליל' → should derive 'גליל'
     expect(rawName).toBe('גליל');
@@ -2917,7 +2935,7 @@ describe('selectedWorkBucketRawName derivation (diagnostic — inline logic repl
   // ── Case 2: דבאח עין המפרץ > כללי ──────────────────────────────────────
   it('דבאח עין המפרץ > כללי: derives pointName=דבאח עין המפרץ from work bucket orders', () => {
     const hierarchy = makeGalilFixture();
-    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'dbeach');
+    const result = selectDistributionGroupWorkGroupSummaries(hierarchy, LINE_GALIL, 'dbeach');
     const rawName = deriveRawName(result, 'כללי');
     // Both orders share pointName='דבאח עין המפרץ'
     expect(rawName).toBe('דבאח עין המפרץ');
@@ -2986,7 +3004,7 @@ describe('selectedWorkBucketRawName derivation (diagnostic — inline logic repl
         }
       ]
     };
-    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'multi-source');
+    const result = selectDistributionGroupWorkGroupSummaries(hierarchy, LINE_GALIL, 'multi-source');
     const rawName = deriveRawName(result, 'מעורב');
     // Two different pointNames → empty string
     expect(rawName).toBe('');
@@ -3042,7 +3060,7 @@ describe('selectedWorkBucketRawName derivation (diagnostic — inline logic repl
         }]
       }]
     };
-    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'empty-wb');
+    const result = selectDistributionGroupWorkGroupSummaries(hierarchy, LINE_GALIL, 'empty-wb');
     const rawName = deriveRawName(result, 'ריק');
     expect(rawName).toBe('');
   });
@@ -3050,7 +3068,7 @@ describe('selectedWorkBucketRawName derivation (diagnostic — inline logic repl
   // ── Case 5: Work bucket not found → rawName = '' (shouldn't happen in normal flow) ──
   it('unknown work bucket name returns empty string', () => {
     const hierarchy = makeGalilFixture();
-    const result = selectRouteGroupWorkBucketSummaries(hierarchy, LINE_GALIL, 'galil-general');
+    const result = selectDistributionGroupWorkGroupSummaries(hierarchy, LINE_GALIL, 'galil-general');
     const rawName = deriveRawName(result, 'NONEXISTENT');
     expect(rawName).toBe('');
   });

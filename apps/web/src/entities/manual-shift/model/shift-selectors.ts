@@ -703,7 +703,7 @@ export interface HierarchyOrder {
   totalQuantity: number;
 }
 
-export interface WorkBucketSummary {
+export interface WorkGroupSummary {
   workBucketName: string;
   workGroupName: string;
   ordersCount: number;
@@ -712,6 +712,9 @@ export interface WorkBucketSummary {
   statusBreakdown: StatusBreakdown;
   orders: HierarchyOrder[];
 }
+
+/** @deprecated Use WorkGroupSummary */
+export type WorkBucketSummary = WorkGroupSummary;
 
 function toHierarchyBucketName(name: string | null | undefined, displayName: string): string {
   return normalizeWorkBucketName(name ?? displayName);
@@ -963,7 +966,7 @@ export function selectWorkHierarchyBucketSummaries(
 // RouteGroup selectors (RouteGroup → WorkBucket drill-down)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface RouteGroupSummary {
+export interface DistributionGroupSummary {
   routeGroupKey: string;
   routeGroupName: string;
   distributionGroupName: string;
@@ -974,6 +977,9 @@ export interface RouteGroupSummary {
   statusBreakdown: StatusBreakdown;
   workBucketCount: number;
 }
+
+/** @deprecated Use DistributionGroupSummary */
+export type RouteGroupSummary = DistributionGroupSummary;
 
 export interface RouteGroupWorkBucketSummary {
   workBucketKey: string;
@@ -990,11 +996,11 @@ export interface RouteGroupWorkBucketSummary {
   orders: HierarchyOrder[];
 }
 
-export function selectLineRouteGroupSummaries(
+export function selectLineDistributionGroupSummaries(
   hierarchy: ManualShiftWorkHierarchyResponse | undefined,
   selectedAreaKeyOrLineId: string | null,
   selectedAreaLineKey?: string | null
-): RouteGroupSummary[] {
+): DistributionGroupSummary[] {
   const line = selectedAreaLineKey === undefined
     ? selectHierarchyLineByLineId(hierarchy, selectedAreaKeyOrLineId)
     : selectHierarchyLineByArea(hierarchy, selectedAreaKeyOrLineId, selectedAreaLineKey);
@@ -1003,7 +1009,7 @@ export function selectLineRouteGroupSummaries(
   const groups = line.routeGroups;
   if (!groups || groups.length === 0) return [];
 
-  return groups.map((rg: ManualShiftWorkHierarchyRouteGroup): RouteGroupSummary => ({
+  return groups.map((rg: ManualShiftWorkHierarchyRouteGroup): DistributionGroupSummary => ({
     routeGroupKey: rg.routeGroupKey,
     routeGroupName: rg.routeGroupName,
     distributionGroupName: rg.distributionGroupName ?? rg.routeGroupName,
@@ -1016,7 +1022,10 @@ export function selectLineRouteGroupSummaries(
   }));
 }
 
-export function selectRouteGroupWorkBucketSummaries(
+/** @deprecated Use selectLineDistributionGroupSummaries */
+export const selectLineRouteGroupSummaries = selectLineDistributionGroupSummaries;
+
+export function selectDistributionGroupWorkGroupSummaries(
   hierarchy: ManualShiftWorkHierarchyResponse | undefined,
   selectedAreaKeyOrLineId: string | null,
   selectedAreaLineKeyOrRouteGroupKey: string | null,
@@ -1066,6 +1075,9 @@ export function selectRouteGroupWorkBucketSummaries(
     };
   });
 }
+
+/** @deprecated Use selectDistributionGroupWorkGroupSummaries */
+export const selectRouteGroupWorkBucketSummaries = selectDistributionGroupWorkGroupSummaries;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OrderDetail
