@@ -36,10 +36,11 @@ describe('manual shift monthly import adapter', () => {
     it('reads header-based rows and excludes fully blank rows', () => {
       const parsed = parseBuffer(buildMonthlyWorkbookBuffer());
 
-      expect(parsed.source).toEqual({
+      expect(parsed.source).toMatchObject({
         fileName: 'monthly.xlsx',
         sheetName: 'יוני 26'
       });
+      expect(parsed.source.availableSheets).toContain('יוני 26');
       expect(parsed.rows).toHaveLength(3);
       expect(parsed.rows[0]).toMatchObject({
         rowIndex: 2,

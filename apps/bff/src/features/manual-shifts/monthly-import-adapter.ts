@@ -362,7 +362,7 @@ export function parseManualShiftMonthlyImportWorkbook(input: {
   );
 
   return {
-    source: { fileName: input.fileName, sheetName },
+    source: { fileName: input.fileName, sheetName, availableSheets: workbook.SheetNames },
     rows
   };
 }

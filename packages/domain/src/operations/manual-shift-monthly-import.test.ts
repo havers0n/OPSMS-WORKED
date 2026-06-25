@@ -13,7 +13,8 @@ function buildInput(
   return {
     source: {
       fileName: 'monthly.xlsx',
-      sheetName: 'יוני 26'
+      sheetName: 'יוני 26',
+      availableSheets: ['יוני 26']
     },
     selectedDate,
     rows
@@ -1962,6 +1963,162 @@ describe('manual shift monthly import parser', () => {
 
     const warningCodes = plan.preview.warnings.map((w) => w.code);
     expect(warningCodes).toContain('SPECIAL_FLOW_ROW_EXCLUDED_FROM_DISTRIBUTION_IMPORT');
+  });
+
+  it('special-flow row is excluded from preview.excludedRows with correct reason', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'עמקים/נקודה א',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 5,
+        notes: 'איסוף'
+      }
+    ]));
+    const ex = result.preview.excludedRows;
+    expect(ex.length).toBeGreaterThanOrEqual(1);
+    expect(ex.some(r => r.exclusionReason === 'special_flow' && r.sourceRowNumber === 2)).toBe(true);
+  });
+
+  it('zero quantity row is excluded from preview.excludedRows with correct reason', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'עמקים/נקודה א',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 0
+      }
+    ]));
+    const ex = result.preview.excludedRows;
+    expect(ex.some(r => r.exclusionReason === 'zero_quantity' && r.sourceRowNumber === 2)).toBe(true);
+  });
+
+  it('negative quantity row is excluded from preview.excludedRows with correct reason', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'עמקים/נקודה א',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: -3
+      }
+    ]));
+    const ex = result.preview.excludedRows;
+    expect(ex.some(r => r.exclusionReason === 'negative_quantity' && r.sourceRowNumber === 2)).toBe(true);
+  });
+
+  it('non-selected-date row is excluded from preview.excludedRows with correct reason', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '5.6.26',
+        rawDistributionValue: 'עמקים/נקודה א',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 1
+      }
+    ]));
+    const ex = result.preview.excludedRows;
+    expect(ex.some(r => r.exclusionReason === 'non_selected_date' && r.sourceRowNumber === 2)).toBe(true);
+  });
+
+  it('missing-required-field row is excluded from preview.excludedRows with correct reason', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: '',
+        customerName: 'לקוח א',
+        orderNumber: '',
+        sku: '',
+        quantity: 1
+      }
+    ]));
+    const ex = result.preview.excludedRows;
+    expect(ex.some(r => r.exclusionReason === 'missing_required_field' && r.sourceRowNumber === 2)).toBe(true);
+  });
+
+  it('normal row count is computed correctly in dateSummary.normalRows', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'עמקים/נקודה א',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2
+      },
+      {
+        rowIndex: 3,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'עמקים/נקודה א',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-2',
+        sku: '1002',
+        quantity: 3,
+        notes: 'איסוף'
+      },
+      {
+        rowIndex: 4,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'עמקים/נקודה א',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-3',
+        sku: '1003',
+        quantity: -1
+      }
+    ]));
+    expect(result.preview.dateSummary.normalRows).toBe(1); // only row 2 is positive + not special-flow
+  });
+
+  it('availableSheets is present in preview source', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([], '2026-06-14'));
+    expect(result.preview.source.availableSheets).toEqual(['יוני 26']);
+  });
+
+  it('multi-sheet warning triggers when extra sheets exist', () => {
+    const input = buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'עמקים/נקודה א',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2
+      }
+    ], '2026-06-14');
+    input.source.availableSheets = ['יוני 26', 'מאי 26'];
+    const result = parseManualShiftMonthlyPreview(input);
+    expect(result.preview.warnings.some(w => w.code === 'OTHER_MONTH_SHEETS_NOT_IMPORTED')).toBe(true);
+  });
+
+  it('apply response includes excludedRowsCount', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'עמקים/נקודה א',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 5,
+        notes: 'איסוף'
+      }
+    ]));
+    const plan = planManualShiftMonthlyImportApply(result);
+    expect(plan.preview.excludedRows).toBeDefined();
+    expect(plan.preview.excludedRows.length).toBeGreaterThan(0);
   });
 
   it('warning for excluded special-flow rows includes useful audit context', () => {
