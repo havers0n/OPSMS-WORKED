@@ -13,7 +13,8 @@ import type {
 } from '@wos/domain';
 import {
   parseManualShiftMonthlyPreview,
-  planManualShiftMonthlyImportApply
+  planManualShiftMonthlyImportApply,
+  demandImportDataSheetCreateResponseSchema
 } from '@wos/domain';
 import { createManualShiftsServiceFromRepo } from './service.js';
 import type { ManualShiftsRepo } from './repo.js';
@@ -3801,6 +3802,8 @@ describe('DataSheet demand staging', () => {
         })
       ]
     }));
+
+    expect(() => demandImportDataSheetCreateResponseSchema.parse(result)).not.toThrow();
   });
 
   it('builds a read-only planning preview from staged raw rows without manual shift writes', async () => {

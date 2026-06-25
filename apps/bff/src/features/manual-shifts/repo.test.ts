@@ -1940,3 +1940,67 @@ describe('listPickerSheetItems work group scoping', () => {
     expect(result.map((row: BucketProductRollupRow | { sku: string }) => row.sku).sort()).toEqual(['SKU-1', 'SKU-2']);
   });
 });
+
+describe('Demand import datasheet distribution area summary', () => {
+  it('aggregates numeric totalQty from PostgREST string quantities', () => {
+    const rows = [
+      { distribution_area: 'דרום', order_number: 'SO-1', sku: 'SKU-1', quantity: '5', planning_status: 'unplanned' },
+      { distribution_area: 'דרום', order_number: 'SO-2', sku: 'SKU-2', quantity: '3', planning_status: 'unplanned' },
+      { distribution_area: 'צפון', order_number: 'SO-3', sku: 'SKU-3', quantity: '7', planning_status: 'special_flow' }
+    ];
+
+    const summary = new Map<string, {
+      distributionArea: string | null;
+      rowsCount: number;
+      orders: Set<string>;
+      skus: Set<string>;
+      totalQty: number;
+      specialFlowRowsCount: number;
+      errorRowsCount: number;
+    }>();
+
+    for (const row of rows) {
+      const key = row.distribution_area ?? '__missing__';
+      const entry = summary.get(key) ?? {
+        distributionArea: row.distribution_area,
+        rowsCount: 0,
+        orders: new Set<string>(),
+        skus: new Set<string>(),
+        totalQty: 0,
+        specialFlowRowsCount: 0,
+        errorRowsCount: 0
+      };
+      entry.rowsCount += 1;
+      if (row.order_number) entry.orders.add(row.order_number);
+      if (row.sku) entry.skus.add(row.sku);
+      entry.totalQty += row.quantity == null ? 0 : Number(row.quantity);
+      if (row.planning_status === 'special_flow') entry.specialFlowRowsCount += 1;
+      if (row.planning_status === 'error') entry.errorRowsCount += 1;
+      summary.set(key, entry);
+    }
+
+    const result = Array.from(summary.values())
+      .map((entry) => ({
+        distributionArea: entry.distributionArea,
+        rowsCount: entry.rowsCount,
+        ordersCount: entry.orders.size,
+        skuCount: entry.skus.size,
+        totalQty: entry.totalQty,
+        specialFlowRowsCount: entry.specialFlowRowsCount,
+        errorRowsCount: entry.errorRowsCount
+      }))
+      .sort((a, b) => {
+        if (a.distributionArea === null) return 1;
+        if (b.distributionArea === null) return -1;
+        return a.distributionArea.localeCompare(b.distributionArea, 'he');
+      });
+
+    expect(result).toHaveLength(2);
+    expect(result[0].distributionArea).toBe('דרום');
+    expect(result[0].totalQty).toBe(8);
+    expect(typeof result[0].totalQty).toBe('number');
+    expect(result[1].distributionArea).toBe('צפון');
+    expect(result[1].totalQty).toBe(7);
+    expect(typeof result[1].totalQty).toBe('number');
+  });
+});

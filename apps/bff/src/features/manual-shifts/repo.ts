@@ -2057,7 +2057,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         entry.rowsCount += 1;
         if (row.order_number) entry.orders.add(row.order_number);
         if (row.sku) entry.skus.add(row.sku);
-        entry.totalQty += row.quantity ?? 0;
+        entry.totalQty += row.quantity == null ? 0 : Number(row.quantity);
         if (row.planning_status === 'special_flow') entry.specialFlowRowsCount += 1;
         if (row.planning_status === 'error') entry.errorRowsCount += 1;
         summary.set(key, entry);
