@@ -168,7 +168,8 @@ function mapManualShiftImportError(error: unknown) {
   }
 
   if (error instanceof ZodError) {
-    return new ApiError(400, 'VALIDATION_ERROR', 'Request validation failed.');
+    const details = error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
+    return new ApiError(400, 'VALIDATION_ERROR', `Request validation failed: ${details}`);
   }
 
   return new ApiError(500, 'INTERNAL_IMPORT_ERROR', error instanceof Error ? error.message : 'Unexpected import error');
