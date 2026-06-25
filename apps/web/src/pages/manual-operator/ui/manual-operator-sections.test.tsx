@@ -770,7 +770,7 @@ describe('ManualOperatorPage URL sections', () => {
     expect(screen.getByText('טעינת קובץ בונדד')).toBeTruthy();
     expect(screen.getAllByText(/קובץ הבונדד אינו כולל תאריך/).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'פתיחת ייבוא יומי' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /פתיחת (תצוגה|החלפה) חודשית/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'פתיחת החלפת ייבוא לפי תאריך' })).toBeTruthy();
   });
 
   it('keeps the import section available even when no shift exists', async () => {
@@ -789,7 +789,7 @@ describe('ManualOperatorPage URL sections', () => {
     expect(screen.getByText('ייבוא נתונים')).toBeTruthy();
     expect(screen.getByText('טעינת קובץ בונדד')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'פתיחת ייבוא יומי' }).hasAttribute('disabled')).toBe(true);
-    expect(screen.getByRole('button', { name: 'פתיחת תצוגה חודשית' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'פתיחת ייבוא הזמנות לתאריך נבחר' }).hasAttribute('disabled')).toBe(true);
   });
 
   it('opens the bonded import sheet from the import route entry point', async () => {

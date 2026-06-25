@@ -3,6 +3,30 @@ import { z } from 'zod';
 export const workBucketTypeSchema = z.enum(['unknown']);
 export type WorkBucketType = z.infer<typeof workBucketTypeSchema>;
 
+export const manualShiftMonthlyExclusionReasonSchema = z.enum([
+  'special_flow',
+  'zero_quantity',
+  'negative_quantity',
+  'missing_required_field',
+  'non_selected_date'
+]);
+export type ManualShiftMonthlyExclusionReason = z.infer<typeof manualShiftMonthlyExclusionReasonSchema>;
+
+export const manualShiftMonthlyExcludedRowSchema = z.object({
+  sourceRowNumber: z.number().int().min(1),
+  exclusionReason: manualShiftMonthlyExclusionReasonSchema,
+  orderNumber: z.string().nullable(),
+  customerName: z.string().nullable(),
+  sku: z.string().nullable(),
+  description: z.string().nullable(),
+  category: z.string().nullable(),
+  quantity: z.number().nullable(),
+  rawRouteLine: z.string().nullable(),
+  deliveryDate: z.string().nullable(),
+  notes: z.string().nullable()
+});
+export type ManualShiftMonthlyExcludedRow = z.infer<typeof manualShiftMonthlyExcludedRowSchema>;
+
 export const manualShiftMonthlyWarningSeveritySchema = z.enum(['info', 'warning', 'blocking']);
 export type ManualShiftMonthlyWarningSeverity = z.infer<typeof manualShiftMonthlyWarningSeveritySchema>;
 
@@ -63,7 +87,8 @@ export type ManualShiftMonthlyPreviewLine = z.infer<typeof manualShiftMonthlyPre
 export const manualShiftMonthlyPreviewSchema = z.object({
   source: z.object({
     fileName: z.string().min(1),
-    sheetName: z.string().min(1)
+    sheetName: z.string().min(1),
+    availableSheets: z.array(z.string())
   }),
   selectedDate: z.object({
     raw: z.string().min(1).nullable(),
@@ -73,6 +98,7 @@ export const manualShiftMonthlyPreviewSchema = z.object({
     totalRows: z.number().int().min(0),
     matchingRows: z.number().int().min(0),
     skippedOtherDateRows: z.number().int().min(0),
+    normalRows: z.number().int().min(0),
     availableDates: z.array(manualShiftMonthlyAvailableDateSchema)
   }),
   totals: z.object({
@@ -105,6 +131,7 @@ export const manualShiftMonthlyPreviewSchema = z.object({
     missingRequiredFields: z.array(manualShiftMonthlyMissingFieldSchema)
   }),
   lines: z.array(manualShiftMonthlyPreviewLineSchema),
+  excludedRows: z.array(manualShiftMonthlyExcludedRowSchema),
   warnings: z.array(manualShiftMonthlyWarningSchema)
 });
 export type ManualShiftMonthlyPreview = z.infer<typeof manualShiftMonthlyPreviewSchema>;
@@ -132,7 +159,8 @@ export type ManualShiftMonthlyParsedRow = z.infer<typeof manualShiftMonthlyParse
 export const parseManualShiftMonthlyPreviewInputSchema = z.object({
   source: z.object({
     fileName: z.string().min(1),
-    sheetName: z.string().min(1)
+    sheetName: z.string().min(1),
+    availableSheets: z.array(z.string())
   }),
   selectedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   rows: z.array(manualShiftMonthlyParsedRowSchema)
@@ -246,6 +274,7 @@ export const manualShiftMonthlyApplyResponseSchema = z.object({
   skippedZeroQuantityRows: z.number().int().min(0),
   appliedTotalQuantity: z.number(),
   appliedItemLines: z.number().int().min(0),
+  excludedRowsCount: z.number().int().min(0),
   warningSummary: z.object({
     info: z.number().int().min(0),
     warning: z.number().int().min(0),
@@ -560,6 +589,7 @@ export function parseManualShiftMonthlyPreview(
 
   let matchingRows = 0;
   let skippedOtherDateRows = 0;
+  let normalRows = 0;
   let negativeQuantityRows = 0;
   let nonSoOrderRows = 0;
   let rowsWithoutDistributionSlash = 0;
@@ -572,6 +602,7 @@ export function parseManualShiftMonthlyPreview(
   let negativeTotalQuantity = 0;
   let zeroQuantityRowsCount = 0;
   let positiveQuantityRowsCount = 0;
+  const excludedRows: ManualShiftMonthlyExcludedRow[] = [];
   const rawDistributionValues = new Set<string>();
   const derivedPoints = new Set<string>();
   const uniqueOrderNumbers = new Set<string>();
@@ -653,6 +684,9 @@ export function parseManualShiftMonthlyPreview(
       if (row.quantity > 0) {
         positiveTotalQuantity += row.quantity;
         positiveQuantityRowsCount += 1;
+        if (row.flowType !== 'special_flow') {
+          normalRows += 1;
+        }
       } else if (row.quantity < 0) {
         negativeQuantityRows += 1;
         negativeTotalQuantity += row.quantity;
@@ -759,6 +793,92 @@ export function parseManualShiftMonthlyPreview(
     lines.set(row.lineName, lineEntry);
   }
 
+  for (const row of workingRows) {
+    if (row.normalizedDate !== input.selectedDate) {
+      excludedRows.push({
+        sourceRowNumber: row.rowIndex,
+        exclusionReason: 'non_selected_date',
+        orderNumber: row.orderNumber,
+        customerName: row.customerName,
+        sku: row.sku,
+        description: row.description,
+        category: row.category,
+        quantity: row.quantity,
+        rawRouteLine: row.rawRouteLine,
+        deliveryDate: row.normalizedDate,
+        notes: row.notes
+      });
+      continue;
+    }
+
+    if (!row.lineName || !row.pointName || !row.orderNumber || !row.sku || row.quantity === null) {
+      excludedRows.push({
+        sourceRowNumber: row.rowIndex,
+        exclusionReason: 'missing_required_field',
+        orderNumber: row.orderNumber,
+        customerName: row.customerName,
+        sku: row.sku,
+        description: row.description,
+        category: row.category,
+        quantity: row.quantity,
+        rawRouteLine: row.rawRouteLine,
+        deliveryDate: row.normalizedDate,
+        notes: row.notes
+      });
+      continue;
+    }
+
+    if (row.flowType === 'special_flow') {
+      excludedRows.push({
+        sourceRowNumber: row.rowIndex,
+        exclusionReason: 'special_flow',
+        orderNumber: row.orderNumber,
+        customerName: row.customerName,
+        sku: row.sku,
+        description: row.description,
+        category: row.category,
+        quantity: row.quantity,
+        rawRouteLine: row.rawRouteLine,
+        deliveryDate: row.normalizedDate,
+        notes: row.notes
+      });
+      continue;
+    }
+
+    if (row.quantity < 0) {
+      excludedRows.push({
+        sourceRowNumber: row.rowIndex,
+        exclusionReason: 'negative_quantity',
+        orderNumber: row.orderNumber,
+        customerName: row.customerName,
+        sku: row.sku,
+        description: row.description,
+        category: row.category,
+        quantity: row.quantity,
+        rawRouteLine: row.rawRouteLine,
+        deliveryDate: row.normalizedDate,
+        notes: row.notes
+      });
+      continue;
+    }
+
+    if (row.quantity === 0) {
+      excludedRows.push({
+        sourceRowNumber: row.rowIndex,
+        exclusionReason: 'zero_quantity',
+        orderNumber: row.orderNumber,
+        customerName: row.customerName,
+        sku: row.sku,
+        description: row.description,
+        category: row.category,
+        quantity: row.quantity,
+        rawRouteLine: row.rawRouteLine,
+        deliveryDate: row.normalizedDate,
+        notes: row.notes
+      });
+    }
+  }
+
   const availableDateList = Array.from(availableDates.entries())
     .map(([normalized, entry]) => ({
       normalized,
@@ -795,6 +915,16 @@ export function parseManualShiftMonthlyPreview(
       code: 'SELECTED_DATE_NOT_FOUND',
       message: `Selected date ${input.selectedDate} was not found in the workbook.`,
       count: 0
+    });
+  }
+
+  const otherSheets = (input.source.availableSheets ?? []).filter(s => s !== input.source.sheetName);
+  if (otherSheets.length > 0) {
+    topWarnings.push({
+      severity: 'info',
+      code: 'OTHER_MONTH_SHEETS_NOT_IMPORTED',
+      message: `הקובץ כולל גיליונות נוספים שלא יובאו בפעולה זו: ${otherSheets.join(', ')}`,
+      count: otherSheets.length
     });
   }
 
@@ -877,7 +1007,10 @@ export function parseManualShiftMonthlyPreview(
 
   return manualShiftMonthlyParseResultSchema.parse({
     preview: {
-      source: input.source,
+      source: {
+        ...input.source,
+        availableSheets: input.source.availableSheets ?? []
+      },
       selectedDate: {
         raw: selectedDateRaw,
         normalized: input.selectedDate
@@ -886,6 +1019,7 @@ export function parseManualShiftMonthlyPreview(
         totalRows: input.rows.length,
         matchingRows,
         skippedOtherDateRows,
+        normalRows,
         availableDates: availableDateList
       },
       totals: {
@@ -918,6 +1052,7 @@ export function parseManualShiftMonthlyPreview(
         missingRequiredFields
       },
       lines: lineSummaries,
+      excludedRows,
       warnings: topWarnings
     },
     groups: groupList.map((group) => ({
