@@ -56,7 +56,7 @@ export const demandImportBatchSchema = z.object({
   tenantId: z.string().uuid(),
   sourceFile: z.string().min(1),
   sourceSheet: z.string().min(1),
-  uploadedAt: z.string().datetime(),
+  uploadedAt: z.string().datetime({ offset: true }),
   uploadedBy: z.string().uuid().nullable(),
   status: demandImportBatchStatusSchema,
   rowsCount: z.number().int().min(0),
@@ -100,7 +100,7 @@ export const rawDemandRowSchema = rawDemandRowStagingSchema.extend({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),
   batchId: z.string().uuid(),
-  createdAt: z.string().datetime()
+  createdAt: z.string().datetime({ offset: true })
 });
 export type RawDemandRow = z.infer<typeof rawDemandRowSchema>;
 
@@ -282,7 +282,7 @@ export const demandPlanningDraftSchema = z.object({
   batchId: z.string().uuid(),
   status: demandPlanningDraftStatusSchema,
   createdBy: z.string().uuid().nullable(),
-  createdAt: z.string().datetime(),
+  createdAt: z.string().datetime({ offset: true }),
   updatedAt: z.string().datetime()
 });
 export type DemandPlanningDraft = z.infer<typeof demandPlanningDraftSchema>;
@@ -296,7 +296,7 @@ export const demandPlanningBucketSchema = z.object({
   planningLineName: z.string().min(1),
   bucketName: z.string().min(1),
   sortOrder: z.number().int().min(0),
-  createdAt: z.string().datetime(),
+  createdAt: z.string().datetime({ offset: true }),
   updatedAt: z.string().datetime()
 });
 export type DemandPlanningBucket = z.infer<typeof demandPlanningBucketSchema>;
@@ -309,7 +309,7 @@ export const demandPlanningAllocationSchema = z.object({
   rawDemandRowId: z.string().uuid(),
   bucketId: z.string().uuid(),
   allocatedQuantity: z.number().min(0),
-  createdAt: z.string().datetime(),
+  createdAt: z.string().datetime({ offset: true }),
   updatedAt: z.string().datetime()
 });
 export type DemandPlanningAllocation = z.infer<typeof demandPlanningAllocationSchema>;
