@@ -1,4 +1,4 @@
-import type { DemandImportDataSheetPreview, DemandImportDataSheetCreateResponse } from '@wos/domain';
+import type { DemandImportDataSheetPreview, DemandImportDataSheetCreateResponse, DemandPlanningDraftWithAssignments } from '@wos/domain';
 import { useMutation } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
 
@@ -24,6 +24,12 @@ async function createDataSheetDemandImport(file: File): Promise<DemandImportData
   });
 }
 
+async function createDemandPlanningDraft(batchId: string): Promise<DemandPlanningDraftWithAssignments> {
+  return bffRequest<DemandPlanningDraftWithAssignments>(`/api/demand-imports/${batchId}/planning-drafts`, {
+    method: 'POST'
+  });
+}
+
 export function usePreviewDataSheetDemandImport() {
   return useMutation({
     mutationFn: previewDataSheetDemandImport
@@ -33,5 +39,11 @@ export function usePreviewDataSheetDemandImport() {
 export function useCreateDataSheetDemandImport() {
   return useMutation({
     mutationFn: createDataSheetDemandImport
+  });
+}
+
+export function useCreateDemandPlanningDraft() {
+  return useMutation({
+    mutationFn: createDemandPlanningDraft
   });
 }

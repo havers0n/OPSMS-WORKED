@@ -6,10 +6,12 @@ export function WorkGroupCard({
   workGroup,
   orderItemMap,
   onStartAssign,
+  isDemandMode = false,
 }: {
   workGroup: WorkGroup;
   orderItemMap: Record<string, SourceOrderItem[]>;
   onStartAssign: (workGroupId: string) => void;
+  isDemandMode?: boolean;
 }) {
   const deleteWorkGroup = useSchemeBuilderStore((s) => s.deleteWorkGroup);
   const getWorkGroupItemCount = useSchemeBuilderStore((s) => s.getWorkGroupItemCount);
@@ -33,23 +35,25 @@ export function WorkGroupCard({
           <span className="w-2 h-2 rounded-full bg-blue-500 block shrink-0" />
           <h3 className="text-sm font-bold text-gray-900">{workGroup.name}</h3>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            if (itemCount > 0) {
-              alert('לא ניתן למחוק קבוצת עבודה שיש בה שורות משויכות');
-              return;
-            }
-            const result = deleteWorkGroup(workGroup.id);
-            if (!result.ok && result.reason === 'has_assignments') {
-              alert('לא ניתן למחוק קבוצת עבודה שיש בה שורות משויכות');
-            }
-          }}
-          className="text-gray-400 hover:text-red-600 transition-colors p-1"
-          title="מחק קבוצה"
-        >
-          <Trash2 size={14} />
-        </button>
+        {!isDemandMode && (
+          <button
+            type="button"
+            onClick={() => {
+              if (itemCount > 0) {
+                alert('לא ניתן למחוק קבוצת עבודה שיש בה שורות משויכות');
+                return;
+              }
+              const result = deleteWorkGroup(workGroup.id);
+              if (!result.ok && result.reason === 'has_assignments') {
+                alert('לא ניתן למחוק קבוצת עבודה שיש בה שורות משויכות');
+              }
+            }}
+            className="text-gray-400 hover:text-red-600 transition-colors p-1"
+            title="מחק קבוצה"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
       </div>
 
       <div className="px-2 py-1.5 space-y-0.5">
@@ -72,7 +76,7 @@ export function WorkGroupCard({
           </div>
         )}
 
-        {itemCount === 0 && (
+        {itemCount === 0 && !isDemandMode && (
           <button
             type="button"
             onClick={() => onStartAssign(workGroup.id)}

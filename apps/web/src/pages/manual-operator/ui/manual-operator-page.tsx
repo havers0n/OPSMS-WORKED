@@ -65,7 +65,9 @@ function ManualOperatorSectionContent({
   isReadOnly,
   selectedDate,
   canMonthlyImport,
-  hasExistingWork
+  hasExistingWork,
+  batchId,
+  draftId
 }: {
   section: ManualOperatorSection;
   shift: ManualShiftSession | null;
@@ -74,6 +76,8 @@ function ManualOperatorSectionContent({
   selectedDate: string;
   canMonthlyImport: boolean;
   hasExistingWork: boolean;
+  batchId: string | null;
+  draftId: string | null;
 }) {
   if (section === 'summary') {
     return shift ? (
@@ -94,6 +98,19 @@ function ManualOperatorSectionContent({
   }
 
   if (section === 'lines') {
+    if (batchId && draftId) {
+      return <SchemeBuilder mode="demand" batchId={batchId} draftId={draftId} />;
+    }
+    if (batchId && !draftId) {
+      return (
+        <div className="mx-auto max-w-lg py-20 text-center" dir="rtl">
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <p className="font-bold">שגיאה: חסר מזהה תכנון (draftId)</p>
+            <p className="mt-1">נמצא batchId אך לא draftId. יש לחזור לייבוא DataSchema וליצור תכנון מחדש.</p>
+          </div>
+        </div>
+      );
+    }
     return shift ? <SchemeBuilder shiftId={shift.id} /> : null;
   }
 
@@ -132,6 +149,8 @@ export function ManualOperatorPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedDate = searchParams.get('date') ?? todayDate;
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const batchId = searchParams.get('batchId');
+  const draftId = searchParams.get('draftId');
 
   const isToday = selectedDate === todayDate;
   const { data: shiftData, isLoading } = useQuery(shiftByDateQueryOptions(selectedDate));
@@ -181,9 +200,11 @@ export function ManualOperatorPage() {
       selectedDate={selectedDate}
       canMonthlyImport={canMonthlyImport}
       hasExistingWork={hasExistingWork}
+      batchId={batchId}
+      draftId={draftId}
     />
   );
-  const renderSectionWithoutShift = section === 'import' || section === 'printing';
+  const renderSectionWithoutShift = section === 'import' || section === 'printing' || (section === 'lines' && !!batchId && !!draftId);
 
   if (section === 'work') {
     return (
@@ -230,9 +251,13 @@ export function ManualOperatorPage() {
         isDesktop={isDesktop}
         contentClassName={isDesktop && section === 'lines' ? 'overflow-hidden' : undefined}
         headerActions={
-          isDesktop && section === 'lines' ? (
+          isDesktop && section === 'lines' && !batchId && !draftId ? (
             <span className="rounded border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
               טיוטה מקומית בלבד
+            </span>
+          ) : isDesktop && section === 'lines' && batchId && draftId ? (
+            <span className="rounded border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+              תכנון ביקוש גולמי
             </span>
           ) : undefined
         }

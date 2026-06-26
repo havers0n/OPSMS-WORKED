@@ -70,7 +70,9 @@ import {
   productControlResponseSchema as manualShiftProductControlResponseSchema,
   pickerSheetPrintDataSchema,
   demandPlanningDraftWithAssignmentsResponseSchema,
-  demandPlanningPutPlanRequestBodySchema
+  demandPlanningPutPlanRequestBodySchema,
+  demandImportAppendDiffResponseSchema,
+  demandImportAppendDiffRequestSchema
 } from '../../schemas.js';
 import { parseOrThrow } from '../../validation.js';
 import { generatePickerSheetPdf, type PickerSheetPdfParams } from './picker-sheet-pdf.js';
@@ -874,6 +876,27 @@ export function registerManualShiftsRoutes(
       });
 
       return parseOrThrow(demandPlanningDraftWithAssignmentsResponseSchema, result);
+    });
+  });
+
+  app.post('/api/demand-imports/:batchId/append-diff', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-imports/:batchId/append-diff', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      const tenantId = requireTenant(auth);
+      const { id: batchId } = parseOrThrow(idResponseSchema, {
+        id: request.params && typeof request.params === 'object' ? (request.params as Record<string, unknown>).batchId : null
+      });
+
+      const body = parseOrThrow(demandImportAppendDiffRequestSchema, request.body);
+      const result = await getManualShiftsService(auth).computeDemandImportAppendDiff({
+        tenantId,
+        batchId,
+        shiftId: body.shiftId
+      });
+
+      return parseOrThrow(demandImportAppendDiffResponseSchema, result);
     });
   });
 

@@ -13,6 +13,7 @@ export function ItemsDrawerV2({
   onAssignSelected,
   onAssignAllUnassigned,
   targetWorkGroupName,
+  isDemandMode = false,
 }: {
   order: SourceOrder;
   items: SourceOrderItem[];
@@ -22,6 +23,7 @@ export function ItemsDrawerV2({
   onAssignSelected: (itemRowIds: string[]) => void;
   onAssignAllUnassigned: (itemRowIds: string[]) => void;
   targetWorkGroupName?: string | null;
+  isDemandMode?: boolean;
 }) {
   const itemAllocations = useSchemeBuilderStore((s) => s.itemAllocations);
   const getWorkGroup = useSchemeBuilderStore((s) => s.getWorkGroup);
@@ -136,63 +138,69 @@ export function ItemsDrawerV2({
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-600">
             <div><span className="text-gray-500">לקוח:</span> {order.customerName}</div>
             <div><span className="text-gray-500">כמות:</span> {order.totalQuantity}</div>
-            <div><span className="text-gray-500">קו הפצה מקורי:</span> {order.sourceDeliveryLine?.lineGroupName ?? '—'}</div>
-            <div><span className="text-gray-500">נקודה:</span> {order.pointName ?? '—'}</div>
-            <div><span className="text-gray-500">איזור:</span> {order.sourceZone ?? '—'}</div>
+            {!isDemandMode && (
+              <>
+                <div><span className="text-gray-500">קו הפצה מקורי:</span> {order.sourceDeliveryLine?.lineGroupName ?? '—'}</div>
+                <div><span className="text-gray-500">נקודה:</span> {order.pointName ?? '—'}</div>
+                <div><span className="text-gray-500">איזור:</span> {order.sourceZone ?? '—'}</div>
+              </>
+            )}
             <div><span className="text-gray-500">סטטוס ביצוע:</span> {order.backendStatus}</div>
           </div>
-          {order.hasAshlama && (
+          {!isDemandMode && order.hasAshlama && (
             <div className="mt-2 text-amber-700 bg-amber-50 px-3 py-1 rounded text-xs font-bold">יש אשלמה פתוחה</div>
           )}
-          {order.hasCheckUnits && (
+          {!isDemandMode && order.hasCheckUnits && (
             <div className="mt-1 text-amber-700 bg-amber-50 px-3 py-1 rounded text-xs font-bold">יש יחידות בדיקה</div>
           )}
-          {targetWorkGroupName && (
+          {targetWorkGroupName && !isDemandMode && (
             <div className="mt-2 text-blue-700 bg-blue-50 px-3 py-1 rounded text-xs font-bold">
               קבוצת יעד: {targetWorkGroupName}
             </div>
           )}
         </div>
 
-        <div className="px-6 py-3 border-b border-gray-200 shrink-0 flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={toggleSelectAllVisible}
-            className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1"
-          >
-            {selectedIds.size === unassignedItemIds.length && unassignedItemIds.length > 0 ? <CheckSquare size={14} /> : <Square size={14} />}
-            בחר הכל
-          </button>
-          <button
-            type="button"
-            onClick={toggleSelectUnassigned}
-            className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1"
-          >
-            <Square size={14} />
-            בחר לא משויכות ({unassignedItemIds.length})
-          </button>
-          <div className="flex-1" />
-          {selectedIds.size > 0 && (
+        {!isDemandMode && (
+          <div className="px-6 py-3 border-b border-gray-200 shrink-0 flex items-center gap-2 flex-wrap">
             <button
               type="button"
-              onClick={handleAssignSelected}
-              className="px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+              onClick={toggleSelectAllVisible}
+              className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1"
             >
-              {targetWorkGroupName
-                ? `שייך לקבוצה: ${targetWorkGroupName} (${selectedIds.size})`
-                : `שייך מסומנים (${selectedIds.size})`}
+              {selectedIds.size === unassignedItemIds.length && unassignedItemIds.length > 0 ? <CheckSquare size={14} /> : <Square size={14} />}
+              בחר הכל
             </button>
-          )}
-          {!targetWorkGroupName && unassignedItemIds.length > 0 && (
             <button
               type="button"
-              onClick={handleAssignAllUnassigned}
-              className="px-3 py-1.5 text-xs font-medium rounded-md border border-blue-300 text-blue-700 hover:bg-blue-50 transition-colors"
+              onClick={toggleSelectUnassigned}
+              className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1"
             >
-              שייך את כל השורות שלא שובצו ({unassignedItemIds.length})
+              <Square size={14} />
+              בחר לא משויכות ({unassignedItemIds.length})
             </button>
-          )}
-        </div>
+            <div className="flex-1" />
+            {selectedIds.size > 0 && (
+              <button
+                type="button"
+                onClick={handleAssignSelected}
+                className="px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+              >
+                {targetWorkGroupName
+                  ? `שייך לקבוצה: ${targetWorkGroupName} (${selectedIds.size})`
+                  : `שייך מסומנים (${selectedIds.size})`}
+              </button>
+            )}
+            {!targetWorkGroupName && unassignedItemIds.length > 0 && (
+              <button
+                type="button"
+                onClick={handleAssignAllUnassigned}
+                className="px-3 py-1.5 text-xs font-medium rounded-md border border-blue-300 text-blue-700 hover:bg-blue-50 transition-colors"
+              >
+                שייך את כל השורות שלא שובצו ({unassignedItemIds.length})
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
@@ -211,14 +219,18 @@ export function ItemsDrawerV2({
             <table className="w-full text-sm text-right">
               <thead className="bg-gray-100 border-b border-gray-200 sticky top-0">
                 <tr>
-                  <th className="p-2 w-8" />
+                  {!isDemandMode && <th className="p-2 w-8" />}
                   <th className="p-2 font-medium text-gray-700">מק"ט</th>
                   <th className="p-2 font-medium text-gray-700">תיאור</th>
                   <th className="p-2 font-medium text-gray-700">קטגוריה</th>
                   <th className="p-2 font-medium text-gray-700 text-center">כמות מקורית</th>
                   <th className="p-2 font-medium text-gray-700 text-center">שויך</th>
                   <th className="p-2 font-medium text-gray-700 text-center">נותר</th>
-                  <th className="p-2 font-medium text-gray-700 min-w-[100px]">קבוצות</th>
+                  {isDemandMode ? (
+                    <th className="p-2 font-medium text-gray-700">טיפול מוצר</th>
+                  ) : (
+                    <th className="p-2 font-medium text-gray-700 min-w-[100px]">קבוצות</th>
+                  )}
                   <th className="p-2 font-medium text-gray-700">הערות</th>
                 </tr>
               </thead>
@@ -230,17 +242,19 @@ export function ItemsDrawerV2({
                   const isFullyAllocated = remainingQty <= 0;
                   const isSelected = selectedIds.has(item.id);
                   return (
-                    <tr key={item.id} className={`hover:bg-gray-50 ${isFullyAllocated ? 'opacity-60' : ''}`}>
-                      <td className="p-2">
-                        <button
-                          type="button"
-                          onClick={() => toggleId(item.id)}
-                          disabled={isFullyAllocated}
-                          className={`transition-colors ${isFullyAllocated ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-blue-600'}`}
-                        >
-                          {isSelected ? <CheckSquare size={16} className="text-blue-600" /> : <Square size={16} />}
-                        </button>
-                      </td>
+                    <tr key={item.id} className={`hover:bg-gray-50 ${isFullyAllocated && !isDemandMode ? 'opacity-60' : ''} ${item.isError ? 'bg-red-50' : ''} ${item.isSpecialFlow ? 'bg-amber-50' : ''}`}>
+                      {!isDemandMode && (
+                        <td className="p-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleId(item.id)}
+                            disabled={isFullyAllocated}
+                            className={`transition-colors ${isFullyAllocated ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-blue-600'}`}
+                          >
+                            {isSelected ? <CheckSquare size={16} className="text-blue-600" /> : <Square size={16} />}
+                          </button>
+                        </td>
+                      )}
                       <td className="p-2 font-mono text-xs">{item.sku}</td>
                       <td className="p-2 max-w-[140px] truncate text-xs" title={item.description ?? ''}>{item.description}</td>
                       <td className="p-2">
@@ -249,26 +263,50 @@ export function ItemsDrawerV2({
                       <td className="p-2 font-semibold text-center text-xs">{item.quantity}</td>
                       <td className="p-2 text-center text-xs text-gray-500">{assignedQty > 0 ? assignedQty : '—'}</td>
                       <td className="p-2 text-center text-xs font-semibold">{remainingQty}</td>
-                      <td className="p-2 min-w-[100px]">
-                        {allocs.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {Array.from(new Map(allocs.map((a) => [a.workGroupId, a.workGroupId])).entries()).map(([wgId]) => (
-                              <span
-                                key={wgId}
-                                className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800"
-                              >
-                                {workGroupNameById.get(wgId) ?? wgId.slice(0, 8)}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </td>
+                      {isDemandMode ? (
+                        <td className="p-2 text-xs">
+                          {item.productHandlingFlow && (
+                            <Badge tone={item.isError ? 'danger' : item.isSpecialFlow ? 'warning' : 'neutral'}>
+                              {item.productHandlingFlow}
+                            </Badge>
+                          )}
+                          {item.issues && item.issues.length > 0 && (
+                            <div className="mt-1 space-y-0.5">
+                              {item.issues.slice(0, 2).map((issue, i) => (
+                                <div key={i} className={`text-[10px] ${issue.severity === 'error' ? 'text-red-600' : issue.severity === 'warning' ? 'text-amber-700' : 'text-blue-700'}`}>
+                                  {issue.message}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      ) : (
+                        <td className="p-2 min-w-[100px]">
+                          {allocs.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {Array.from(new Map(allocs.map((a) => [a.workGroupId, a.workGroupId])).entries()).map(([wgId]) => (
+                                <span
+                                  key={wgId}
+                                  className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800"
+                                >
+                                  {workGroupNameById.get(wgId) ?? wgId.slice(0, 8)}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </td>
+                      )}
                       <td className="p-2 text-xs text-gray-500">
                         {item.notes && <div>{item.notes}</div>}
-                        {item.sourceRows && item.sourceRows.length > 0 && (
+                        {!isDemandMode && item.sourceRows && item.sourceRows.length > 0 && (
                           <div className="text-gray-400">שורות: {item.sourceRows.join(', ')}</div>
+                        )}
+                        {isDemandMode && item.planningStatus && (
+                          <div className={`text-[10px] ${item.planningStatus === 'error' ? 'text-red-600' : item.planningStatus === 'special_flow' ? 'text-amber-700' : 'text-gray-400'}`}>
+                            {item.planningStatus}
+                          </div>
                         )}
                       </td>
                     </tr>

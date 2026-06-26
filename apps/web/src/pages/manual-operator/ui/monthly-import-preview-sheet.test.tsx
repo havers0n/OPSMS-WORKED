@@ -38,7 +38,8 @@ vi.mock('@/entities/manual-shift/api/queries', () => ({
 const previewPayload = {
   source: {
     fileName: 'monthly.xlsx',
-    sheetName: 'יוני 26'
+    sheetName: 'יוני 26',
+    availableSheets: ['יוני 26'],
   },
   selectedDate: {
     raw: '14.6.26',
@@ -48,6 +49,7 @@ const previewPayload = {
     totalRows: 4,
     matchingRows: 3,
     skippedOtherDateRows: 1,
+    normalRows: 0,
     availableDates: [
       { raw: '5.6.26', normalized: '2026-06-05', rows: 1 },
       { raw: '14.6.26', normalized: '2026-06-14', rows: 3 }
@@ -95,6 +97,7 @@ const previewPayload = {
       warnings: []
     }
   ],
+  excludedRows: [],
   warnings: [
     {
       severity: 'blocking' as const,
@@ -121,7 +124,7 @@ it('accepts xlsx files', () => {
         onSuccess={() => undefined}
       />
     );
-    expect(screen.getByLabelText('בחר קובץ אקסל חודשי').getAttribute('accept')).toBe(
+    expect(screen.getByLabelText('ייבוא הזמנות לתאריך נבחר').getAttribute('accept')).toBe(
       '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     );
   });
@@ -140,12 +143,12 @@ it('requests preview and renders metrics, dates, anomalies, and lines', async ()
     );
 
     const file = new File(['x'], 'monthly.xlsx');
-    fireEvent.change(screen.getByLabelText('בחר קובץ אקסל חודשי'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('ייבוא הזמנות לתאריך נבחר'), { target: { files: [file] } });
 
     await waitFor(() => expect(monthlyPreviewMutateAsync).toHaveBeenCalledWith(file));
 
-    expect(screen.getByText('תצוגה מקדימה חודשית')).toBeTruthy();
-    expect(screen.getByText('ייבוא חודשי לפי תאריך המשמרת שנבחרה')).toBeTruthy();
+    expect(screen.getAllByText('ייבוא הזמנות לתאריך נבחר').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('תצוגה מקדימה לפי תאריך המשמרת שנבחרה')).toBeTruthy();
     expect(screen.getByText(/monthly.xlsx/)).toBeTruthy();
     expect(screen.getByText(/תאריך משמרת:/)).toBeTruthy();
     expect(screen.getByText(/עמקים/)).toBeTruthy();
@@ -165,7 +168,7 @@ it('shows translated error when preview request fails', async () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText('בחר קובץ אקסל חודשי'), {
+    fireEvent.change(screen.getByLabelText('ייבוא הזמנות לתאריך נבחר'), {
       target: { files: [new File(['x'], 'monthly.xlsx')] }
     });
 
@@ -185,7 +188,7 @@ it('disables apply when blocking warnings exist', async () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText('בחר קובץ אקסל חודשי'), {
+    fireEvent.change(screen.getByLabelText('ייבוא הזמנות לתאריך נבחר'), {
       target: { files: [new File(['x'], 'monthly.xlsx')] }
     });
 
@@ -213,6 +216,7 @@ it('disables apply when blocking warnings exist', async () => {
       skippedZeroQuantityRows: 0,
       appliedTotalQuantity: 3,
       appliedItemLines: 1,
+      excludedRowsCount: 0,
       warningSummary: { info: 0, warning: 0, blocking: 0 },
       warnings: [],
       previewTotals: previewPayload.totals,
@@ -231,7 +235,7 @@ render(
     );
 
     const file = new File(['x'], 'monthly.xlsx');
-    fireEvent.change(screen.getByLabelText('בחר קובץ אקסל חודשי'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('ייבוא הזמנות לתאריך נבחר'), { target: { files: [file] } });
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'אשר ייבוא' })).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: 'אשר ייבוא' }));
@@ -263,6 +267,7 @@ await waitFor(() => expect(monthlyApplyMutateAsync).toHaveBeenCalledWith({ shift
       skippedZeroQuantityRows: 0,
       appliedTotalQuantity: 3,
       appliedItemLines: 1,
+      excludedRowsCount: 0,
       warningSummary: { info: 0, warning: 0, blocking: 0 },
       warnings: [],
       previewTotals: previewPayload.totals,
@@ -281,7 +286,7 @@ await waitFor(() => expect(monthlyApplyMutateAsync).toHaveBeenCalledWith({ shift
     );
 
     const file = new File(['x'], 'monthly.xlsx');
-    fireEvent.change(screen.getByLabelText('בחר קובץ אקסל חודשי'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('ייבוא הזמנות לתאריך נבחר'), { target: { files: [file] } });
 
     await waitFor(() => expect(screen.getByRole('button', { name: /ייבוא מחדש והחלפת עבודה קיימת/ })).toBeTruthy());
     expect(screen.getByText('כבר קיימים קווים והזמנות ליום הזה.')).toBeTruthy();
@@ -325,6 +330,7 @@ await waitFor(() => expect(monthlyApplyMutateAsync).toHaveBeenCalledWith({ shift
       skippedZeroQuantityRows: 0,
       appliedTotalQuantity: 3,
       appliedItemLines: 1,
+      excludedRowsCount: 0,
       warningSummary: { info: 0, warning: 0, blocking: 0 },
       warnings: [],
       previewTotals: previewPayload.totals,
@@ -343,7 +349,7 @@ await waitFor(() => expect(monthlyApplyMutateAsync).toHaveBeenCalledWith({ shift
     );
 
     const file = new File(['x'], 'monthly.xlsx');
-    fireEvent.change(screen.getByLabelText('בחר קובץ אקסל חודשי'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('ייבוא הזמנות לתאריך נבחר'), { target: { files: [file] } });
 
     await waitFor(() => expect(screen.getByRole('button', { name: /ייבוא מחדש והחלפת עבודה קיימת/ })).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: /ייבוא מחדש והחלפת עבודה קיימת/ }));

@@ -107,7 +107,10 @@ import {
   rackSlotLocationRefsResponseSchema as rackSlotLocationRefsResponseDtoSchema,
   manualShiftWorkHierarchyResponseSchema,
   bucketProductRollupResponseSchema,
-  productControlResponseSchema
+  productControlResponseSchema,
+  demandImportAppendDiffResponseSchema as demandImportAppendDiffDtoSchema,
+  demandImportAppendExistingLineSchema,
+  demandImportAppendExistingItemSchema
 } from '@wos/domain';
 
 // ── Rack Inspector ──────────────────────────────────────────────────────────
@@ -599,6 +602,10 @@ export const warehouseLabelPreviewRequestBodySchema = warehouseLabelPreviewReque
 export const warehouseLabelPreviewResponseSchema = warehouseLabelPreviewResponseDtoSchema;
 export const rackSlotLocationRefsResponseSchema = rackSlotLocationRefsResponseDtoSchema;
 export { manualShiftWorkHierarchyResponseSchema, bucketProductRollupResponseSchema, productControlResponseSchema };
+export const demandImportAppendDiffResponseSchema = demandImportAppendDiffDtoSchema;
+export const demandImportAppendDiffRequestSchema = z.object({
+  shiftId: z.string().uuid()
+});
 
 // ── Manual shift print ──────────────────────────────────────────────────────────
 

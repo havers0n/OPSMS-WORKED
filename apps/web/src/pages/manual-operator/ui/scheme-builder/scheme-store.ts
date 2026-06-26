@@ -32,6 +32,11 @@ export interface SchemeBuilderState {
   removeAllocationsForItems: (itemRowIds: string[]) => void;
 
   clearLocalDraft: () => void;
+  hydrateFromDraft: (input: {
+    planningLines: PlanningLine[];
+    workGroups: WorkGroup[];
+    itemAllocations: ItemAllocation[];
+  }) => void;
 
   getPlanningLine: (planningLineId: string) => PlanningLine | undefined;
   getPlanningLinesByArea: (areaName: string) => PlanningLine[];
@@ -215,6 +220,20 @@ export const useSchemeBuilderStore = create<SchemeBuilderState>((set, get) => ({
 
   clearLocalDraft: () => {
     set({ planningLines: [], workGroups: [], itemAllocations: [], selectedAreaName: null, targetWorkGroupId: null });
+  },
+
+  hydrateFromDraft: (input: {
+    planningLines: PlanningLine[];
+    workGroups: WorkGroup[];
+    itemAllocations: ItemAllocation[];
+  }) => {
+    set({
+      planningLines: input.planningLines,
+      workGroups: input.workGroups,
+      itemAllocations: input.itemAllocations,
+      selectedAreaName: null,
+      targetWorkGroupId: null,
+    });
   },
 
   getPlanningLine: (planningLineId: string) => {

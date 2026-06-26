@@ -110,14 +110,14 @@ async function handleApply() {
       <div className="relative flex h-[100dvh] w-full max-w-[430px] flex-col bg-white">
         <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white p-4">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">תצוגה מקדימה חודשית</h2>
-            <p className="text-sm text-gray-500">ייבוא חודשי לפי תאריך המשמרת שנבחרה</p>
+            <h2 className="text-lg font-bold text-gray-900">ייבוא הזמנות לתאריך נבחר</h2>
+            <p className="text-sm text-gray-500">תצוגה מקדימה לפי תאריך המשמרת שנבחרה</p>
           </div>
           <button
             onClick={onClose}
             disabled={isBlocking}
             className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 disabled:opacity-40"
-            aria-label="סגור תצוגה מקדימה חודשית"
+            aria-label="סגור ייבוא הזמנות לתאריך נבחר"
           >
             <X size={20} />
           </button>
@@ -147,13 +147,13 @@ async function handleApply() {
           )}
 
           <div className="space-y-2 rounded-xl border border-gray-200 p-4">
-            <p className="font-medium text-gray-900">בחר קובץ אקסל חודשי</p>
+            <p className="font-medium text-gray-900">ייבוא הזמנות לתאריך נבחר</p>
             <p className="text-sm text-gray-500">תאריך המשמרת שנבחר: {selectedDate}</p>
             <input
               type="file"
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               disabled={isBlocking}
-              aria-label="בחר קובץ אקסל חודשי"
+              aria-label="ייבוא הזמנות לתאריך נבחר"
               onChange={handleFileInputChange}
               className="w-full text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white disabled:opacity-50"
             />
@@ -162,7 +162,7 @@ async function handleApply() {
           {previewMutation.isPending && (
             <div className="flex items-center gap-2 rounded-xl border border-gray-200 p-4 text-sm text-gray-700">
               <Loader2 size={16} className="animate-spin" />
-              מחשב תצוגה מקדימה חודשית...
+              מחשב תצוגה מקדימה...
             </div>
           )}
 
@@ -183,12 +183,18 @@ async function handleApply() {
                   label="תאריך בקובץ"
                   value={preview.selectedDate.raw ?? 'לא נמצא תאריך בקובץ'}
                 />
+                <StatRow label="גיליונות בקובץ" value={preview.source.availableSheets.join(', ')} />
+                {preview.source.availableSheets.length > 1 && (
+                  <p className="text-xs text-amber-700">הקובץ כולל גיליונות נוספים שלא יובאו בפעולה זו</p>
+                )}
               </div>
 
               <div className="rounded-xl border border-gray-200 p-4 text-sm space-y-1">
                 <p className="font-medium text-gray-900">סיכום תאריכים</p>
                 <StatRow label="סה&quot;כ שורות" value={preview.dateSummary.totalRows} />
                 <StatRow label="שורות תואמות" value={preview.dateSummary.matchingRows} />
+                <StatRow label="שורות רגילות לייבוא" value={preview.dateSummary.normalRows} />
+                <StatRow label="שורות מתאריך אחר שנדחו" value={preview.dateSummary.skippedOtherDateRows} />
               </div>
 
               <div className="rounded-xl border border-gray-200 p-4">
@@ -218,7 +224,8 @@ async function handleApply() {
                   <div>SKU ייחודיים: {preview.totals.uniqueSkus}</div>
                   <div>כמות כוללת באקסל: {preview.totals.rawTotalQuantity}</div>
                   <div>כמות חיובית (תיכנס לעבודה): {preview.totals.positiveTotalQuantity}</div>
-                  <div>שורות חיוביות: {preview.totals.positiveQuantityRowsCount}</div>
+                  <div>שורות חיוביות רגילות: {preview.dateSummary.normalRows}</div>
+                  <div>שורות חיוביות (סה&quot;כ): {preview.totals.positiveQuantityRowsCount}</div>
                   <div>שורות שליליות שנדחו: {preview.totals.negativeQuantityRowsCount}</div>
                   <div>שורות אפס שנדחו: {preview.totals.zeroQuantityRowsCount}</div>
                 </div>
@@ -230,12 +237,34 @@ async function handleApply() {
                   <div>שורות שאינן SO: {preview.anomalies.nonSoOrderRows}</div>
                   <div>שורות ללא / בערך הפצה: {preview.anomalies.rowsWithoutDistributionSlash}</div>
                   <div>שורות fallback: {preview.anomalies.pointFallbackRows}</div>
-                  <div>שורות הערת איסוף: {preview.anomalies.pickupNoteRows}</div>
-                  <div>שורות הערת השלמה: {preview.anomalies.ashlamaNoteRows}</div>
+                  <div>שורות special flow שנדחו: {preview.anomalies.specialFlowRowCount}</div>
                   <div>שורות עם תאריך הפצה לא תקין: {preview.anomalies.invalidDistributionDateRows.length}</div>
                   <div className="col-span-2">שדות חובה חסרים: {preview.anomalies.missingRequiredFields.length}</div>
                 </div>
               </div>
+
+              {preview.excludedRows.length > 0 && (
+                <div className="rounded-xl border border-amber-200 p-4">
+                  <p className="mb-2 text-sm font-medium text-amber-900">
+                    שורות שלא יובאו ({preview.excludedRows.length})
+                  </p>
+                  <div className="max-h-40 space-y-1 overflow-y-auto text-xs text-gray-700">
+                    {preview.excludedRows.map((row) => (
+                      <div key={row.sourceRowNumber} className="flex items-center gap-2">
+                        <span className="shrink-0 rounded bg-amber-100 px-1 font-mono">
+                          #{row.sourceRowNumber}
+                        </span>
+                        <span className="shrink-0 rounded bg-gray-100 px-1 text-amber-800">
+                          {row.exclusionReason}
+                        </span>
+                        <span className="truncate">
+                          {row.orderNumber ?? ''} {row.sku ?? ''} {row.customerName ?? ''}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {preview.warnings.length > 0 && (
                 <div className="space-y-2">

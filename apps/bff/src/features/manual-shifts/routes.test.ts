@@ -634,6 +634,27 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
       buckets: [],
       allocations: []
     })),
+    computeDemandImportAppendDiff: vi.fn(async () => ({
+      shiftId: ids.shift,
+      batchId: ids.shift,
+      existingLines: [],
+      summary: {
+        totalRows: 0,
+        newRows: 0,
+        alreadyExistsRows: 0,
+        quantityChangedRows: 0,
+        duplicateRows: 0,
+        specialFlowRows: 0,
+        requiresReviewRows: 0,
+        newOrders: 0
+      },
+      newOrders: [],
+      alreadyExistsOrders: [],
+      quantityChangedOrders: [],
+      duplicateOrders: [],
+      specialFlowOrders: [],
+      requiresReviewOrders: []
+    })),
     ...overrides
   };
 }

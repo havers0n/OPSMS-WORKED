@@ -1,4 +1,4 @@
-import type { ManualShiftOrderStatus } from '@wos/domain';
+import type { ManualShiftOrderStatus, DemandImportIssue, RawDemandProductHandlingFlow, RawDemandPlanningStatus } from '@wos/domain';
 
 export interface SourceDeliveryLine {
   lineId: string;
@@ -34,6 +34,11 @@ export interface SourceOrderItem {
   zone: string | null;
   sourceRows: number[] | null;
   sourceFile: string | null;
+  productHandlingFlow?: RawDemandProductHandlingFlow;
+  planningStatus?: RawDemandPlanningStatus;
+  issues?: DemandImportIssue[];
+  isSpecialFlow?: boolean;
+  isError?: boolean;
 }
 
 export interface SourceArea {

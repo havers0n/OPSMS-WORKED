@@ -1,10 +1,12 @@
-﻿import { useState, useMemo, useCallback } from 'react';
+﻿import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import { workHierarchyQueryOptions, orderItemsQueryOptions } from '@/entities/manual-shift/api/queries';
+import { demandPlanningPreviewQueryOptions, demandPlanningDraftQueryOptions } from '@/entities/demand/api/queries';
 import { useSchemeBuilderStore } from './scheme-store';
 import { adaptWorkHierarchyToSource, adaptOrderItemsToSource } from './source-data-adapter';
-import type { SourceOrderItem, OrderBadgeStatus } from './scheme-types';
+import { adaptDemandPlanningPreviewToSource } from './demand-source-adapter';
+import type { SourceOrderItem, OrderBadgeStatus, PlanningLine, WorkGroup, ItemAllocation } from './scheme-types';
 import { AreaOverview } from './area-overview';
 import { WorkGroupWorkspace } from './work-group-workspace';
 import { ItemsDrawerV2 } from './items-drawer-v2';
@@ -15,8 +17,48 @@ import { PublishSummary } from './publish-summary';
 import { filterOrdersBySearch, filterOrdersByStatus } from './order-list-utils';
 import { OrderCard } from './order-card';
 
-export function SchemeBuilder({ shiftId }: { shiftId: string }) {
-  const { data: hierarchy, isLoading, error } = useQuery(workHierarchyQueryOptions(shiftId));
+interface ShiftModeProps {
+  mode?: 'shift';
+  shiftId: string;
+  batchId?: never;
+  draftId?: never;
+}
+
+interface DemandModeProps {
+  mode: 'demand';
+  batchId: string;
+  draftId: string;
+  shiftId?: never;
+}
+
+export type SchemeBuilderProps = ShiftModeProps | DemandModeProps;
+
+export function SchemeBuilder(props: SchemeBuilderProps) {
+  const isDemandMode = props.mode === 'demand';
+  const shiftId = !isDemandMode ? (props as ShiftModeProps).shiftId : undefined;
+  const batchId = isDemandMode ? (props as DemandModeProps).batchId : undefined;
+  const draftId = isDemandMode ? (props as DemandModeProps).draftId : undefined;
+
+  const {
+    data: hierarchy, isLoading: hierarchyLoading, error: hierarchyError
+  } = useQuery({
+    ...workHierarchyQueryOptions(shiftId ?? ''),
+    enabled: !isDemandMode && !!shiftId,
+  });
+
+  const {
+    data: planningPreview, isLoading: previewLoading, error: previewError
+  } = useQuery({
+    ...demandPlanningPreviewQueryOptions(batchId ?? ''),
+    enabled: isDemandMode && !!batchId,
+  });
+
+  const {
+    data: draftWithAssignments, isLoading: draftLoading, error: draftError
+  } = useQuery({
+    ...demandPlanningDraftQueryOptions(draftId ?? ''),
+    enabled: isDemandMode && !!draftId,
+  });
 
   const selectedAreaName = useSchemeBuilderStore((s) => s.selectedAreaName);
   const setSelectedArea = useSchemeBuilderStore((s) => s.setSelectedArea);
@@ -27,6 +69,8 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
   const setTargetWorkGroup = useSchemeBuilderStore((s) => s.setTargetWorkGroup);
   const getWorkGroup = useSchemeBuilderStore((s) => s.getWorkGroup);
   const getAssignedQty = useSchemeBuilderStore((s) => s.getAssignedQty);
+  const hydrateFromDraft = useSchemeBuilderStore((s) => s.hydrateFromDraft);
+  const clearLocalDraft = useSchemeBuilderStore((s) => s.clearLocalDraft);
 
   const [drawerOrderId, setDrawerOrderId] = useState<string | null>(null);
   const [assignItemIds, setAssignItemIds] = useState<string[]>([]);
@@ -43,38 +87,115 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | OrderBadgeStatus>('all');
 
-  const source = useMemo(() => {
+  /* ---------- Shift-mode data ---------- */
+  const shiftSource = useMemo(() => {
     if (!hierarchy) return null;
     return adaptWorkHierarchyToSource(hierarchy);
   }, [hierarchy]);
 
-  const { data: rawItems, isLoading: itemsLoading, isError: itemsError } = useQuery({
+  const { data: rawItems } = useQuery({
     ...orderItemsQueryOptions(drawerOrderId ?? ''),
-    enabled: !!drawerOrderId,
+    enabled: !isDemandMode && !!drawerOrderId,
   });
 
-  const drawerItems: SourceOrderItem[] = useMemo(() => {
+  const drawerItemsShift: SourceOrderItem[] = useMemo(() => {
     if (!rawItems) return [];
     return adaptOrderItemsToSource(rawItems);
   }, [rawItems]);
 
+  /* ---------- Demand-mode data ---------- */
+  const demandSource = useMemo(() => {
+    if (!isDemandMode || !planningPreview || !batchId) return null;
+    return adaptDemandPlanningPreviewToSource(planningPreview, batchId);
+  }, [isDemandMode, planningPreview, batchId]);
+
+  /* Hydrate draft into store when data arrives */
+  const lastDraftKey = useMemo(() => {
+    if (!isDemandMode || !draftWithAssignments) return null;
+    return `${draftWithAssignments.draft.id}:${draftWithAssignments.allocations.length}:${draftWithAssignments.buckets.length}`;
+  }, [isDemandMode, draftWithAssignments]);
+
+  useEffect(() => {
+    if (!isDemandMode || !draftWithAssignments) return;
+    const { buckets, allocations } = draftWithAssignments;
+
+    const planningLines: PlanningLine[] = buckets.map((b) => ({
+      id: b.id,
+      areaName: b.distributionArea ?? '__missing__',
+      name: b.planningLineName,
+      sortOrder: b.sortOrder,
+      createdAt: new Date(b.createdAt).getTime(),
+    }));
+
+    const workGroups: WorkGroup[] = buckets.map((b) => ({
+      id: b.id,
+      planningLineId: b.id,
+      areaName: b.distributionArea ?? '__missing__',
+      name: b.bucketName,
+      createdAt: new Date(b.createdAt).getTime(),
+    }));
+
+    const itemAllocations: ItemAllocation[] = allocations.map((a) => ({
+      id: a.id,
+      itemRowId: a.rawDemandRowId,
+      workGroupId: a.bucketId,
+      qty: a.allocatedQuantity,
+      createdAt: new Date(a.createdAt).getTime(),
+    }));
+
+    hydrateFromDraft({ planningLines, workGroups, itemAllocations });
+  }, [isDemandMode, lastDraftKey]);
+
+  /* Cleanup when leaving demand mode */
+  useEffect(() => {
+    return () => {
+      clearLocalDraft();
+    };
+  }, [isDemandMode]);
+
+  /* Share orderItemMap between shift and demand modes */
   const orderItemMap = useMemo(() => {
+    if (isDemandMode && demandSource) {
+      return demandSource.orderItemMap;
+    }
     const map: Record<string, SourceOrderItem[]> = {};
-    if (drawerOrderId && drawerItems.length > 0) {
-      map[drawerOrderId] = drawerItems;
+    if (!isDemandMode && drawerOrderId && drawerItemsShift.length > 0) {
+      map[drawerOrderId] = drawerItemsShift;
     }
     return map;
-  }, [drawerOrderId, drawerItems]);
+  }, [isDemandMode, demandSource, drawerOrderId, drawerItemsShift]);
 
   const drawerOrder = useMemo(() => {
-    if (!source || !drawerOrderId) return null;
-    return source.orders.find((o) => o.orderId === drawerOrderId) ?? null;
-  }, [source, drawerOrderId]);
+    if (!isDemandMode && shiftSource && drawerOrderId) {
+      return shiftSource.orders.find((o) => o.orderId === drawerOrderId) ?? null;
+    }
+    if (isDemandMode && demandSource && drawerOrderId) {
+      return demandSource.orders.find((o) => o.orderId === drawerOrderId)
+        ?? demandSource.specialFlowOrders.find((o) => o.orderId === drawerOrderId)
+        ?? demandSource.errorOrders.find((o) => o.orderId === drawerOrderId)
+        ?? null;
+    }
+    return null;
+  }, [isDemandMode, shiftSource, demandSource, drawerOrderId]);
+
+  const drawerItems: SourceOrderItem[] = useMemo(() => {
+    if (isDemandMode && demandSource && drawerOrderId) {
+      return demandSource.orderItemMap[drawerOrderId] ?? [];
+    }
+    return drawerItemsShift;
+  }, [isDemandMode, demandSource, drawerOrderId, drawerItemsShift]);
+
+  const allOrders = useMemo(() => {
+    if (isDemandMode && demandSource) {
+      return [...demandSource.orders, ...demandSource.specialFlowOrders, ...demandSource.errorOrders];
+    }
+    return shiftSource?.orders ?? [];
+  }, [isDemandMode, demandSource, shiftSource]);
 
   const areaOrders = useMemo(() => {
-    if (!source || !selectedAreaName) return [];
-    return source.orders.filter((o) => o.areaName === selectedAreaName);
-  }, [source, selectedAreaName]);
+    if (!allOrders || !selectedAreaName) return [];
+    return allOrders.filter((o) => o.areaName === selectedAreaName);
+  }, [allOrders, selectedAreaName]);
 
   const searchFilteredOrders = useMemo(() => {
     return filterOrdersBySearch(areaOrders, searchQuery, orderItemMap);
@@ -99,11 +220,13 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
   }, []);
 
   const handleOpenQuantityModal = useCallback((itemRowIds: string[], workGroupId: string) => {
+    if (isDemandMode) return;
     setQuantityModalState({ itemRowIds, workGroupId });
-  }, []);
+  }, [isDemandMode]);
 
   const handleConfirmAllocations = useCallback(
     (allocations: { itemRowId: string; qty: number }[], workGroupId: string) => {
+      if (isDemandMode) return;
       for (const alloc of allocations) {
         const item = drawerItems.find((i) => i.id === alloc.itemRowId);
         if (!item) continue;
@@ -117,10 +240,11 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
       setQuantityModalState(null);
       setAssignItemIds([]);
     },
-    [allocateItemQty, drawerItems],
+    [allocateItemQty, drawerItems, isDemandMode],
   );
 
   const handleAssignSelected = useCallback((itemRowIds: string[]) => {
+    if (isDemandMode) return;
     if (targetWorkGroupId) {
       handleOpenQuantityModal(itemRowIds, targetWorkGroupId);
       return;
@@ -128,9 +252,10 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
     setAssignItemIds(itemRowIds);
     setIsWholeOrderAssign(false);
     setShowAssignModal(true);
-  }, [targetWorkGroupId, handleOpenQuantityModal]);
+  }, [isDemandMode, targetWorkGroupId, handleOpenQuantityModal]);
 
   const handleAssignAllUnassigned = useCallback((itemRowIds: string[]) => {
+    if (isDemandMode) return;
     if (targetWorkGroupId) {
       allocateItemRows(itemRowIds, targetWorkGroupId, orderItemMap);
       return;
@@ -138,10 +263,11 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
     setAssignItemIds(itemRowIds);
     setIsWholeOrderAssign(true);
     setShowAssignModal(true);
-  }, [targetWorkGroupId, allocateItemRows, orderItemMap]);
+  }, [isDemandMode, targetWorkGroupId, allocateItemRows, orderItemMap]);
 
   const handleConfirmAssign = useCallback(
     (workGroupId: string) => {
+      if (isDemandMode) return;
       if (isWholeOrderAssign) {
         allocateItemRows(assignItemIds, workGroupId, orderItemMap);
         setAssignItemIds([]);
@@ -151,19 +277,20 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
         setIsWholeOrderAssign(false);
       }
     },
-    [assignItemIds, isWholeOrderAssign, allocateItemRows, handleOpenQuantityModal, orderItemMap],
+    [isDemandMode, assignItemIds, isWholeOrderAssign, allocateItemRows, handleOpenQuantityModal, orderItemMap],
   );
 
   const handleStartAssign = useCallback((workGroupId: string) => {
+    if (isDemandMode) return;
     setTargetWorkGroup(workGroupId);
-  }, [setTargetWorkGroup]);
+  }, [isDemandMode, setTargetWorkGroup]);
 
   const handleCancelTarget = useCallback(() => {
     setTargetWorkGroup(null);
   }, [setTargetWorkGroup]);
 
   const quantityModalRows = useMemo(() => {
-    if (!quantityModalState) return [];
+    if (!quantityModalState || isDemandMode) return [];
     return quantityModalState.itemRowIds.map((id) => {
       const item = drawerItems.find((i) => i.id === id);
       const assignedQty = getAssignedQty(id);
@@ -173,13 +300,16 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
         assignedQty,
       };
     }).filter((r) => r.item);
-  }, [quantityModalState, drawerItems, getAssignedQty]);
+  }, [quantityModalState, isDemandMode, drawerItems, getAssignedQty]);
+
+  const isLoading = isDemandMode ? (previewLoading || draftLoading) : hierarchyLoading;
+  const error = isDemandMode ? (previewError || draftError) : hierarchyError;
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20 text-gray-500" dir="rtl">
         <div className="animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full ml-2" />
-        טוען נתוני משמרת...
+        {isDemandMode ? 'טוען נתוני תכנון...' : 'טוען נתוני משמרת...'}
       </div>
     );
   }
@@ -193,7 +323,15 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
     );
   }
 
-  if (!source) {
+  if (isDemandMode && !demandSource) {
+    return (
+      <div className="flex items-center justify-center py-20 text-gray-500" dir="rtl">
+        לא התקבלו נתוני תכנון
+      </div>
+    );
+  }
+
+  if (!isDemandMode && !shiftSource) {
     return (
       <div className="flex items-center justify-center py-20 text-gray-500" dir="rtl">
         לא התקבלו נתונים
@@ -201,8 +339,20 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
     );
   }
 
+  const source = isDemandMode ? demandSource! : shiftSource!;
+
   return (
     <div className="flex-1 flex flex-col bg-gray-50" dir="rtl">
+
+      {/* Demand mode banner */}
+      {isDemandMode && (
+        <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-2 text-sm">
+          <p className="font-bold text-amber-900">תכנון ביקוש גולמי — לא שויך למשמרת</p>
+          <p className="text-xs text-amber-700 mt-0.5">
+            הנתונים מגיעים מ-DataSheet ונמצאים בשלב תכנון בלבד
+          </p>
+        </div>
+      )}
 
       {/* Compact toolbar — area selector pills */}
       <div className="shrink-0 border-b border-gray-200 bg-white px-3 py-1.5">
@@ -217,20 +367,48 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
       <main className="flex-1 flex overflow-hidden">
         {/* Left rail (appears on the right in RTL) */}
         <aside className="w-64 shrink-0 border-e border-gray-200 bg-gray-50 p-2 flex flex-col gap-2 overflow-y-auto">
-          <PublishSummary
-            orders={source.orders}
-            orderItemMap={orderItemMap}
-          />
+          {!isDemandMode && (
+            <PublishSummary
+              orders={source.orders}
+              orderItemMap={orderItemMap}
+            />
+          )}
 
-          <ProblemQueue
-            orders={areaOrders.length > 0 ? areaOrders : source.orders}
-            orderItemMap={orderItemMap}
-          />
+          {isDemandMode ? (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm space-y-1">
+              <p className="font-bold text-blue-800">תצוגת תכנון בלבד</p>
+              <p className="text-xs text-blue-700">
+                אזורים: {source.areas.length} | הזמנות: {source.orders.length} | סה"כ כמות:{' '}
+                {source.orders.reduce((s, o) => s + o.totalQuantity, 0)}
+              </p>
+              {demandSource && demandSource.specialFlowItems.length > 0 && (
+                <p className="text-xs text-amber-700">
+                  Special Flow: {demandSource.specialFlowItems.length} שורות
+                </p>
+              )}
+              {demandSource && demandSource.errorItems.length > 0 && (
+                <p className="text-xs text-red-600">
+                  שגיאות: {demandSource.errorItems.length} שורות
+                </p>
+              )}
+              {draftWithAssignments && (
+                <>
+                  <p className="text-xs text-blue-700">קבוצות: {draftWithAssignments.buckets.length}</p>
+                  <p className="text-xs text-blue-700">שיוכים: {draftWithAssignments.allocations.length}</p>
+                </>
+              )}
+            </div>
+          ) : (
+            <ProblemQueue
+              orders={areaOrders.length > 0 ? areaOrders : source.orders}
+              orderItemMap={orderItemMap}
+            />
+          )}
         </aside>
 
         {/* Center board */}
         <div className="flex-1 flex flex-col min-h-0">
-          {targetWg && (
+          {!isDemandMode && targetWg && (
             <div className="shrink-0 flex items-center gap-2 bg-blue-50 border-b border-blue-200 px-3 py-1.5 text-sm">
               <span className="font-bold text-blue-800">קבוצת יעד: {targetWg.name}</span>
               <span className="text-blue-600">— בחר הזמנה ושורות לשיוך</span>
@@ -252,6 +430,7 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
                 selectedAreaName={selectedAreaName}
                 orderItemMap={orderItemMap}
                 onStartAssign={handleStartAssign}
+                isDemandMode={isDemandMode}
               />
             ) : (
               <div className="bg-white border border-dashed border-gray-300 rounded-lg p-6 text-center">
@@ -342,31 +521,36 @@ export function SchemeBuilder({ shiftId }: { shiftId: string }) {
         <ItemsDrawerV2
           order={drawerOrder}
           items={drawerItems}
-          isLoading={itemsLoading}
-          isError={itemsError}
+          isLoading={false}
+          isError={false}
           onClose={handleCloseItemsDrawer}
           onAssignSelected={handleAssignSelected}
           onAssignAllUnassigned={handleAssignAllUnassigned}
-          targetWorkGroupName={targetWg?.name ?? null}
+          targetWorkGroupName={!isDemandMode ? (targetWg?.name ?? null) : null}
+          isDemandMode={isDemandMode}
         />
       )}
 
-      <AssignModalV2
-        isOpen={showAssignModal}
-        onClose={() => { setShowAssignModal(false); setAssignItemIds([]); setIsWholeOrderAssign(false); }}
-        targetAreaName={selectedAreaName}
-        itemCount={assignItemIds.length}
-        onAssign={handleConfirmAssign}
-      />
+      {!isDemandMode && (
+        <>
+          <AssignModalV2
+            isOpen={showAssignModal}
+            onClose={() => { setShowAssignModal(false); setAssignItemIds([]); setIsWholeOrderAssign(false); }}
+            targetAreaName={selectedAreaName}
+            itemCount={assignItemIds.length}
+            onAssign={handleConfirmAssign}
+          />
 
-      {quantityModalState && (
-        <QuantityAllocationModal
-          isOpen={true}
-          onClose={() => { setQuantityModalState(null); setAssignItemIds([]); }}
-          itemRows={quantityModalRows}
-          workGroupName={getWorkGroup(quantityModalState.workGroupId)?.name ?? ''}
-          onConfirm={(allocs) => handleConfirmAllocations(allocs, quantityModalState.workGroupId)}
-        />
+          {quantityModalState && (
+            <QuantityAllocationModal
+              isOpen={true}
+              onClose={() => { setQuantityModalState(null); setAssignItemIds([]); }}
+              itemRows={quantityModalRows}
+              workGroupName={getWorkGroup(quantityModalState.workGroupId)?.name ?? ''}
+              onConfirm={(allocs) => handleConfirmAllocations(allocs, quantityModalState.workGroupId)}
+            />
+          )}
+        </>
       )}
     </div>
   );

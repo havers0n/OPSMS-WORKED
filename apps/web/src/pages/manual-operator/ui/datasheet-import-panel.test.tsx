@@ -2,10 +2,22 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import { DatasheetImportPanel } from './datasheet-import-panel';
 
 const previewMutateAsync = vi.fn();
 const createMutateAsync = vi.fn();
+const createDraftMutate = vi.fn();
+
+const mockNavigate = vi.fn();
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  };
+});
 
 vi.mock('@/entities/demand/api/mutations', () => ({
   usePreviewDataSheetDemandImport: () => ({
@@ -17,14 +29,38 @@ vi.mock('@/entities/demand/api/mutations', () => ({
     mutateAsync: createMutateAsync,
     isPending: false,
     error: null
+  }),
+  useCreateDemandPlanningDraft: () => ({
+    mutate: createDraftMutate,
+    isPending: false,
+    error: null
   })
 }));
 
+const mockPlanningPreviewData = {
+  batch: { id: 'test-batch-id', sourceFile: 'datasheet.xlsx', sourceSheet: 'DataSheet', uploadedAt: '2026-06-24T12:00:00.000Z', status: 'ready', rowsCount: 10, rawRowsCount: 7, warningRowsCount: 2, errorRowsCount: 1, specialFlowRowsCount: 1, distributionAreasCount: 2, distinctOrdersCount: 5, distinctSkuCount: 8 },
+  summary: { rowsCount: 10, normalRowsCount: 7, specialFlowRowsCount: 1, errorRowsCount: 1, distributionAreasCount: 2, ordersCount: 5, skuCount: 8, totalQuantity: 180 },
+  distributionAreas: [
+    { distributionArea: 'דרום', rowsCount: 5, ordersCount: 3, skuCount: 4, totalQuantity: 100, specialFlowRowsCount: 0, errorRowsCount: 0, orders: [], productSummary: [], issues: [] },
+    { distributionArea: 'צפון', rowsCount: 5, ordersCount: 2, skuCount: 4, totalQuantity: 80, specialFlowRowsCount: 1, errorRowsCount: 0, orders: [], productSummary: [], issues: [] },
+  ],
+  specialFlows: [],
+  errors: [],
+};
+
 vi.mock('@/entities/demand/api/queries', () => ({
-  demandPlanningPreviewQueryOptions: () => ({
-    queryKey: ['demand-import', 'planning-preview', 'test-batch-id'],
-    queryFn: vi.fn()
-  })
+  demandPlanningPreviewQueryOptions: (batchId: string) => ({
+    queryKey: ['demand-import', 'planning-preview', batchId],
+    queryFn: () => mockPlanningPreviewData,
+    enabled: !!batchId,
+    staleTime: 30_000,
+  }),
+  demandPlanningDraftQueryOptions: (draftId: string) => ({
+    queryKey: ['demand-import', 'draft', draftId],
+    queryFn: () => ({}),
+    enabled: !!draftId,
+    staleTime: 30_000,
+  }),
 }));
 
 function renderPanel() {
@@ -32,9 +68,11 @@ function renderPanel() {
     defaultOptions: { queries: { retry: false } }
   });
   return render(
-    <QueryClientProvider client={queryClient}>
-      <DatasheetImportPanel />
-    </QueryClientProvider>
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <DatasheetImportPanel />
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 
@@ -226,6 +264,89 @@ describe('DatasheetPlanningPreview', () => {
 
     await waitFor(() => {
       expect(container.textContent).toContain('Batch ID: test-batch-id');
+    });
+  });
+});
+
+describe('Demand mode "פתח תכנון ב-Lines" button', () => {
+  it('appears after planning preview loads', async () => {
+    previewMutateAsync.mockResolvedValueOnce(previewPayload);
+    createMutateAsync.mockResolvedValueOnce(createResponse);
+    renderPanel();
+
+    const fileInput = screen.getByLabelText('בחר קובץ DataSheet');
+    const file = new File(['test'], 'datasheet.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('שמור ביקוש גולמי')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText('שמור ביקוש גולמי'));
+
+    await waitFor(() => {
+      expect(screen.getByText('פתח תכנון ב-Lines')).toBeTruthy();
+    });
+  });
+
+  it('calls createDemandPlanningDraft on click and navigates', async () => {
+    previewMutateAsync.mockResolvedValueOnce(previewPayload);
+    createMutateAsync.mockResolvedValueOnce(createResponse);
+
+    const draftResult = {
+      draft: { id: 'draft-1111-1111-1111' },
+      buckets: [],
+      allocations: [],
+    };
+    createDraftMutate.mockImplementation((_batchId: string, opts?: { onSuccess?: (result: unknown) => void }) => {
+      if (opts?.onSuccess) opts.onSuccess(draftResult);
+    });
+
+    renderPanel();
+
+    const fileInput = screen.getByLabelText('בחר קובץ DataSheet');
+    const file = new File(['test'], 'datasheet.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('שמור ביקוש גולמי')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText('שמור ביקוש גולמי'));
+
+    await waitFor(() => {
+      expect(screen.getByText('פתח תכנון ב-Lines')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText('פתח תכנון ב-Lines'));
+
+    expect(createDraftMutate).toHaveBeenCalledWith('test-batch-id', expect.any(Object));
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith(
+        '/operator/manual/lines?batchId=test-batch-id&draftId=draft-1111-1111-1111'
+      );
+    });
+  });
+
+  it('button shows initial state', async () => {
+    previewMutateAsync.mockResolvedValueOnce(previewPayload);
+    createMutateAsync.mockResolvedValueOnce(createResponse);
+    renderPanel();
+
+    const fileInput = screen.getByLabelText('בחר קובץ DataSheet');
+    const file = new File(['test'], 'datasheet.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('שמור ביקוש גולמי')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText('שמור ביקוש גולמי'));
+
+    await waitFor(() => {
+      const btn = screen.getByText('פתח תכנון ב-Lines');
+      expect(btn).toBeTruthy();
+      expect(btn.closest('button')).toHaveProperty('disabled', false);
     });
   });
 });

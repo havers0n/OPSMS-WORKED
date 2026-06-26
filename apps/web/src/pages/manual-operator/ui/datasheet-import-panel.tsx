@@ -1,18 +1,22 @@
 import { useState, type ChangeEvent } from 'react';
 import type { DemandImportDataSheetPreview, DemandImportDataSheetCreateResponse, RawDemandPlanningPreview } from '@wos/domain';
-import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, ExternalLink } from 'lucide-react';
 import {
   usePreviewDataSheetDemandImport,
-  useCreateDataSheetDemandImport
+  useCreateDataSheetDemandImport,
+  useCreateDemandPlanningDraft
 } from '@/entities/demand/api/mutations';
 import { useQuery } from '@tanstack/react-query';
 import { demandPlanningPreviewQueryOptions } from '@/entities/demand/api/queries';
 import { BffRequestError } from '@/shared/api/bff/client';
 import { translateBffError } from '@/shared/i18n';
+import { useNavigate } from 'react-router-dom';
 
 export function DatasheetImportPanel() {
+  const navigate = useNavigate();
   const previewMutation = usePreviewDataSheetDemandImport();
   const createMutation = useCreateDataSheetDemandImport();
+  const createDraftMutation = useCreateDemandPlanningDraft();
 
   const [preview, setPreview] = useState<DemandImportDataSheetPreview | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -313,6 +317,28 @@ export function DatasheetImportPanel() {
 
       {planningPreview && (
         <DatasheetPlanningPreviewContent preview={planningPreview} />
+      )}
+
+      {planningPreview && batchId && (
+        <button
+          type="button"
+          onClick={() => {
+            createDraftMutation.mutate(batchId, {
+              onSuccess: (result) => {
+                navigate(`/operator/manual/lines?batchId=${batchId}&draftId=${result.draft.id}`);
+              },
+            });
+          }}
+          disabled={createDraftMutation.isPending}
+          className="w-full min-h-12 rounded-xl bg-amber-600 text-white font-medium disabled:opacity-40 hover:bg-amber-700 transition-colors flex items-center justify-center gap-2"
+        >
+          {createDraftMutation.isPending ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : (
+            <ExternalLink size={16} />
+          )}
+          {createDraftMutation.isPending ? 'יוצר תכנון...' : 'פתח תכנון ב-Lines'}
+        </button>
       )}
 
       {(previewErrorCode || createErrorCode) && <span className="hidden">{previewErrorCode ?? createErrorCode}</span>}

@@ -9,10 +9,12 @@ export function PlanningLineSection({
   planningLine,
   orderItemMap,
   onStartAssign,
+  isDemandMode = false,
 }: {
   planningLine: PlanningLine;
   orderItemMap: Record<string, SourceOrderItem[]>;
   onStartAssign: (workGroupId: string) => void;
+  isDemandMode?: boolean;
 }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -58,7 +60,7 @@ export function PlanningLineSection({
       <div className="bg-gray-100 px-2 py-1.5 border-b border-gray-200 flex justify-between items-center">
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-2 h-2 rounded-full bg-indigo-500 block shrink-0" />
-          {isRenaming ? (
+          {!isDemandMode && isRenaming ? (
             <input
               autoFocus
               className="border border-gray-300 rounded px-2 py-0.5 text-sm font-bold w-36 focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -70,47 +72,51 @@ export function PlanningLineSection({
             />
           ) : (
             <h3
-              className="text-sm font-bold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
-              onClick={() => { setRenameValue(planningLine.name); setIsRenaming(true); }}
-              title="לחץ לשינוי שם"
+              className={`text-sm font-bold ${isDemandMode ? 'text-gray-700' : 'text-gray-900 cursor-pointer hover:text-blue-600 transition-colors'}`}
+              onClick={() => { if (!isDemandMode) { setRenameValue(planningLine.name); setIsRenaming(true); } }}
+              title={isDemandMode ? undefined : 'לחץ לשינוי שם'}
             >
               {planningLine.name}
             </h3>
           )}
           <span className="text-[11px] text-gray-400">קו עבודה</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={12} />
-            קבוצת עבודה
-          </button>
-          <button
-            type="button"
-            onClick={handleDeleteClick}
-            className="text-gray-400 hover:text-red-600 transition-colors p-1"
-            title="מחק קו עבודה"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
+        {!isDemandMode && (
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            >
+              <Plus size={12} />
+              קבוצת עבודה
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteClick}
+              className="text-gray-400 hover:text-red-600 transition-colors p-1"
+              title="מחק קו עבודה"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="p-2">
         {lineGroups.length === 0 ? (
           <div className="text-center py-2">
             <p className="text-xs text-gray-500 mb-2">אין קבוצות עבודה בקו זה</p>
-            <button
-              type="button"
-              onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-            >
-              <Plus size={12} />
-              צור קבוצת עבודה
-            </button>
+            {!isDemandMode && (
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(true)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+              >
+                <Plus size={12} />
+                צור קבוצת עבודה
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5">
@@ -120,6 +126,7 @@ export function PlanningLineSection({
                 workGroup={wg}
                 orderItemMap={orderItemMap}
                 onStartAssign={onStartAssign}
+                isDemandMode={isDemandMode}
               />
             ))}
           </div>

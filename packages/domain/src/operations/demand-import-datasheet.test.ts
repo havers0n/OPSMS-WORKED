@@ -394,3 +394,234 @@ describe('raw demand planning preview builder', () => {
     ]);
   });
 });
+
+// ──── computeDemandImportAppendDiff tests ─────────────────────────────────
+
+import {
+  computeDemandImportAppendDiff,
+  demandImportAppendDiffResponseSchema
+} from './demand-import-datasheet';
+
+import type {
+  DemandImportAppendExistingLine,
+  DemandImportAppendExistingItem,
+  RawDemandRow
+} from './demand-import-datasheet';
+
+function makeRawRow(overrides: Partial<RawDemandRow> = {}): RawDemandRow {
+  return {
+    id: '11111111-1111-4111-8111-111111111111',
+    tenantId: '00000000-0000-4000-8000-000000000000',
+    batchId: 'bbbbbbbb-0000-4000-8000-0000000000b1',
+    sourceSheet: 'DataSheet',
+    sourceRowNumber: 2,
+    agent: null,
+    orderDate: '2026-06-26',
+    customerName: 'לקוח א',
+    orderNumber: 'SO-1',
+    sku: 'SKU-1',
+    description: 'מוצר רגיל',
+    category: 'רגיל',
+    quantity: 3,
+    cost: null,
+    notes: null,
+    distributionArea: 'דרום',
+    rawRouteLine: null,
+    plannedDeliveryDate: null,
+    plannedRouteLine: null,
+    plannedWorkBucket: null,
+    planningStatus: 'unplanned',
+    routeFlow: 'unassigned',
+    productHandlingFlow: 'regular',
+    noteDateHints: [],
+    issues: [],
+    createdAt: '2026-06-26T10:00:00Z',
+    ...overrides
+  };
+}
+
+function makeLine(overrides: Partial<DemandImportAppendExistingLine> = {}): DemandImportAppendExistingLine {
+  return {
+    lineId: 'aaaaaaaa-0000-4000-8000-000000000001',
+    lineName: 'קו דרום',
+    distributionArea: 'דרום',
+    status: 'open',
+    ...overrides
+  };
+}
+
+function makeItem(overrides: Partial<DemandImportAppendExistingItem> = {}): DemandImportAppendExistingItem {
+  return {
+    lineId: 'aaaaaaaa-0000-4000-8000-000000000001',
+    orderNumber: 'SO-1',
+    customerName: 'לקוח א',
+    sku: 'SKU-1',
+    quantity: 3,
+    distributionArea: 'דרום',
+    ...overrides
+  };
+}
+
+function validateResponse(result: unknown) {
+  expect(() => demandImportAppendDiffResponseSchema.parse(result)).not.toThrow();
+}
+
+describe('computeDemandImportAppendDiff', () => {
+  it('classifies a row as new when no match exists in shift', () => {
+    const result = computeDemandImportAppendDiff({
+      batchId: 'bbbbbbbb-0000-4000-8000-0000000000b1',
+      shiftId: 'cccccccc-0000-4000-8000-00000000ccc1',
+      rows: [makeRawRow({ orderNumber: 'SO-NEW', customerName: 'לקוח חדש', sku: 'SKU-NEW', distributionArea: 'דרום' })],
+      existingLines: [makeLine()],
+      existingItems: []
+    });
+
+    validateResponse(result);
+    expect(result.summary.newRows).toBe(1);
+    expect(result.summary.totalRows).toBe(1);
+    expect(result.newOrders).toHaveLength(1);
+    expect(result.newOrders[0].rows[0].classification).toBe('new');
+  });
+
+  it('classifies a row as already_exists when exact match with same qty exists', () => {
+    const result = computeDemandImportAppendDiff({
+      batchId: 'bbbbbbbb-0000-4000-8000-0000000000b1',
+      shiftId: 'cccccccc-0000-4000-8000-00000000ccc1',
+      rows: [makeRawRow({ orderNumber: 'SO-1', customerName: 'לקוח א', sku: 'SKU-1', quantity: 3, distributionArea: 'דרום' })],
+      existingLines: [makeLine()],
+      existingItems: [makeItem({ sku: 'SKU-1', quantity: 3 })]
+    });
+
+    expect(result.summary.alreadyExistsRows).toBe(1);
+    expect(result.alreadyExistsOrders).toHaveLength(1);
+    expect(result.alreadyExistsOrders[0].rows[0].classification).toBe('already_exists');
+  });
+
+  it('classifies a row as quantity_changed when quantity differs', () => {
+    const result = computeDemandImportAppendDiff({
+      batchId: 'bbbbbbbb-0000-4000-8000-0000000000b1',
+      shiftId: 'cccccccc-0000-4000-8000-00000000ccc1',
+      rows: [makeRawRow({ orderNumber: 'SO-1', customerName: 'לקוח א', sku: 'SKU-1', quantity: 10, distributionArea: 'דרום' })],
+      existingLines: [makeLine()],
+      existingItems: [makeItem({ sku: 'SKU-1', quantity: 3 })]
+    });
+
+    expect(result.summary.quantityChangedRows).toBe(1);
+    expect(result.quantityChangedOrders).toHaveLength(1);
+    expect(result.quantityChangedOrders[0].rows[0].classification).toBe('quantity_changed');
+    expect(result.quantityChangedOrders[0].rows[0].existingQuantity).toBe(3);
+  });
+
+  it('classifies second occurrence of same key as duplicate within batch', () => {
+    const result = computeDemandImportAppendDiff({
+      batchId: 'bbbbbbbb-0000-4000-8000-0000000000b1',
+      shiftId: 'cccccccc-0000-4000-8000-00000000ccc1',
+      rows: [
+        makeRawRow({ id: 'dddddddd-0000-4000-8000-000000000d01', sourceRowNumber: 2, orderNumber: 'SO-1', customerName: 'לקוח א', sku: 'SKU-1', distributionArea: 'דרום' }),
+        makeRawRow({ id: 'eeeeeeee-0000-4000-8000-000000000e02', sourceRowNumber: 3, orderNumber: 'SO-1', customerName: 'לקוח א', sku: 'SKU-1', distributionArea: 'דרום' })
+      ],
+      existingLines: [],
+      existingItems: []
+    });
+
+    expect(result.summary.duplicateRows).toBe(1);
+    expect(result.duplicateOrders).toHaveLength(1);
+    // row[0] is the first (new), row[1] is the duplicate
+    expect(result.duplicateOrders[0].rows[1].classification).toBe('duplicate');
+    expect(result.duplicateOrders[0].rows[1].duplicateOfRowId).toBe('dddddddd-0000-4000-8000-000000000d01');
+  });
+
+  it('classifies special_flow rows without checking existing items', () => {
+    const result = computeDemandImportAppendDiff({
+      batchId: 'bbbbbbbb-0000-4000-8000-0000000000b1',
+      shiftId: 'cccccccc-0000-4000-8000-00000000ccc1',
+      rows: [makeRawRow({ planningStatus: 'special_flow', notes: 'איסוף עצמי', routeFlow: 'pickup' })],
+      existingLines: [makeLine()],
+      existingItems: [makeItem()]
+    });
+
+    expect(result.summary.specialFlowRows).toBe(1);
+    expect(result.specialFlowOrders).toHaveLength(1);
+    expect(result.specialFlowOrders[0].rows[0].classification).toBe('special_flow');
+  });
+
+  it('classifies as requires_review when same order+customer but different sku', () => {
+    const result = computeDemandImportAppendDiff({
+      batchId: 'bbbbbbbb-0000-4000-8000-0000000000b1',
+      shiftId: 'cccccccc-0000-4000-8000-00000000ccc1',
+      rows: [makeRawRow({ orderNumber: 'SO-1', customerName: 'לקוח א', sku: 'SKU-DIFF', distributionArea: 'דרום' })],
+      existingLines: [makeLine()],
+      existingItems: [makeItem({ sku: 'SKU-1' })]
+    });
+
+    expect(result.summary.requiresReviewRows).toBe(1);
+    expect(result.requiresReviewOrders).toHaveLength(1);
+    expect(result.requiresReviewOrders[0].rows[0].classification).toBe('requires_review');
+  });
+
+  it('classifies as requires_review when same order+customer+sku but different distributionArea', () => {
+    const result = computeDemandImportAppendDiff({
+      batchId: 'bbbbbbbb-0000-4000-8000-0000000000b1',
+      shiftId: 'cccccccc-0000-4000-8000-00000000ccc1',
+      rows: [makeRawRow({ orderNumber: 'SO-1', customerName: 'לקוח א', sku: 'SKU-1', distributionArea: 'צפון' })],
+      existingLines: [makeLine({ distributionArea: 'דרום' })],
+      existingItems: [makeItem({ sku: 'SKU-1', distributionArea: 'דרום' })]
+    });
+
+    expect(result.summary.requiresReviewRows).toBe(1);
+  });
+
+  it('suggests target line by exact distributionArea match', () => {
+    const result = computeDemandImportAppendDiff({
+      batchId: 'bbbbbbbb-0000-4000-8000-0000000000b1',
+      shiftId: 'cccccccc-0000-4000-8000-00000000ccc1',
+      rows: [makeRawRow({ orderNumber: 'SO-NEW', customerName: 'לקוח חדש', sku: 'SKU-NEW', distributionArea: 'דרום' })],
+      existingLines: [
+        makeLine({ lineId: 'dddddddd-0000-4000-8000-00000000dd01', lineName: 'קו דרום', distributionArea: 'דרום' }),
+        makeLine({ lineId: 'eeeeeeee-0000-4000-8000-00000000ee01', lineName: 'קו צפון', distributionArea: 'צפון' })
+      ],
+      existingItems: []
+    });
+
+    expect(result.summary.newRows).toBe(1);
+    const row = result.newOrders[0].rows[0];
+    expect(row.suggestedLineId).toBe('dddddddd-0000-4000-8000-00000000dd01');
+    expect(row.suggestedLineName).toBe('קו דרום');
+  });
+
+  it('returns null suggestion when no line matches distributionArea', () => {
+    const result = computeDemandImportAppendDiff({
+      batchId: 'bbbbbbbb-0000-4000-8000-0000000000b1',
+      shiftId: 'cccccccc-0000-4000-8000-00000000ccc1',
+      rows: [makeRawRow({ distributionArea: 'מרכז' })],
+      existingLines: [makeLine({ distributionArea: 'דרום' }), makeLine({ distributionArea: 'צפון' })],
+      existingItems: []
+    });
+
+    const row = result.newOrders[0].rows[0];
+    expect(row.suggestedLineId).toBeNull();
+    expect(row.suggestedLineName).toBeNull();
+  });
+
+  it('classifies a mixed-row order as requires_review when one row partially matches existing order', () => {
+    const result = computeDemandImportAppendDiff({
+      batchId: 'bbbbbbbb-0000-4000-8000-0000000000b1',
+      shiftId: 'cccccccc-0000-4000-8000-00000000ccc1',
+      rows: [
+        makeRawRow({ id: 'dddddddd-0000-4000-8000-000000000d01', sourceRowNumber: 2, orderNumber: 'SO-MIX', customerName: 'לקוח מעורב', sku: 'SKU-OLD', quantity: 3, distributionArea: 'דרום' }),
+        makeRawRow({ id: 'eeeeeeee-0000-4000-8000-000000000e02', sourceRowNumber: 3, orderNumber: 'SO-MIX', customerName: 'לקוח מעורב', sku: 'SKU-NEW', quantity: 5, distributionArea: 'דרום' })
+      ],
+      existingLines: [makeLine()],
+      existingItems: [
+        makeItem({ orderNumber: 'SO-MIX', customerName: 'לקוח מעורב', sku: 'SKU-OLD', quantity: 3, distributionArea: 'דרום' })
+      ]
+    });
+
+    // SKU-OLD → already_exists, SKU-NEW → requires_review (same order+customer, different product)
+    expect(result.summary.alreadyExistsRows).toBe(1);
+    expect(result.summary.requiresReviewRows).toBe(1);
+    // Order appears in requiresReviewOrders because one row is requires_review
+    expect(result.requiresReviewOrders).toHaveLength(1);
+    expect(result.newOrders).toHaveLength(0);
+  });
+});

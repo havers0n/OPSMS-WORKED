@@ -36,7 +36,10 @@ import type {
   PickerSheetPrintData,
   PickerSheetWorkGroup,
   RawDemandPlanningPreview,
-  DemandPlanningDraftWithAssignments
+  DemandPlanningDraftWithAssignments,
+  DemandImportAppendDiffResponse,
+  DemandImportAppendExistingLine,
+  DemandImportAppendExistingItem
 } from '@wos/domain';
 import {
   buildProductControlRow,
@@ -45,6 +48,7 @@ import {
   canTransitionManualShiftOrderToDoneWithCheckUnits,
   canTransitionManualShiftOrderStatus,
   computeProductControlTotals,
+  computeDemandImportAppendDiff,
   deriveManualShiftLineStatus,
   getEffectiveExpectedCheckUnitsCount,
   manualShiftBulkAddInputRowSchema,
@@ -319,6 +323,11 @@ export type ManualShiftsService = {
     sourceLineName?: string;
   }): Promise<BucketProductRollupResponse>;
   getProductControl(input: { tenantId: string; shiftId: string }): Promise<ProductControlResponse>;
+  computeDemandImportAppendDiff(input: {
+    tenantId: string;
+    batchId: string;
+    shiftId: string;
+  }): Promise<DemandImportAppendDiffResponse>;
   getPickerSheetWorkGroup(input: {
     tenantId: string;
     shiftId: string;
@@ -1455,6 +1464,68 @@ export function createManualShiftsServiceFromRepo(
       return buildRawDemandPlanningPreview({
         batch,
         rows
+      });
+    },
+
+    async computeDemandImportAppendDiff(input) {
+      const shift = await requireShift(input.shiftId);
+      if (shift.tenantId !== input.tenantId) {
+        throw manualShiftNotFound(input.shiftId);
+      }
+
+      const [batch, rows, lines, orders, orderItems] = await Promise.all([
+        repo.getDemandImportBatch({ tenantId: input.tenantId, batchId: input.batchId }),
+        repo.listRawDemandRowsByBatch({ tenantId: input.tenantId, batchId: input.batchId }),
+        repo.listShiftLines(input.shiftId),
+        repo.listShiftOrders(input.shiftId),
+        repo.listShiftOrderItems(input.shiftId)
+      ]);
+
+      if (!batch) {
+        throw new ApiError(404, 'BATCH_NOT_FOUND', 'Demand import batch not found.');
+      }
+
+      const existingLines: DemandImportAppendExistingLine[] = lines
+        .filter((l) => l.deleted_at === null)
+        .map((l) => ({
+          lineId: l.id,
+          lineName: l.name,
+          distributionArea: l.distribution_area,
+          status: 'open'
+        }));
+
+      const orderMap = new Map(orders.map((o) => [o.id, o]));
+
+      const existingItems: DemandImportAppendExistingItem[] = [];
+      for (const item of orderItems) {
+        const order = orderMap.get(item.orderId);
+        if (!order) continue;
+        const line = existingLines.find((l) => l.lineId === item.lineId);
+        if (!line) continue;
+        existingItems.push({
+          lineId: item.lineId,
+          orderNumber: order.orderNumber,
+          customerName: order.customerName,
+          sku: item.sku,
+          quantity: item.quantity,
+          distributionArea: line.distributionArea
+        });
+      }
+
+      return computeDemandImportAppendDiff({
+        batchId: input.batchId,
+        shiftId: input.shiftId,
+        rows,
+        existingLines,
+        existingItems
+      });
+
+      return computeDemandImportAppendDiff({
+        batchId: input.batchId,
+        shiftId: input.shiftId,
+        rows,
+        existingLines,
+        existingItems
       });
     },
 

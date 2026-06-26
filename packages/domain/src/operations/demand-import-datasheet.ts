@@ -993,3 +993,391 @@ export function buildRawDemandPlanningPreview(input: {
     errors
   });
 }
+
+// ──── Append diff: merge DataSheet into existing shift ─────────────────────
+
+export const demandImportAppendClassificationSchema = z.enum([
+  'new',
+  'already_exists',
+  'quantity_changed',
+  'duplicate',
+  'special_flow',
+  'requires_review'
+]);
+export type DemandImportAppendClassification = z.infer<typeof demandImportAppendClassificationSchema>;
+
+export const demandImportAppendExistingLineSchema = z.object({
+  lineId: z.string().uuid(),
+  lineName: z.string(),
+  distributionArea: z.string().nullable(),
+  status: z.string()
+});
+export type DemandImportAppendExistingLine = z.infer<typeof demandImportAppendExistingLineSchema>;
+
+export const demandImportAppendExistingItemSchema = z.object({
+  lineId: z.string().uuid(),
+  orderNumber: z.string().nullable(),
+  customerName: z.string().nullable(),
+  sku: z.string(),
+  quantity: z.number(),
+  distributionArea: z.string().nullable()
+});
+export type DemandImportAppendExistingItem = z.infer<typeof demandImportAppendExistingItemSchema>;
+
+export const demandImportAppendDiffRowSchema = z.object({
+  rawDemandRowId: z.string().uuid(),
+  sourceRowNumber: z.number().int().min(1),
+  orderNumber: z.string().nullable(),
+  customerName: z.string().nullable(),
+  sku: z.string().nullable(),
+  description: z.string().nullable(),
+  quantity: z.number().nullable(),
+  distributionArea: z.string().nullable(),
+  classification: demandImportAppendClassificationSchema,
+  existingQuantity: z.number().nullable().optional(),
+  duplicateOfRowId: z.string().uuid().nullable().optional(),
+  suggestedLineId: z.string().uuid().nullable(),
+  suggestedLineName: z.string().nullable()
+});
+export type DemandImportAppendDiffRow = z.infer<typeof demandImportAppendDiffRowSchema>;
+
+export const demandImportAppendDiffOrderSchema = z.object({
+  orderKey: z.string(),
+  orderNumber: z.string().nullable(),
+  customerName: z.string().nullable(),
+  distributionArea: z.string().nullable(),
+  classification: demandImportAppendClassificationSchema,
+  rows: z.array(demandImportAppendDiffRowSchema),
+  suggestedLineId: z.string().uuid().nullable(),
+  suggestedLineName: z.string().nullable(),
+  totalQuantity: z.number()
+});
+export type DemandImportAppendDiffOrder = z.infer<typeof demandImportAppendDiffOrderSchema>;
+
+export const demandImportAppendDiffSummarySchema = z.object({
+  totalRows: z.number().int().min(0),
+  newRows: z.number().int().min(0),
+  alreadyExistsRows: z.number().int().min(0),
+  quantityChangedRows: z.number().int().min(0),
+  duplicateRows: z.number().int().min(0),
+  specialFlowRows: z.number().int().min(0),
+  requiresReviewRows: z.number().int().min(0),
+  newOrders: z.number().int().min(0)
+});
+export type DemandImportAppendDiffSummary = z.infer<typeof demandImportAppendDiffSummarySchema>;
+
+export const demandImportAppendDiffResponseSchema = z.object({
+  batchId: z.string().uuid(),
+  shiftId: z.string().uuid(),
+  existingLines: z.array(demandImportAppendExistingLineSchema),
+  summary: demandImportAppendDiffSummarySchema,
+  newOrders: z.array(demandImportAppendDiffOrderSchema),
+  alreadyExistsOrders: z.array(demandImportAppendDiffOrderSchema),
+  quantityChangedOrders: z.array(demandImportAppendDiffOrderSchema),
+  duplicateOrders: z.array(demandImportAppendDiffOrderSchema),
+  specialFlowOrders: z.array(demandImportAppendDiffOrderSchema),
+  requiresReviewOrders: z.array(demandImportAppendDiffOrderSchema)
+});
+export type DemandImportAppendDiffResponse = z.infer<typeof demandImportAppendDiffResponseSchema>;
+
+const SEP = '::';
+
+function buildExactKey(
+  orderNumber: string | null,
+  customerName: string | null,
+  sku: string | null | undefined,
+  distributionArea: string | null
+): string {
+  return `${orderNumber ?? ''}${SEP}${customerName ?? ''}${SEP}${sku ?? ''}${SEP}${distributionArea ?? ''}`;
+}
+
+function buildSkuKey(
+  orderNumber: string | null,
+  customerName: string | null,
+  sku: string | null | undefined
+): string {
+  return `${orderNumber ?? ''}${SEP}${customerName ?? ''}${SEP}${sku ?? ''}`;
+}
+
+function buildOrderKey(
+  orderNumber: string | null,
+  customerName: string | null
+): string {
+  return `${orderNumber ?? ''}${SEP}${customerName ?? ''}`;
+}
+
+const APPEND_CLASSIFICATION_PRIORITY: DemandImportAppendClassification[] = [
+  'requires_review',
+  'duplicate',
+  'quantity_changed',
+  'new',
+  'special_flow',
+  'already_exists'
+];
+
+function getOrderClassification(
+  classifications: DemandImportAppendClassification[]
+): DemandImportAppendClassification {
+  const set = new Set(classifications);
+  for (const cls of APPEND_CLASSIFICATION_PRIORITY) {
+    if (set.has(cls)) return cls;
+  }
+  return 'already_exists';
+}
+
+export function computeDemandImportAppendDiff(input: {
+  batchId: string;
+  shiftId: string;
+  rows: RawDemandRow[];
+  existingLines: DemandImportAppendExistingLine[];
+  existingItems: DemandImportAppendExistingItem[];
+}): DemandImportAppendDiffResponse {
+  // ── Index existing items ────────────────────────────────────────────────
+  const exactMap = new Map<string, { quantity: number; lineId: string }>();
+  const skuMap = new Map<string, { distributionArea: string | null; quantity: number; lineId: string }>();
+  const orderSet = new Set<string>();
+
+  for (const item of input.existingItems) {
+    const exactKey = buildExactKey(item.orderNumber, item.customerName, item.sku, item.distributionArea);
+    const skuKey = buildSkuKey(item.orderNumber, item.customerName, item.sku);
+    const orderKey = buildOrderKey(item.orderNumber, item.customerName);
+
+    exactMap.set(exactKey, { quantity: item.quantity, lineId: item.lineId });
+    if (!skuMap.has(skuKey)) {
+      skuMap.set(skuKey, { distributionArea: item.distributionArea, quantity: item.quantity, lineId: item.lineId });
+    }
+    orderSet.add(orderKey);
+  }
+
+  // ── Index lines for suggestions ─────────────────────────────────────────
+  const lineSuggestionMap = new Map<string, { lineId: string; lineName: string }>();
+  for (const line of input.existingLines) {
+    if (line.distributionArea && !lineSuggestionMap.has(line.distributionArea)) {
+      lineSuggestionMap.set(line.distributionArea, { lineId: line.lineId, lineName: line.lineName });
+    }
+  }
+
+  // ── Classify each row ───────────────────────────────────────────────────
+  const diffRows: DemandImportAppendDiffRow[] = [];
+  const batchKeysSeen = new Map<string, string>();
+
+  for (const row of input.rows) {
+    const exactKey = buildExactKey(row.orderNumber, row.customerName, row.sku, row.distributionArea);
+    const suggestion = row.distributionArea ? lineSuggestionMap.get(row.distributionArea) : undefined;
+    const suggestedLineId = suggestion?.lineId ?? null;
+    const suggestedLineName = suggestion?.lineName ?? null;
+
+    if (row.planningStatus === 'special_flow') {
+      diffRows.push({
+        rawDemandRowId: row.id,
+        sourceRowNumber: row.sourceRowNumber,
+        orderNumber: row.orderNumber,
+        customerName: row.customerName,
+        sku: row.sku,
+        description: row.description,
+        quantity: row.quantity,
+        distributionArea: row.distributionArea,
+        classification: 'special_flow',
+        suggestedLineId,
+        suggestedLineName
+      });
+      continue;
+    }
+
+    if (batchKeysSeen.has(exactKey)) {
+      const firstId = batchKeysSeen.get(exactKey) ?? null;
+      diffRows.push({
+        rawDemandRowId: row.id,
+        sourceRowNumber: row.sourceRowNumber,
+        orderNumber: row.orderNumber,
+        customerName: row.customerName,
+        sku: row.sku,
+        description: row.description,
+        quantity: row.quantity,
+        distributionArea: row.distributionArea,
+        classification: 'duplicate',
+        duplicateOfRowId: firstId,
+        suggestedLineId,
+        suggestedLineName
+      });
+      continue;
+    }
+    batchKeysSeen.set(exactKey, row.id);
+
+    const exactMatch = exactMap.get(exactKey);
+    if (exactMatch) {
+      const sameQty = Math.abs(exactMatch.quantity - (row.quantity ?? 0)) < 0.001;
+      if (sameQty) {
+        diffRows.push({
+          rawDemandRowId: row.id,
+          sourceRowNumber: row.sourceRowNumber,
+          orderNumber: row.orderNumber,
+          customerName: row.customerName,
+          sku: row.sku,
+          description: row.description,
+          quantity: row.quantity,
+          distributionArea: row.distributionArea,
+          classification: 'already_exists',
+          suggestedLineId,
+          suggestedLineName
+        });
+      } else {
+        diffRows.push({
+          rawDemandRowId: row.id,
+          sourceRowNumber: row.sourceRowNumber,
+          orderNumber: row.orderNumber,
+          customerName: row.customerName,
+          sku: row.sku,
+          description: row.description,
+          quantity: row.quantity,
+          distributionArea: row.distributionArea,
+          classification: 'quantity_changed',
+          existingQuantity: exactMatch.quantity,
+          suggestedLineId,
+          suggestedLineName
+        });
+      }
+      continue;
+    }
+
+    const skuKey = buildSkuKey(row.orderNumber, row.customerName, row.sku);
+    if (row.sku && skuMap.has(skuKey)) {
+      diffRows.push({
+        rawDemandRowId: row.id,
+        sourceRowNumber: row.sourceRowNumber,
+        orderNumber: row.orderNumber,
+        customerName: row.customerName,
+        sku: row.sku,
+        description: row.description,
+        quantity: row.quantity,
+        distributionArea: row.distributionArea,
+        classification: 'requires_review',
+        suggestedLineId,
+        suggestedLineName
+      });
+      continue;
+    }
+
+    const orderKey = buildOrderKey(row.orderNumber, row.customerName);
+    if ((row.orderNumber || row.customerName) && orderSet.has(orderKey)) {
+      diffRows.push({
+        rawDemandRowId: row.id,
+        sourceRowNumber: row.sourceRowNumber,
+        orderNumber: row.orderNumber,
+        customerName: row.customerName,
+        sku: row.sku,
+        description: row.description,
+        quantity: row.quantity,
+        distributionArea: row.distributionArea,
+        classification: 'requires_review',
+        suggestedLineId,
+        suggestedLineName
+      });
+      continue;
+    }
+
+    diffRows.push({
+      rawDemandRowId: row.id,
+      sourceRowNumber: row.sourceRowNumber,
+      orderNumber: row.orderNumber,
+      customerName: row.customerName,
+      sku: row.sku,
+      description: row.description,
+      quantity: row.quantity,
+      distributionArea: row.distributionArea,
+      classification: 'new',
+      suggestedLineId,
+      suggestedLineName
+    });
+  }
+
+  // ── Group diff rows into orders ─────────────────────────────────────────
+  const orderGroupMap = new Map<string, {
+    orderNumber: string | null;
+    customerName: string | null;
+    distributionArea: string | null;
+    rows: DemandImportAppendDiffRow[];
+    classifications: DemandImportAppendClassification[];
+    totalQuantity: number;
+  }>();
+
+  for (const diffRow of diffRows) {
+    const key = buildOrderKey(diffRow.orderNumber, diffRow.customerName);
+    let group = orderGroupMap.get(key);
+    if (!group) {
+      group = {
+        orderNumber: diffRow.orderNumber,
+        customerName: diffRow.customerName,
+        distributionArea: diffRow.distributionArea,
+        rows: [],
+        classifications: [],
+        totalQuantity: 0
+      };
+      orderGroupMap.set(key, group);
+    }
+    group.rows.push(diffRow);
+    group.classifications.push(diffRow.classification);
+    group.totalQuantity += diffRow.quantity ?? 0;
+    if (group.distributionArea === null && diffRow.distributionArea !== null) {
+      group.distributionArea = diffRow.distributionArea;
+    }
+  }
+
+  // ── Partition into buckets ──────────────────────────────────────────────
+  const newOrders: DemandImportAppendDiffOrder[] = [];
+  const alreadyExistsOrders: DemandImportAppendDiffOrder[] = [];
+  const quantityChangedOrders: DemandImportAppendDiffOrder[] = [];
+  const duplicateOrders: DemandImportAppendDiffOrder[] = [];
+  const specialFlowOrders: DemandImportAppendDiffOrder[] = [];
+  const requiresReviewOrders: DemandImportAppendDiffOrder[] = [];
+
+  for (const [, group] of orderGroupMap) {
+    const classification = getOrderClassification(group.classifications);
+    const firstSuggestion = group.rows.find((r) => r.suggestedLineId);
+    const order: DemandImportAppendDiffOrder = {
+      orderKey: buildOrderKey(group.orderNumber, group.customerName),
+      orderNumber: group.orderNumber,
+      customerName: group.customerName,
+      distributionArea: group.distributionArea,
+      classification,
+      rows: group.rows,
+      suggestedLineId: firstSuggestion?.suggestedLineId ?? null,
+      suggestedLineName: firstSuggestion?.suggestedLineName ?? null,
+      totalQuantity: group.totalQuantity
+    };
+
+    switch (classification) {
+      case 'new': newOrders.push(order); break;
+      case 'already_exists': alreadyExistsOrders.push(order); break;
+      case 'quantity_changed': quantityChangedOrders.push(order); break;
+      case 'duplicate': duplicateOrders.push(order); break;
+      case 'special_flow': specialFlowOrders.push(order); break;
+      case 'requires_review': requiresReviewOrders.push(order); break;
+    }
+  }
+
+  // ── Summary ─────────────────────────────────────────────────────────────
+  const summary: DemandImportAppendDiffSummary = {
+    totalRows: diffRows.length,
+    newRows: diffRows.filter((r) => r.classification === 'new').length,
+    alreadyExistsRows: diffRows.filter((r) => r.classification === 'already_exists').length,
+    quantityChangedRows: diffRows.filter((r) => r.classification === 'quantity_changed').length,
+    duplicateRows: diffRows.filter((r) => r.classification === 'duplicate').length,
+    specialFlowRows: diffRows.filter((r) => r.classification === 'special_flow').length,
+    requiresReviewRows: diffRows.filter((r) => r.classification === 'requires_review').length,
+    newOrders: newOrders.length
+  };
+
+  return {
+    batchId: input.batchId,
+    shiftId: input.shiftId,
+    existingLines: input.existingLines,
+    summary,
+    newOrders,
+    alreadyExistsOrders,
+    quantityChangedOrders,
+    duplicateOrders,
+    specialFlowOrders,
+    requiresReviewOrders
+  };
+}
