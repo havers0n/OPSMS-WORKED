@@ -1,12 +1,13 @@
 ﻿import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, ChevronDown, ChevronUp, Search, X } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronUp, Save, Search, X } from 'lucide-react';
 import { workHierarchyQueryOptions, orderItemsQueryOptions } from '@/entities/manual-shift/api/queries';
 import { demandPlanningPreviewQueryOptions, demandPlanningDraftQueryOptions } from '@/entities/demand/api/queries';
+import { usePutDemandPlanningPlan } from '@/entities/demand/api/mutations';
 import { useSchemeBuilderStore } from './scheme-store';
 import { adaptWorkHierarchyToSource, adaptOrderItemsToSource } from './source-data-adapter';
 import { adaptDemandPlanningPreviewToSource } from './demand-source-adapter';
-import type { SourceOrderItem, OrderBadgeStatus, PlanningLine, WorkGroup, ItemAllocation } from './scheme-types';
+import type { SourceOrderItem, OrderBadgeStatus, PlanningLine, WorkGroup, ItemAllocation, SchemeBuilderCapabilities } from './scheme-types';
 import { AreaOverview } from './area-overview';
 import { WorkGroupWorkspace } from './work-group-workspace';
 import { ItemsDrawerV2 } from './items-drawer-v2';
@@ -38,6 +39,17 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   const shiftId = !isDemandMode ? (props as ShiftModeProps).shiftId : undefined;
   const batchId = isDemandMode ? (props as DemandModeProps).batchId : undefined;
   const draftId = isDemandMode ? (props as DemandModeProps).draftId : undefined;
+
+  const capabilities: SchemeBuilderCapabilities = useMemo(() => ({
+    canCreatePlanningLines: !isDemandMode || true,
+    canCreateWorkGroups: !isDemandMode || true,
+    canAssignOrders: !isDemandMode || true,
+    canMoveOrders: !isDemandMode || true,
+    canSaveDraft: isDemandMode,
+    canPublishToShift: !isDemandMode,
+    canWriteManualShift: !isDemandMode,
+    canPrint: !isDemandMode,
+  }), [isDemandMode]);
 
   const {
     data: hierarchy, isLoading: hierarchyLoading, error: hierarchyError
@@ -71,6 +83,10 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   const getAssignedQty = useSchemeBuilderStore((s) => s.getAssignedQty);
   const hydrateFromDraft = useSchemeBuilderStore((s) => s.hydrateFromDraft);
   const clearLocalDraft = useSchemeBuilderStore((s) => s.clearLocalDraft);
+  const planningLines = useSchemeBuilderStore((s) => s.planningLines);
+  const workGroups = useSchemeBuilderStore((s) => s.workGroups);
+
+  const savePlan = usePutDemandPlanningPlan();
 
   const [drawerOrderId, setDrawerOrderId] = useState<string | null>(null);
   const [assignItemIds, setAssignItemIds] = useState<string[]>([]);
@@ -220,13 +236,13 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   }, []);
 
   const handleOpenQuantityModal = useCallback((itemRowIds: string[], workGroupId: string) => {
-    if (isDemandMode) return;
+    if (!capabilities.canAssignOrders) return;
     setQuantityModalState({ itemRowIds, workGroupId });
-  }, [isDemandMode]);
+  }, [capabilities.canAssignOrders]);
 
   const handleConfirmAllocations = useCallback(
     (allocations: { itemRowId: string; qty: number }[], workGroupId: string) => {
-      if (isDemandMode) return;
+      if (!capabilities.canAssignOrders) return;
       for (const alloc of allocations) {
         const item = drawerItems.find((i) => i.id === alloc.itemRowId);
         if (!item) continue;
@@ -240,11 +256,11 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
       setQuantityModalState(null);
       setAssignItemIds([]);
     },
-    [allocateItemQty, drawerItems, isDemandMode],
+    [allocateItemQty, drawerItems, capabilities.canAssignOrders],
   );
 
   const handleAssignSelected = useCallback((itemRowIds: string[]) => {
-    if (isDemandMode) return;
+    if (!capabilities.canAssignOrders) return;
     if (targetWorkGroupId) {
       handleOpenQuantityModal(itemRowIds, targetWorkGroupId);
       return;
@@ -252,10 +268,10 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     setAssignItemIds(itemRowIds);
     setIsWholeOrderAssign(false);
     setShowAssignModal(true);
-  }, [isDemandMode, targetWorkGroupId, handleOpenQuantityModal]);
+  }, [capabilities.canAssignOrders, targetWorkGroupId, handleOpenQuantityModal]);
 
   const handleAssignAllUnassigned = useCallback((itemRowIds: string[]) => {
-    if (isDemandMode) return;
+    if (!capabilities.canAssignOrders) return;
     if (targetWorkGroupId) {
       allocateItemRows(itemRowIds, targetWorkGroupId, orderItemMap);
       return;
@@ -263,11 +279,11 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     setAssignItemIds(itemRowIds);
     setIsWholeOrderAssign(true);
     setShowAssignModal(true);
-  }, [isDemandMode, targetWorkGroupId, allocateItemRows, orderItemMap]);
+  }, [capabilities.canAssignOrders, targetWorkGroupId, allocateItemRows, orderItemMap]);
 
   const handleConfirmAssign = useCallback(
     (workGroupId: string) => {
-      if (isDemandMode) return;
+      if (!capabilities.canAssignOrders) return;
       if (isWholeOrderAssign) {
         allocateItemRows(assignItemIds, workGroupId, orderItemMap);
         setAssignItemIds([]);
@@ -277,20 +293,20 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
         setIsWholeOrderAssign(false);
       }
     },
-    [isDemandMode, assignItemIds, isWholeOrderAssign, allocateItemRows, handleOpenQuantityModal, orderItemMap],
+    [capabilities.canAssignOrders, assignItemIds, isWholeOrderAssign, allocateItemRows, handleOpenQuantityModal, orderItemMap],
   );
 
   const handleStartAssign = useCallback((workGroupId: string) => {
-    if (isDemandMode) return;
+    if (!capabilities.canAssignOrders) return;
     setTargetWorkGroup(workGroupId);
-  }, [isDemandMode, setTargetWorkGroup]);
+  }, [capabilities.canAssignOrders, setTargetWorkGroup]);
 
   const handleCancelTarget = useCallback(() => {
     setTargetWorkGroup(null);
   }, [setTargetWorkGroup]);
 
   const quantityModalRows = useMemo(() => {
-    if (!quantityModalState || isDemandMode) return [];
+    if (!quantityModalState || !capabilities.canAssignOrders) return [];
     return quantityModalState.itemRowIds.map((id) => {
       const item = drawerItems.find((i) => i.id === id);
       const assignedQty = getAssignedQty(id);
@@ -300,7 +316,33 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
         assignedQty,
       };
     }).filter((r) => r.item);
-  }, [quantityModalState, isDemandMode, drawerItems, getAssignedQty]);
+  }, [quantityModalState, capabilities.canAssignOrders, drawerItems, getAssignedQty]);
+
+  const plMap = useMemo(() => new Map(planningLines.map((pl) => [pl.id, pl])), [planningLines]);
+
+  const handleSaveDraft = useCallback(() => {
+    if (!draftId || !capabilities.canSaveDraft) return;
+    const buckets = workGroups.map((wg) => {
+      const pl = plMap.get(wg.planningLineId);
+      return {
+        distributionArea: wg.areaName === '__missing__' ? null : wg.areaName,
+        planningLineName: pl?.name ?? 'default',
+        bucketName: wg.name,
+      };
+    });
+    const bucketKeyByWgId = new Map<string, string>();
+    for (const wg of workGroups) {
+      const pl = plMap.get(wg.planningLineId);
+      const key = `${wg.areaName === '__missing__' ? '' : (wg.areaName ?? '')}|${pl?.name ?? 'default'}|${wg.name}`;
+      bucketKeyByWgId.set(wg.id, key);
+    }
+    const allocations = itemAllocations.map((alloc) => {
+      const bucketKey = bucketKeyByWgId.get(alloc.workGroupId);
+      if (!bucketKey) return null;
+      return { rawDemandRowId: alloc.itemRowId, bucketKey, allocatedQuantity: alloc.qty };
+    }).filter((x): x is NonNullable<typeof x> => x !== null);
+    savePlan.mutate({ draftId, body: { buckets, allocations } });
+  }, [draftId, capabilities.canSaveDraft, planningLines, workGroups, itemAllocations, plMap, savePlan]);
 
   const isLoading = isDemandMode ? (previewLoading || draftLoading) : hierarchyLoading;
   const error = isDemandMode ? (previewError || draftError) : hierarchyError;
@@ -380,7 +422,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
           )}
 
           {isDemandMode ? (
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm space-y-1">
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm space-y-2">
               <p className="font-bold text-blue-800">תצוגת תכנון בלבד</p>
               <p className="text-xs text-blue-700">
                 אזורים: {source.areas.length} | הזמנות: {source.orders.length} | סה"כ כמות:{' '}
@@ -396,11 +438,22 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
                   שגיאות: {demandSource.errorItems.length} שורות
                 </p>
               )}
-              {draftWithAssignments && (
-                <>
-                  <p className="text-xs text-blue-700">קבוצות: {draftWithAssignments.buckets.length}</p>
-                  <p className="text-xs text-blue-700">שיוכים: {draftWithAssignments.allocations.length}</p>
-                </>
+              {capabilities.canSaveDraft && (
+                <button
+                  type="button"
+                  onClick={handleSaveDraft}
+                  disabled={savePlan.isPending}
+                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  <Save size={14} />
+                  {savePlan.isPending ? 'שומר...' : 'שמור טיוטה'}
+                </button>
+              )}
+              {savePlan.isSuccess && (
+                <p className="text-xs text-green-700 font-semibold">הטיוטה נשמרה</p>
+              )}
+              {savePlan.isError && (
+                <p className="text-xs text-red-600 font-semibold">שגיאה בשמירה: {savePlan.error?.message}</p>
               )}
             </div>
           ) : (
@@ -413,7 +466,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
 
         {/* Center board */}
         <div className="flex-1 flex flex-col min-h-0">
-          {!isDemandMode && targetWg && (
+          {capabilities.canAssignOrders && targetWg && (
             <div className="shrink-0 flex items-center gap-2 bg-blue-50 border-b border-blue-200 px-3 py-1.5 text-sm">
               <span className="font-bold text-blue-800">קבוצת יעד: {targetWg.name}</span>
               <span className="text-blue-600">— בחר הזמנה ושורות לשיוך</span>
@@ -435,7 +488,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
                 selectedAreaName={selectedAreaName}
                 orderItemMap={orderItemMap}
                 onStartAssign={handleStartAssign}
-                isDemandMode={isDemandMode}
+                capabilities={capabilities}
               />
             ) : (
               <div className="bg-white border border-dashed border-gray-300 rounded-lg p-6 text-center">
@@ -531,12 +584,12 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
           onClose={handleCloseItemsDrawer}
           onAssignSelected={handleAssignSelected}
           onAssignAllUnassigned={handleAssignAllUnassigned}
-          targetWorkGroupName={!isDemandMode ? (targetWg?.name ?? null) : null}
-          isDemandMode={isDemandMode}
+          targetWorkGroupName={targetWg?.name ?? null}
+          capabilities={capabilities}
         />
       )}
 
-      {!isDemandMode && (
+      {capabilities.canAssignOrders && (
         <>
           <AssignModalV2
             isOpen={showAssignModal}

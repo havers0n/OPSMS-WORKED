@@ -84,3 +84,14 @@ export type AllocateResult =
 export type OrderSplitStatus = 'unassigned' | 'assigned' | 'partial' | 'split';
 
 export type OrderBadgeStatus = 'not_loaded' | 'unassigned' | 'assigned' | 'partial' | 'split';
+
+export interface SchemeBuilderCapabilities {
+  canCreatePlanningLines: boolean;
+  canCreateWorkGroups: boolean;
+  canAssignOrders: boolean;
+  canMoveOrders: boolean;
+  canSaveDraft: boolean;
+  canPublishToShift: boolean;
+  canWriteManualShift: boolean;
+  canPrint: boolean;
+}

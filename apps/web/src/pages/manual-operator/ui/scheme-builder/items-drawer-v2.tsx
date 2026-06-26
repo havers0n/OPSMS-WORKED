@@ -1,6 +1,6 @@
 ﻿import { useState, useMemo } from 'react';
 import { AlertCircle, CheckSquare, Loader2, Square } from 'lucide-react';
-import type { SourceOrder, SourceOrderItem } from './scheme-types';
+import type { SourceOrder, SourceOrderItem, SchemeBuilderCapabilities } from './scheme-types';
 import { useSchemeBuilderStore, getOrderSplitStatus } from './scheme-store';
 import { Badge } from '@/shared/ui/badge';
 
@@ -13,7 +13,7 @@ export function ItemsDrawerV2({
   onAssignSelected,
   onAssignAllUnassigned,
   targetWorkGroupName,
-  isDemandMode = false,
+  capabilities,
 }: {
   order: SourceOrder;
   items: SourceOrderItem[];
@@ -23,7 +23,7 @@ export function ItemsDrawerV2({
   onAssignSelected: (itemRowIds: string[]) => void;
   onAssignAllUnassigned: (itemRowIds: string[]) => void;
   targetWorkGroupName?: string | null;
-  isDemandMode?: boolean;
+  capabilities: SchemeBuilderCapabilities;
 }) {
   const itemAllocations = useSchemeBuilderStore((s) => s.itemAllocations);
   const getWorkGroup = useSchemeBuilderStore((s) => s.getWorkGroup);
@@ -138,7 +138,7 @@ export function ItemsDrawerV2({
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-600">
             <div><span className="text-gray-500">לקוח:</span> {order.customerName}</div>
             <div><span className="text-gray-500">כמות:</span> {order.totalQuantity}</div>
-            {!isDemandMode && (
+            {capabilities.canWriteManualShift && (
               <>
                 <div><span className="text-gray-500">קו הפצה מקורי:</span> {order.sourceDeliveryLine?.lineGroupName ?? '—'}</div>
                 <div><span className="text-gray-500">נקודה:</span> {order.pointName ?? '—'}</div>
@@ -147,20 +147,20 @@ export function ItemsDrawerV2({
             )}
             <div><span className="text-gray-500">סטטוס ביצוע:</span> {order.backendStatus}</div>
           </div>
-          {!isDemandMode && order.hasAshlama && (
+          {capabilities.canWriteManualShift && order.hasAshlama && (
             <div className="mt-2 text-amber-700 bg-amber-50 px-3 py-1 rounded text-xs font-bold">יש אשלמה פתוחה</div>
           )}
-          {!isDemandMode && order.hasCheckUnits && (
+          {capabilities.canWriteManualShift && order.hasCheckUnits && (
             <div className="mt-1 text-amber-700 bg-amber-50 px-3 py-1 rounded text-xs font-bold">יש יחידות בדיקה</div>
           )}
-          {targetWorkGroupName && !isDemandMode && (
+          {targetWorkGroupName && capabilities.canAssignOrders && (
             <div className="mt-2 text-blue-700 bg-blue-50 px-3 py-1 rounded text-xs font-bold">
               קבוצת יעד: {targetWorkGroupName}
             </div>
           )}
         </div>
 
-        {!isDemandMode && (
+        {capabilities.canAssignOrders && (
           <div className="px-6 py-3 border-b border-gray-200 shrink-0 flex items-center gap-2 flex-wrap">
             <button
               type="button"
@@ -219,14 +219,14 @@ export function ItemsDrawerV2({
             <table className="w-full text-sm text-right">
               <thead className="bg-gray-100 border-b border-gray-200 sticky top-0">
                 <tr>
-                  {!isDemandMode && <th className="p-2 w-8" />}
+                  {capabilities.canAssignOrders && <th className="p-2 w-8" />}
                   <th className="p-2 font-medium text-gray-700">מק"ט</th>
                   <th className="p-2 font-medium text-gray-700">תיאור</th>
                   <th className="p-2 font-medium text-gray-700">קטגוריה</th>
                   <th className="p-2 font-medium text-gray-700 text-center">כמות מקורית</th>
                   <th className="p-2 font-medium text-gray-700 text-center">שויך</th>
                   <th className="p-2 font-medium text-gray-700 text-center">נותר</th>
-                  {isDemandMode ? (
+                  {!capabilities.canWriteManualShift ? (
                     <th className="p-2 font-medium text-gray-700">טיפול מוצר</th>
                   ) : (
                     <th className="p-2 font-medium text-gray-700 min-w-[100px]">קבוצות</th>
@@ -242,8 +242,8 @@ export function ItemsDrawerV2({
                   const isFullyAllocated = remainingQty <= 0;
                   const isSelected = selectedIds.has(item.id);
                   return (
-                    <tr key={item.id} className={`hover:bg-gray-50 ${isFullyAllocated && !isDemandMode ? 'opacity-60' : ''} ${item.isError ? 'bg-red-50' : ''} ${item.isSpecialFlow ? 'bg-amber-50' : ''}`}>
-                      {!isDemandMode && (
+                    <tr key={item.id} className={`hover:bg-gray-50 ${isFullyAllocated && !capabilities.canAssignOrders ? 'opacity-60' : ''} ${item.isError ? 'bg-red-50' : ''} ${item.isSpecialFlow ? 'bg-amber-50' : ''}`}>
+                      {capabilities.canAssignOrders && (
                         <td className="p-2">
                           <button
                             type="button"
@@ -263,7 +263,7 @@ export function ItemsDrawerV2({
                       <td className="p-2 font-semibold text-center text-xs">{item.quantity}</td>
                       <td className="p-2 text-center text-xs text-gray-500">{assignedQty > 0 ? assignedQty : '—'}</td>
                       <td className="p-2 text-center text-xs font-semibold">{remainingQty}</td>
-                      {isDemandMode ? (
+                      {!capabilities.canWriteManualShift ? (
                         <td className="p-2 text-xs">
                           {item.productHandlingFlow && (
                             <Badge tone={item.isError ? 'danger' : item.isSpecialFlow ? 'warning' : 'neutral'}>
@@ -300,10 +300,10 @@ export function ItemsDrawerV2({
                       )}
                       <td className="p-2 text-xs text-gray-500">
                         {item.notes && <div>{item.notes}</div>}
-                        {!isDemandMode && item.sourceRows && item.sourceRows.length > 0 && (
+                        {capabilities.canWriteManualShift && item.sourceRows && item.sourceRows.length > 0 && (
                           <div className="text-gray-400">שורות: {item.sourceRows.join(', ')}</div>
                         )}
-                        {isDemandMode && item.planningStatus && (
+                        {!capabilities.canWriteManualShift && item.planningStatus && (
                           <div className={`text-[10px] ${item.planningStatus === 'error' ? 'text-red-600' : item.planningStatus === 'special_flow' ? 'text-amber-700' : 'text-gray-400'}`}>
                             {item.planningStatus}
                           </div>

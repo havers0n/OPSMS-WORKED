@@ -8,6 +8,18 @@ import { useSchemeBuilderStore } from './scheme-store';
 import { AreaOverview } from './area-overview';
 import { WorkGroupWorkspace } from './work-group-workspace';
 import { AppendDiffSummaryCard } from './append-diff-summary-card';
+import type { SchemeBuilderCapabilities } from './scheme-types';
+
+const APPEND_CAPABILITIES: SchemeBuilderCapabilities = {
+  canCreatePlanningLines: false,
+  canCreateWorkGroups: false,
+  canAssignOrders: false,
+  canMoveOrders: false,
+  canSaveDraft: false,
+  canPublishToShift: false,
+  canWriteManualShift: false,
+  canPrint: false,
+};
 import { AppendBacklogSection } from './append-backlog-section';
 import type { DemandImportAppendClassification } from '@wos/domain';
 
@@ -140,8 +152,7 @@ export function AppendModePanel({ shiftId, batchId }: AppendModePanelProps) {
                 selectedAreaName={selectedAreaName}
                 orderItemMap={{}}
                 onStartAssign={() => {}}
-                isDemandMode={true}
-                isReadOnly={true}
+                capabilities={APPEND_CAPABILITIES}
               />
             ) : (
               <div className="bg-white border border-dashed border-gray-300 rounded-lg p-6 text-center">

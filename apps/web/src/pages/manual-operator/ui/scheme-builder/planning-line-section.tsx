@@ -1,6 +1,6 @@
 ﻿import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import type { PlanningLine, SourceOrderItem } from './scheme-types';
+import type { PlanningLine, SourceOrderItem, SchemeBuilderCapabilities } from './scheme-types';
 import { useSchemeBuilderStore } from './scheme-store';
 import { WorkGroupCard } from './work-group-card';
 import { WorkGroupCreateModal } from './work-group-create-modal';
@@ -9,14 +9,12 @@ export function PlanningLineSection({
   planningLine,
   orderItemMap,
   onStartAssign,
-  isDemandMode = false,
-  isReadOnly = false,
+  capabilities,
 }: {
   planningLine: PlanningLine;
   orderItemMap: Record<string, SourceOrderItem[]>;
   onStartAssign: (workGroupId: string) => void;
-  isDemandMode?: boolean;
-  isReadOnly?: boolean;
+  capabilities: SchemeBuilderCapabilities;
 }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -62,7 +60,7 @@ export function PlanningLineSection({
       <div className="bg-gray-100 px-2 py-1.5 border-b border-gray-200 flex justify-between items-center">
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-2 h-2 rounded-full bg-indigo-500 block shrink-0" />
-          {!isDemandMode && !isReadOnly && isRenaming ? (
+          {capabilities.canCreatePlanningLines && isRenaming ? (
             <input
               autoFocus
               className="border border-gray-300 rounded px-2 py-0.5 text-sm font-bold w-36 focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -74,33 +72,37 @@ export function PlanningLineSection({
             />
           ) : (
             <h3
-              className={`text-sm font-bold ${isDemandMode || isReadOnly ? 'text-gray-700' : 'text-gray-900 cursor-pointer hover:text-blue-600 transition-colors'}`}
-              onClick={() => { if (!isDemandMode && !isReadOnly) { setRenameValue(planningLine.name); setIsRenaming(true); } }}
-              title={isDemandMode || isReadOnly ? undefined : 'לחץ לשינוי שם'}
+              className={`text-sm font-bold ${capabilities.canCreatePlanningLines ? 'text-gray-900 cursor-pointer hover:text-blue-600 transition-colors' : 'text-gray-700'}`}
+              onClick={() => { if (capabilities.canCreatePlanningLines) { setRenameValue(planningLine.name); setIsRenaming(true); } }}
+              title={capabilities.canCreatePlanningLines ? 'לחץ לשינוי שם' : undefined}
             >
               {planningLine.name}
             </h3>
           )}
           <span className="text-[11px] text-gray-400">קו עבודה</span>
         </div>
-        {!isDemandMode && !isReadOnly && (
+        {(capabilities.canCreateWorkGroups || capabilities.canCreatePlanningLines) && (
           <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-            >
-              <Plus size={12} />
-              קבוצת עבודה
-            </button>
-            <button
-              type="button"
-              onClick={handleDeleteClick}
-              className="text-gray-400 hover:text-red-600 transition-colors p-1"
-              title="מחק קו עבודה"
-            >
-              <Trash2 size={14} />
-            </button>
+            {capabilities.canCreateWorkGroups && (
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(true)}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+              >
+                <Plus size={12} />
+                קבוצת עבודה
+              </button>
+            )}
+            {capabilities.canCreatePlanningLines && (
+              <button
+                type="button"
+                onClick={handleDeleteClick}
+                className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                title="מחק קו עבודה"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -109,7 +111,7 @@ export function PlanningLineSection({
         {lineGroups.length === 0 ? (
           <div className="text-center py-2">
             <p className="text-xs text-gray-500 mb-2">אין קבוצות עבודה בקו זה</p>
-            {!isDemandMode && !isReadOnly && (
+            {capabilities.canCreateWorkGroups && (
               <button
                 type="button"
                 onClick={() => setShowCreateModal(true)}
@@ -128,8 +130,7 @@ export function PlanningLineSection({
                 workGroup={wg}
                 orderItemMap={orderItemMap}
                 onStartAssign={onStartAssign}
-                isDemandMode={isDemandMode}
-                isReadOnly={isReadOnly}
+                capabilities={capabilities}
               />
             ))}
           </div>
