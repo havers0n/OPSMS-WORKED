@@ -399,7 +399,11 @@ describe('raw demand planning preview builder', () => {
 
 import {
   computeDemandImportAppendDiff,
-  demandImportAppendDiffResponseSchema
+  demandImportAppendDiffResponseSchema,
+  demandPlanningDraftSchema,
+  demandPlanningBucketSchema,
+  demandPlanningAllocationSchema,
+  demandPlanningDraftWithAssignmentsSchema
 } from './demand-import-datasheet';
 
 import type {
@@ -623,5 +627,98 @@ describe('computeDemandImportAppendDiff', () => {
     // Order appears in requiresReviewOrders because one row is requires_review
     expect(result.requiresReviewOrders).toHaveLength(1);
     expect(result.newOrders).toHaveLength(0);
+  });
+});
+
+describe('demand planning draft schema offset timestamp acceptance', () => {
+  const offsetTimestamp = '2026-06-26T08:49:57.681454+00:00';
+  const uuid = () => '00000000-0000-4000-8000-000000000000';
+
+  it('demandPlanningDraftSchema accepts offset timestamp on updatedAt', () => {
+    const payload = {
+      id: uuid(),
+      tenantId: uuid(),
+      batchId: uuid(),
+      status: 'draft' as const,
+      createdBy: null,
+      createdAt: '2026-06-26T08:49:57.681454+00:00',
+      updatedAt: offsetTimestamp
+    };
+    const result = demandPlanningDraftSchema.parse(payload);
+    expect(result.updatedAt).toBe(offsetTimestamp);
+  });
+
+  it('demandPlanningBucketSchema accepts offset timestamp on updatedAt', () => {
+    const payload = {
+      id: uuid(),
+      tenantId: uuid(),
+      draftId: uuid(),
+      batchId: uuid(),
+      distributionArea: 'דרום',
+      planningLineName: 'default',
+      bucketName: 'unassigned',
+      sortOrder: 0,
+      createdAt: '2026-06-26T08:49:57.681454+00:00',
+      updatedAt: offsetTimestamp
+    };
+    const result = demandPlanningBucketSchema.parse(payload);
+    expect(result.updatedAt).toBe(offsetTimestamp);
+  });
+
+  it('demandPlanningAllocationSchema accepts offset timestamp on updatedAt', () => {
+    const payload = {
+      id: uuid(),
+      tenantId: uuid(),
+      draftId: uuid(),
+      batchId: uuid(),
+      rawDemandRowId: uuid(),
+      bucketId: uuid(),
+      allocatedQuantity: 0,
+      createdAt: '2026-06-26T08:49:57.681454+00:00',
+      updatedAt: offsetTimestamp
+    };
+    const result = demandPlanningAllocationSchema.parse(payload);
+    expect(result.updatedAt).toBe(offsetTimestamp);
+  });
+
+  it('demandPlanningDraftWithAssignmentsSchema validates full response with offset timestamps', () => {
+    const payload = {
+      draft: {
+        id: uuid(),
+        tenantId: uuid(),
+        batchId: uuid(),
+        status: 'draft' as const,
+        createdBy: null,
+        createdAt: '2026-06-26T08:49:57.681454+00:00',
+        updatedAt: '2026-06-26T08:49:57.681454+00:00'
+      },
+      buckets: [{
+        id: uuid(),
+        tenantId: uuid(),
+        draftId: uuid(),
+        batchId: uuid(),
+        distributionArea: 'דרום',
+        planningLineName: 'default',
+        bucketName: 'unassigned',
+        sortOrder: 0,
+        createdAt: '2026-06-26T08:49:57.681454+00:00',
+        updatedAt: '2026-06-26T08:49:57.681454+00:00'
+      }],
+      allocations: [{
+        id: uuid(),
+        tenantId: uuid(),
+        draftId: uuid(),
+        batchId: uuid(),
+        rawDemandRowId: uuid(),
+        bucketId: uuid(),
+        allocatedQuantity: 5,
+        createdAt: '2026-06-26T08:49:57.681454+00:00',
+        updatedAt: '2026-06-26T08:49:57.681454+00:00'
+      }]
+    };
+    const result = demandPlanningDraftWithAssignmentsSchema.parse(payload);
+    expect(result.draft.updatedAt).toBe(offsetTimestamp);
+    expect(result.buckets[0].updatedAt).toBe(offsetTimestamp);
+    expect(result.allocations[0].updatedAt).toBe(offsetTimestamp);
   });
 });

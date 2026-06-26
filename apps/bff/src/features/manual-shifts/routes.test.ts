@@ -620,17 +620,17 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
       }
     })),
     createDemandPlanningDraft: vi.fn(async () => ({
-      draft: { id: ids.shift, tenantId: ids.tenant, batchId: ids.shift, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' },
+      draft: { id: ids.shift, tenantId: ids.tenant, batchId: ids.shift, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000+00:00', updatedAt: '2026-06-25T00:00:00.000+00:00' },
       buckets: [],
       allocations: []
     })),
     getDemandPlanningDraft: vi.fn(async () => ({
-      draft: { id: ids.shift, tenantId: ids.tenant, batchId: ids.shift, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' },
+      draft: { id: ids.shift, tenantId: ids.tenant, batchId: ids.shift, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000+00:00', updatedAt: '2026-06-25T00:00:00.000+00:00' },
       buckets: [],
       allocations: []
     })),
     putDemandPlanningPlan: vi.fn(async () => ({
-      draft: { id: ids.shift, tenantId: ids.tenant, batchId: ids.shift, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' },
+      draft: { id: ids.shift, tenantId: ids.tenant, batchId: ids.shift, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000+00:00', updatedAt: '2026-06-25T00:00:00.000+00:00' },
       buckets: [],
       allocations: []
     })),
@@ -3564,8 +3564,8 @@ describe('demand planning draft routes', () => {
   const bucketId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 
   const draftResponse = {
-    draft: { id: draftId, tenantId: ids.tenant, batchId, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' },
-    buckets: [{ id: bucketId, tenantId: ids.tenant, draftId, batchId, distributionArea: 'דרום', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 0, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' }],
+    draft: { id: draftId, tenantId: ids.tenant, batchId, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000+00:00', updatedAt: '2026-06-25T00:00:00.000+00:00' },
+    buckets: [{ id: bucketId, tenantId: ids.tenant, draftId, batchId, distributionArea: 'דרום', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 0, createdAt: '2026-06-25T00:00:00.000+00:00', updatedAt: '2026-06-25T00:00:00.000+00:00' }],
     allocations: []
   };
 

@@ -283,7 +283,7 @@ export const demandPlanningDraftSchema = z.object({
   status: demandPlanningDraftStatusSchema,
   createdBy: z.string().uuid().nullable(),
   createdAt: z.string().datetime({ offset: true }),
-  updatedAt: z.string().datetime()
+  updatedAt: z.string().datetime({ offset: true })
 });
 export type DemandPlanningDraft = z.infer<typeof demandPlanningDraftSchema>;
 
@@ -297,7 +297,7 @@ export const demandPlanningBucketSchema = z.object({
   bucketName: z.string().min(1),
   sortOrder: z.number().int().min(0),
   createdAt: z.string().datetime({ offset: true }),
-  updatedAt: z.string().datetime()
+  updatedAt: z.string().datetime({ offset: true })
 });
 export type DemandPlanningBucket = z.infer<typeof demandPlanningBucketSchema>;
 
@@ -310,7 +310,7 @@ export const demandPlanningAllocationSchema = z.object({
   bucketId: z.string().uuid(),
   allocatedQuantity: z.number().min(0),
   createdAt: z.string().datetime({ offset: true }),
-  updatedAt: z.string().datetime()
+  updatedAt: z.string().datetime({ offset: true })
 });
 export type DemandPlanningAllocation = z.infer<typeof demandPlanningAllocationSchema>;
 
