@@ -325,7 +325,7 @@ export function DatasheetImportPanel({ shiftId }: { shiftId?: string | null }) {
           onClick={() => {
             createDraftMutation.mutate(batchId, {
               onSuccess: (result) => {
-                navigate(`/operator/manual/lines?batchId=${batchId}&draftId=${result.draft.id}`);
+                navigate(`/operator/manual/lines?batchId=${batchId}&draftId=${result.draft.id}&mode=demand`);
               },
             });
           }}

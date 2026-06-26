@@ -347,10 +347,15 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
       {/* Demand mode banner */}
       {isDemandMode && (
         <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-2 text-sm">
-          <p className="font-bold text-amber-900">תכנון ביקוש גולמי — לא שויך למשמרת</p>
-          <p className="text-xs text-amber-700 mt-0.5">
-            הנתונים מגיעים מ-DataSheet ונמצאים בשלב תכנון בלבד
-          </p>
+          <p className="font-bold text-amber-900">תכנון ביקוש גולמי מ-DataSheet</p>
+          <div className="text-xs text-amber-700 mt-0.5 space-y-0.5">
+            {planningPreview && (
+              <>
+                <p>קובץ: {planningPreview.batch.sourceFile} | גיליון: {planningPreview.batch.sourceSheet} | סטטוס: {planningPreview.batch.status}</p>
+              </>
+            )}
+            <p>לא שויך למשמרת — הנתונים מגיעים מ-DataSheet ונמצאים בשלב תכנון בלבד</p>
+          </div>
         </div>
       )}
 

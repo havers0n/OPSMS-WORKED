@@ -103,10 +103,11 @@ function ManualOperatorSectionContent({
   }
 
   if (section === 'lines') {
+    const isDemandMode = mode === 'demand' && !!batchId && !!draftId;
     if (mode === 'append' && shiftIdFromParams && batchId) {
       return <AppendModePanel shiftId={shiftIdFromParams} batchId={batchId} />;
     }
-    if (batchId && draftId) {
+    if (isDemandMode) {
       return <SchemeBuilder mode="demand" batchId={batchId} draftId={draftId} />;
     }
     if (batchId && !draftId) {
@@ -216,7 +217,7 @@ export function ManualOperatorPage() {
       shiftIdFromParams={shiftIdFromParams}
     />
   );
-  const renderSectionWithoutShift = section === 'import' || section === 'printing' || (section === 'lines' && !!batchId && !!draftId) || (section === 'lines' && mode === 'append' && !!shiftIdFromParams);
+  const renderSectionWithoutShift = section === 'import' || section === 'printing' || (section === 'lines' && mode === 'demand' && !!batchId && !!draftId) || (section === 'lines' && mode === 'append' && !!shiftIdFromParams);
 
   if (section === 'work') {
     return (
@@ -267,13 +268,13 @@ export function ManualOperatorPage() {
             <span className="rounded border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
               הוספת ביקוש גולמי לקווים קיימים
             </span>
-          ) : isDesktop && section === 'lines' && !batchId && !draftId ? (
+          ) : isDesktop && section === 'lines' && mode === 'demand' && batchId && draftId ? (
+            <span className="rounded border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+              תכנון ביקוש גולמי מ-DataSheet — לא שויך למשמרת
+            </span>
+          ) : isDesktop && section === 'lines' ? (
             <span className="rounded border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
               טיוטה מקומית בלבד
-            </span>
-          ) : isDesktop && section === 'lines' && batchId && draftId ? (
-            <span className="rounded border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
-              תכנון ביקוש גולמי
             </span>
           ) : undefined
         }

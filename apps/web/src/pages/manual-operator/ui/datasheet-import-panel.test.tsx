@@ -323,7 +323,7 @@ describe('Demand mode "פתח תכנון ב-Lines" button', () => {
     expect(createDraftMutate).toHaveBeenCalledWith('test-batch-id', expect.any(Object));
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith(
-        '/operator/manual/lines?batchId=test-batch-id&draftId=draft-1111-1111-1111'
+        '/operator/manual/lines?batchId=test-batch-id&draftId=draft-1111-1111-1111&mode=demand'
       );
     });
   });

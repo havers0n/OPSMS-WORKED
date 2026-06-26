@@ -911,6 +911,120 @@ describe('ManualOperatorPage URL sections', () => {
     expect(screen.queryByText('שייך שורות')).toBeNull();
   });
 
+  describe('demand mode (mode=demand + batchId + draftId)', () => {
+    const mockPlanningPreview = {
+      batch: { id: 'batch-demand', sourceFile: 'datasheet.xlsx', sourceSheet: 'DataSheet', status: 'ready', rowsCount: 10, rawRowsCount: 7, warningRowsCount: 2, errorRowsCount: 1, specialFlowRowsCount: 1, distributionAreasCount: 2, distinctOrdersCount: 5, distinctSkuCount: 8 },
+      summary: { rowsCount: 10, normalRowsCount: 7, specialFlowRowsCount: 1, errorRowsCount: 1, distributionAreasCount: 2, ordersCount: 5, skuCount: 8, totalQuantity: 180 },
+      distributionAreas: [
+        {
+          distributionArea: 'דרום', rowsCount: 5, ordersCount: 3, skuCount: 4, totalQuantity: 100, specialFlowRowsCount: 0, errorRowsCount: 0,
+          orders: [
+            { orderNumber: 'SO-001', customerName: 'לקוח א', rowsCount: 2, skuCount: 2, totalQuantity: 50, productHandlingFlows: ['regular'], issues: [], items: [
+              { rawDemandRowId: 'row-1', sku: 'SKU-1', description: 'מוצר 1', category: 'קטגוריה א', quantity: 30, productHandlingFlow: 'regular', planningStatus: 'unplanned', issues: [] },
+              { rawDemandRowId: 'row-2', sku: 'SKU-2', description: 'מוצר 2', category: 'קטגוריה ב', quantity: 20, productHandlingFlow: 'regular', planningStatus: 'unplanned', issues: [] },
+            ] },
+          ],
+          productSummary: [],
+          issues: []
+        },
+        {
+          distributionArea: 'צפון', rowsCount: 5, ordersCount: 2, skuCount: 4, totalQuantity: 80, specialFlowRowsCount: 1, errorRowsCount: 0,
+          orders: [],
+          productSummary: [],
+          issues: []
+        }
+      ],
+      specialFlows: [],
+      errors: []
+    };
+
+    const mockDraftWithAssignments = {
+      draft: { id: 'draft-demand', tenantId: 'tenant-1', batchId: 'batch-demand', status: 'draft', createdBy: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      buckets: [
+        { id: 'bucket-1', tenantId: 'tenant-1', draftId: 'draft-demand', batchId: 'batch-demand', distributionArea: 'דרום', planningLineName: 'דרום', bucketName: 'קבוצה א', sortOrder: 0, createdAt: new Date().toISOString() }
+      ],
+      allocations: []
+    };
+
+    function mockDemandModeData() {
+      mockedBffRequest.mockImplementation((url: string) => {
+        const path = String(url);
+        if (path.includes('/api/manual-shifts/by-date')) return Promise.resolve({ shift: null, lines: [] });
+        if (path.includes('/planning-preview')) return Promise.resolve(mockPlanningPreview);
+        if (path.includes('/demand-planning-drafts/')) return Promise.resolve(mockDraftWithAssignments);
+        if (path.includes('/work-hierarchy')) return Promise.resolve({ shiftId: null, areas: [] });
+        return Promise.resolve([]);
+      });
+    }
+
+    it('renders demand mode when mode=demand + batchId + draftId in URL', async () => {
+      mockDemandModeData();
+      renderAt('/operator/manual/lines?batchId=batch-demand&draftId=draft-demand&mode=demand');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('manual-section-switcher-trigger')).toBeTruthy();
+      });
+    });
+
+    it('shows demand mode banner with DataSheet source info', async () => {
+      isDesktop = true;
+      mockDemandModeData();
+      renderAt('/operator/manual/lines?batchId=batch-demand&draftId=draft-demand&mode=demand');
+
+      await waitFor(() => {
+        expect(screen.getByText('תכנון ביקוש גולמי מ-DataSheet')).toBeTruthy();
+      });
+    });
+
+    it('does not show shift-specific empty state in demand mode', async () => {
+      mockDemandModeData();
+      renderAt('/operator/manual/lines?batchId=batch-demand&draftId=draft-demand&mode=demand');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('manual-section-switcher-trigger')).toBeTruthy();
+      });
+
+      expect(screen.queryByText('לא נמצאה משמרת ליום זה')).toBeNull();
+      expect(screen.queryByText('צור משמרת חדשה')).toBeNull();
+    });
+
+    it('demand mode does not call work-hierarchy as main source', async () => {
+      mockDemandModeData();
+      renderAt('/operator/manual/lines?batchId=batch-demand&draftId=draft-demand&mode=demand');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('manual-section-switcher-trigger')).toBeTruthy();
+      });
+
+      const hierarchyCalls = mockedBffRequest.mock.calls.filter(
+        ([url]) => String(url).includes('/work-hierarchy')
+      );
+      expect(hierarchyCalls.length).toBe(0);
+    });
+
+    it('demand mode calls planning-preview endpoint', async () => {
+      mockDemandModeData();
+      renderAt('/operator/manual/lines?batchId=batch-demand&draftId=draft-demand&mode=demand');
+
+      await waitFor(() => {
+        expect(mockedBffRequest.mock.calls.some(
+          ([url]) => String(url).includes('/planning-preview')
+        )).toBe(true);
+      });
+    });
+
+    it('does not render SchemeBuilder in demand mode when mode param is missing', async () => {
+      mockWorkspaceData();
+      renderAt('/operator/manual/lines?batchId=batch-demand&draftId=draft-demand');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('manual-section-switcher-trigger')).toBeTruthy();
+      });
+
+      expect(screen.queryByText('תכנון ביקוש גולמי')).toBeNull();
+    });
+  });
+
   it.each([
     routes.operatorManualWork,
     routes.operatorManualSummary,
