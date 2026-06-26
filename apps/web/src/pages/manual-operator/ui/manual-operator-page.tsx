@@ -23,6 +23,7 @@ import { ManualOperatorPlaceholder } from './manual-operator-placeholder';
 import { ManualOperatorShell } from './manual-operator-shell';
 import { ManualOperatorWorkSection } from './manual-operator-work-section';
 import { SchemeBuilder } from './scheme-builder';
+import { AppendModePanel } from './scheme-builder/append-mode-panel';
 import { PrintingHomePage } from '../printing/routes/PrintingHomePage';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -67,7 +68,9 @@ function ManualOperatorSectionContent({
   canMonthlyImport,
   hasExistingWork,
   batchId,
-  draftId
+  draftId,
+  mode,
+  shiftIdFromParams
 }: {
   section: ManualOperatorSection;
   shift: ManualShiftSession | null;
@@ -78,6 +81,8 @@ function ManualOperatorSectionContent({
   hasExistingWork: boolean;
   batchId: string | null;
   draftId: string | null;
+  mode: string | null;
+  shiftIdFromParams: string | null;
 }) {
   if (section === 'summary') {
     return shift ? (
@@ -98,6 +103,9 @@ function ManualOperatorSectionContent({
   }
 
   if (section === 'lines') {
+    if (mode === 'append' && shiftIdFromParams && batchId) {
+      return <AppendModePanel shiftId={shiftIdFromParams} batchId={batchId} />;
+    }
     if (batchId && draftId) {
       return <SchemeBuilder mode="demand" batchId={batchId} draftId={draftId} />;
     }
@@ -151,6 +159,8 @@ export function ManualOperatorPage() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const batchId = searchParams.get('batchId');
   const draftId = searchParams.get('draftId');
+  const mode = searchParams.get('mode');
+  const shiftIdFromParams = searchParams.get('shiftId');
 
   const isToday = selectedDate === todayDate;
   const { data: shiftData, isLoading } = useQuery(shiftByDateQueryOptions(selectedDate));
@@ -202,9 +212,11 @@ export function ManualOperatorPage() {
       hasExistingWork={hasExistingWork}
       batchId={batchId}
       draftId={draftId}
+      mode={mode}
+      shiftIdFromParams={shiftIdFromParams}
     />
   );
-  const renderSectionWithoutShift = section === 'import' || section === 'printing' || (section === 'lines' && !!batchId && !!draftId);
+  const renderSectionWithoutShift = section === 'import' || section === 'printing' || (section === 'lines' && !!batchId && !!draftId) || (section === 'lines' && mode === 'append' && !!shiftIdFromParams);
 
   if (section === 'work') {
     return (
@@ -251,7 +263,11 @@ export function ManualOperatorPage() {
         isDesktop={isDesktop}
         contentClassName={isDesktop && section === 'lines' ? 'overflow-hidden' : undefined}
         headerActions={
-          isDesktop && section === 'lines' && !batchId && !draftId ? (
+          isDesktop && section === 'lines' && mode === 'append' && shiftIdFromParams && batchId ? (
+            <span className="rounded border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+              הוספת ביקוש גולמי לקווים קיימים
+            </span>
+          ) : isDesktop && section === 'lines' && !batchId && !draftId ? (
             <span className="rounded border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
               טיוטה מקומית בלבד
             </span>

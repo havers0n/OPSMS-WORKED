@@ -10,11 +10,13 @@ export function WorkGroupWorkspace({
   orderItemMap,
   onStartAssign,
   isDemandMode = false,
+  isReadOnly = false,
 }: {
   selectedAreaName: string;
   orderItemMap: Record<string, SourceOrderItem[]>;
   onStartAssign: (workGroupId: string) => void;
   isDemandMode?: boolean;
+  isReadOnly?: boolean;
 }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const getPlanningLinesByArea = useSchemeBuilderStore((s) => s.getPlanningLinesByArea);
@@ -30,7 +32,7 @@ export function WorkGroupWorkspace({
     <div>
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-sm font-bold text-gray-900">קווי עבודה</h2>
-        {!isDemandMode && (
+        {!isDemandMode && !isReadOnly && (
           <button
             type="button"
             onClick={() => setShowCreateModal(true)}
@@ -45,9 +47,9 @@ export function WorkGroupWorkspace({
       {areaLines.length === 0 ? (
         <div className="bg-white border border-dashed border-gray-300 rounded-lg p-4 text-center">
           <p className="text-sm text-gray-500 mb-2">
-            {isDemandMode ? 'אין קבוצות עבודה בתכנון זה' : 'יש ליצור קווי עבודה ולשייך אליהן קבוצות עבודה ושורות מוצר.'}
+            {isDemandMode || isReadOnly ? 'אין קבוצות עבודה בתצוגה זו' : 'יש ליצור קווי עבודה ולשייך אליהן קבוצות עבודה ושורות מוצר.'}
           </p>
-          {!isDemandMode && (
+          {!isDemandMode && !isReadOnly && (
             <button
               type="button"
               onClick={() => setShowCreateModal(true)}
@@ -60,15 +62,16 @@ export function WorkGroupWorkspace({
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {areaLines.map((pl) => (
-            <PlanningLineSection
-              key={pl.id}
-              planningLine={pl}
-              orderItemMap={orderItemMap}
-              onStartAssign={onStartAssign}
-              isDemandMode={isDemandMode}
-            />
-          ))}
+            {areaLines.map((pl) => (
+              <PlanningLineSection
+                key={pl.id}
+                planningLine={pl}
+                orderItemMap={orderItemMap}
+                onStartAssign={onStartAssign}
+                isDemandMode={isDemandMode}
+                isReadOnly={isReadOnly}
+              />
+            ))}
         </div>
       )}
 

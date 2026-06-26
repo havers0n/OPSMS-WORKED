@@ -350,3 +350,93 @@ describe('Demand mode "פתח תכנון ב-Lines" button', () => {
     });
   });
 });
+
+describe('Append button visibility', () => {
+  it('shows append button when shiftId is provided and batch is saved', async () => {
+    previewMutateAsync.mockResolvedValueOnce(previewPayload);
+    createMutateAsync.mockResolvedValueOnce(createResponse);
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <DatasheetImportPanel shiftId="shift-123" />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    const fileInput = screen.getByLabelText('בחר קובץ DataSheet');
+    const file = new File(['test'], 'datasheet.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('שמור ביקוש גולמי')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText('שמור ביקוש גולמי'));
+
+    await waitFor(() => {
+      expect(screen.getByText('הוסף לקווים קיימים')).toBeTruthy();
+    });
+  });
+
+  it('does not show append button when shiftId is null', async () => {
+    previewMutateAsync.mockResolvedValueOnce(previewPayload);
+    createMutateAsync.mockResolvedValueOnce(createResponse);
+    const { container } = render(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <DatasheetImportPanel shiftId={null} />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    const fileInput = screen.getByLabelText('בחר קובץ DataSheet');
+    const file = new File(['test'], 'datasheet.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('שמור ביקוש גולמי')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText('שמור ביקוש גולמי'));
+
+    await waitFor(() => {
+      expect(container.textContent).toContain('Batch ID: test-batch-id');
+    });
+
+    expect(screen.queryByText('הוסף לקווים קיימים')).toBeNull();
+  });
+
+  it('navigates to append mode URL on click', async () => {
+    previewMutateAsync.mockResolvedValueOnce(previewPayload);
+    createMutateAsync.mockResolvedValueOnce(createResponse);
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <DatasheetImportPanel shiftId="shift-123" />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    const fileInput = screen.getByLabelText('בחר קובץ DataSheet');
+    const file = new File(['test'], 'datasheet.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('שמור ביקוש גולמי')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText('שמור ביקוש גולמי'));
+
+    await waitFor(() => {
+      expect(screen.getByText('הוסף לקווים קיימים')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText('הוסף לקווים קיימים'));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith(
+        '/operator/manual/lines?shiftId=shift-123&batchId=test-batch-id&mode=append'
+      );
+    });
+  });
+});

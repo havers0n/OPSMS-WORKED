@@ -7,11 +7,13 @@ export function WorkGroupCard({
   orderItemMap,
   onStartAssign,
   isDemandMode = false,
+  isReadOnly = false,
 }: {
   workGroup: WorkGroup;
   orderItemMap: Record<string, SourceOrderItem[]>;
   onStartAssign: (workGroupId: string) => void;
   isDemandMode?: boolean;
+  isReadOnly?: boolean;
 }) {
   const deleteWorkGroup = useSchemeBuilderStore((s) => s.deleteWorkGroup);
   const getWorkGroupItemCount = useSchemeBuilderStore((s) => s.getWorkGroupItemCount);
@@ -35,7 +37,7 @@ export function WorkGroupCard({
           <span className="w-2 h-2 rounded-full bg-blue-500 block shrink-0" />
           <h3 className="text-sm font-bold text-gray-900">{workGroup.name}</h3>
         </div>
-        {!isDemandMode && (
+        {!isDemandMode && !isReadOnly && (
           <button
             type="button"
             onClick={() => {
@@ -76,7 +78,7 @@ export function WorkGroupCard({
           </div>
         )}
 
-        {itemCount === 0 && !isDemandMode && (
+        {itemCount === 0 && !isDemandMode && !isReadOnly && (
           <button
             type="button"
             onClick={() => onStartAssign(workGroup.id)}

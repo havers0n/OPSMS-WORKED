@@ -10,11 +10,13 @@ export function PlanningLineSection({
   orderItemMap,
   onStartAssign,
   isDemandMode = false,
+  isReadOnly = false,
 }: {
   planningLine: PlanningLine;
   orderItemMap: Record<string, SourceOrderItem[]>;
   onStartAssign: (workGroupId: string) => void;
   isDemandMode?: boolean;
+  isReadOnly?: boolean;
 }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -60,7 +62,7 @@ export function PlanningLineSection({
       <div className="bg-gray-100 px-2 py-1.5 border-b border-gray-200 flex justify-between items-center">
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-2 h-2 rounded-full bg-indigo-500 block shrink-0" />
-          {!isDemandMode && isRenaming ? (
+          {!isDemandMode && !isReadOnly && isRenaming ? (
             <input
               autoFocus
               className="border border-gray-300 rounded px-2 py-0.5 text-sm font-bold w-36 focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -72,16 +74,16 @@ export function PlanningLineSection({
             />
           ) : (
             <h3
-              className={`text-sm font-bold ${isDemandMode ? 'text-gray-700' : 'text-gray-900 cursor-pointer hover:text-blue-600 transition-colors'}`}
-              onClick={() => { if (!isDemandMode) { setRenameValue(planningLine.name); setIsRenaming(true); } }}
-              title={isDemandMode ? undefined : 'לחץ לשינוי שם'}
+              className={`text-sm font-bold ${isDemandMode || isReadOnly ? 'text-gray-700' : 'text-gray-900 cursor-pointer hover:text-blue-600 transition-colors'}`}
+              onClick={() => { if (!isDemandMode && !isReadOnly) { setRenameValue(planningLine.name); setIsRenaming(true); } }}
+              title={isDemandMode || isReadOnly ? undefined : 'לחץ לשינוי שם'}
             >
               {planningLine.name}
             </h3>
           )}
           <span className="text-[11px] text-gray-400">קו עבודה</span>
         </div>
-        {!isDemandMode && (
+        {!isDemandMode && !isReadOnly && (
           <div className="flex items-center gap-1.5">
             <button
               type="button"
@@ -107,7 +109,7 @@ export function PlanningLineSection({
         {lineGroups.length === 0 ? (
           <div className="text-center py-2">
             <p className="text-xs text-gray-500 mb-2">אין קבוצות עבודה בקו זה</p>
-            {!isDemandMode && (
+            {!isDemandMode && !isReadOnly && (
               <button
                 type="button"
                 onClick={() => setShowCreateModal(true)}
@@ -127,6 +129,7 @@ export function PlanningLineSection({
                 orderItemMap={orderItemMap}
                 onStartAssign={onStartAssign}
                 isDemandMode={isDemandMode}
+                isReadOnly={isReadOnly}
               />
             ))}
           </div>

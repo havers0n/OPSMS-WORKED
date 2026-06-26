@@ -216,6 +216,23 @@ function mockWorkspaceData(options?: {
     if (path.includes('/check-units')) return Promise.resolve([]);
     if (path.includes('/ashlamot')) return Promise.resolve([]);
     if (path.endsWith(`/api/manual-shift-lines/${line.id}/orders`)) return Promise.resolve([]);
+    if (path.includes('/append-diff')) {
+      return Promise.resolve({
+        batchId: 'batch-1',
+        shiftId: shift.id,
+        existingLines: [],
+        summary: { totalRows: 0, newRows: 0, alreadyExistsRows: 0, quantityChangedRows: 0, duplicateRows: 0, specialFlowRows: 0, requiresReviewRows: 0, newOrders: 0 },
+        newOrders: [], alreadyExistsOrders: [], quantityChangedOrders: [],
+        duplicateOrders: [], specialFlowOrders: [], requiresReviewOrders: []
+      });
+    }
+    if (path.includes('/planning-preview')) {
+      return Promise.resolve({
+        batch: { id: 'batch-1', sourceFile: 'test.xlsx', sourceSheet: 'DataSheet', status: 'ready', rowsCount: 0 },
+        summary: { rowsCount: 0, normalRowsCount: 0, specialFlowRowsCount: 0, errorRowsCount: 0, distributionAreasCount: 0, ordersCount: 0, skuCount: 0, totalQuantity: 0 },
+        distributionAreas: [], specialFlows: [], errors: []
+      });
+    }
     if (path.includes(`/api/manual-shifts/${shift.id}/product-control`)) {
       return Promise.resolve({
         shiftId: shift.id,
@@ -847,6 +864,51 @@ describe('ManualOperatorPage URL sections', () => {
     await waitFor(() => {
       expect(screen.getByTestId('location').textContent).toBe(routes.operatorManualWork);
     });
+  });
+
+  it('renders append mode panel when mode=append is in URL', async () => {
+    mockWorkspaceData();
+    renderAt('/operator/manual/lines?shiftId=shift-1&batchId=batch-1&mode=append');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('manual-section-switcher-trigger')).toBeTruthy();
+    });
+  });
+
+  it('append mode renders without requiring shift data', async () => {
+    mockedBffRequest.mockImplementation((url: string) => {
+      const path = String(url);
+      if (path.includes('/api/manual-shifts/by-date')) return Promise.resolve({ shift: null, lines: [] });
+      if (path.includes('/append-diff') || path.includes('/planning-preview')) {
+        return Promise.resolve({
+          batchId: 'batch-1', shiftId: 'shift-1', existingLines: [],
+          summary: { totalRows: 0, newRows: 0, alreadyExistsRows: 0, quantityChangedRows: 0, duplicateRows: 0, specialFlowRows: 0, requiresReviewRows: 0, newOrders: 0 },
+          newOrders: [], alreadyExistsOrders: [], quantityChangedOrders: [],
+          duplicateOrders: [], specialFlowOrders: [], requiresReviewOrders: []
+        });
+      }
+      if (path.includes('/work-hierarchy')) return Promise.resolve({ shiftId: 'shift-1', areas: [] });
+      return Promise.resolve([]);
+    });
+
+    renderAt('/operator/manual/lines?shiftId=shift-1&batchId=batch-1&mode=append');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('manual-section-switcher-trigger')).toBeTruthy();
+    });
+  });
+
+  it('append mode does not show commit or mutation buttons', async () => {
+    mockWorkspaceData();
+    renderAt('/operator/manual/lines?shiftId=shift-1&batchId=batch-1&mode=append');
+
+    await waitFor(() => {
+      expect(screen.getByText('הוספת ביקוש גולמי לקווים קיימים')).toBeTruthy();
+    });
+
+    expect(screen.queryByText('פרסם')).toBeNull();
+    expect(screen.queryByText('מחק קו')).toBeNull();
+    expect(screen.queryByText('שייך שורות')).toBeNull();
   });
 
   it.each([

@@ -143,7 +143,7 @@ export function ManualOperatorImportSection({
               הנתונים יישמרו לתכנון לפי אזור הפצה ולא ייכנסו עדיין למשמרת
             </p>
           </div>
-          <DatasheetImportPanel />
+          <DatasheetImportPanel shiftId={shift?.id ?? null} />
         </section>
       </div>
 

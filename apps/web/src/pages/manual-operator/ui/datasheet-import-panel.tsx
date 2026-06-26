@@ -12,7 +12,7 @@ import { BffRequestError } from '@/shared/api/bff/client';
 import { translateBffError } from '@/shared/i18n';
 import { useNavigate } from 'react-router-dom';
 
-export function DatasheetImportPanel() {
+export function DatasheetImportPanel({ shiftId }: { shiftId?: string | null }) {
   const navigate = useNavigate();
   const previewMutation = usePreviewDataSheetDemandImport();
   const createMutation = useCreateDataSheetDemandImport();
@@ -338,6 +338,19 @@ export function DatasheetImportPanel() {
             <ExternalLink size={16} />
           )}
           {createDraftMutation.isPending ? 'יוצר תכנון...' : 'פתח תכנון ב-Lines'}
+        </button>
+      )}
+
+      {planningPreview && batchId && shiftId && (
+        <button
+          type="button"
+          onClick={() => {
+            navigate(`/operator/manual/lines?shiftId=${shiftId}&batchId=${batchId}&mode=append`);
+          }}
+          className="w-full min-h-12 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+        >
+          <ExternalLink size={16} />
+          הוסף לקווים קיימים
         </button>
       )}
 
