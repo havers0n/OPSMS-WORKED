@@ -287,7 +287,7 @@ async function patchOrderAshlama({
 
 async function patchOrder({
   orderId,
-  lineId: _lineId,
+  lineId,
   shiftId: _shiftId,
   pickerName,
   pickerWorkerId,
@@ -297,9 +297,11 @@ async function patchOrder({
   finishedAt,
   checkedAt
 }: PatchOrderInput): Promise<ManualShiftOrder> {
+  const body: Record<string, unknown> = { pickerName, pickerWorkerId, lineCount, palletCount, startedAt, finishedAt, checkedAt };
+  if (lineId !== undefined) body.lineId = lineId;
   return bffRequest<ManualShiftOrder>(`/api/manual-shift-orders/${orderId}`, {
     method: 'PATCH',
-    body: JSON.stringify({ pickerName, pickerWorkerId, lineCount, palletCount, startedAt, finishedAt, checkedAt })
+    body: JSON.stringify(body)
   });
 }
 

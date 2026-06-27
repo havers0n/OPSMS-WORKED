@@ -830,6 +830,7 @@ export type ManualShiftOrderPatch = {
   deliveryPointMatchStatus?: string;
   deliveryPointAliasText?: string | null;
   deliveryPointAliasId?: string | null;
+  lineId?: string | null;
 };
 
 export type ManualShiftOrderCheckUnitPatch = {
@@ -2375,6 +2376,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       if (patch.deliveryPointMatchStatus !== undefined) payload.delivery_point_match_status = patch.deliveryPointMatchStatus;
       if (patch.deliveryPointAliasText !== undefined) payload.delivery_point_alias_text = patch.deliveryPointAliasText;
       if (patch.deliveryPointAliasId !== undefined) payload.delivery_point_alias_id = patch.deliveryPointAliasId;
+      if (patch.lineId !== undefined) payload.line_id = patch.lineId;
 
       const { data, error } = await supabase
         .from('manual_shift_orders')

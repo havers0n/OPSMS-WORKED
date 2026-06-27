@@ -556,6 +556,9 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
                 onStartAssign={handleStartAssign}
                 capabilities={capabilities}
                 orderNumberMap={orderNumberMap}
+                sourceOrders={source.orders}
+                isShiftMode={!isDemandMode}
+                shiftId={!isDemandMode && shiftId ? shiftId : null}
               />
             ) : (
               <div className="bg-white border border-dashed border-gray-300 rounded-lg p-6 text-center">
