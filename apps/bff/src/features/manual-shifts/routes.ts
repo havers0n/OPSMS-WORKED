@@ -72,7 +72,10 @@ import {
   demandPlanningDraftWithAssignmentsResponseSchema,
   demandPlanningPutPlanRequestBodySchema,
   demandImportAppendDiffResponseSchema,
-  demandImportAppendDiffRequestSchema
+  demandImportAppendDiffRequestSchema,
+  demandBacklogListResponseSchema,
+  demandBacklogSummaryResponseSchema,
+  demandBacklogQuerySchema
 } from '../../schemas.js';
 import { parseOrThrow } from '../../validation.js';
 import { generatePickerSheetPdf, type PickerSheetPdfParams } from './picker-sheet-pdf.js';
@@ -897,6 +900,50 @@ export function registerManualShiftsRoutes(
       });
 
       return parseOrThrow(demandImportAppendDiffResponseSchema, result);
+    });
+  });
+
+  // --- Demand Backlog endpoints (Phase 1: read-only) ---
+
+  app.get('/api/demand-backlog', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-backlog', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      const tenantId = requireTenant(auth);
+      const query = parseOrThrow(demandBacklogQuerySchema, request.query);
+
+      const result = await getManualShiftsService(auth).getDemandBacklog({
+        tenantId,
+        status: query.status,
+        distributionArea: query.distributionArea,
+        search: query.search,
+        sourceBatchId: query.sourceBatchId,
+        page: query.page,
+        limit: query.limit
+      });
+
+      return parseOrThrow(demandBacklogListResponseSchema, result);
+    });
+  });
+
+  app.get('/api/demand-backlog/summary', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-backlog/summary', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      const tenantId = requireTenant(auth);
+      const query = parseOrThrow(demandBacklogQuerySchema, request.query);
+
+      const result = await getManualShiftsService(auth).getDemandBacklogSummary({
+        tenantId,
+        status: query.status,
+        distributionArea: query.distributionArea,
+        search: query.search,
+        sourceBatchId: query.sourceBatchId
+      });
+
+      return parseOrThrow(demandBacklogSummaryResponseSchema, result);
     });
   });
 

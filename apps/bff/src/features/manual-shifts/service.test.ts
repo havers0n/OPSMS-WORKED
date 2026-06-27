@@ -752,6 +752,16 @@ function createRepo() {
     insertDemandPlanningAllocations: vi.fn(async () => []),
     listDemandPlanningAllocations: vi.fn(async () => []),
     listRawDemandRowsByIds: vi.fn(async () => []),
+    findBacklogItemByIdentityKey: vi.fn().mockResolvedValue(null),
+    findBacklogSourceLinkByRawRowId: vi.fn().mockResolvedValue(null),
+    createBacklogItem: vi.fn().mockResolvedValue({ id: 'mock-id' }),
+    updateBacklogItem: vi.fn().mockResolvedValue({}),
+    createBacklogSourceLink: vi.fn().mockResolvedValue({}),
+    listBacklogItems: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+    listBacklogItemAllocationsSum: vi.fn().mockResolvedValue([]),
+    listBacklogSourceBatches: vi.fn().mockResolvedValue([]),
+    getBacklogSummary: vi.fn().mockResolvedValue({}),
+    countBacklogDistinctBatches: vi.fn().mockResolvedValue(0),
   };
  
   return { repo, state };
@@ -1598,7 +1608,9 @@ describe('manual shift workers service', () => {
               k !== 'deleteDemandPlanningAllocationsByDraft' &&
               k !== 'insertDemandPlanningAllocations' &&
               k !== 'listDemandPlanningAllocations' &&
-              k !== 'listRawDemandRowsByIds'
+              k !== 'listRawDemandRowsByIds' &&
+              k !== 'getBacklogSummary' &&
+              k !== 'countBacklogDistinctBatches'
     );
     expect(canonicalKeys).toEqual([]);
   });

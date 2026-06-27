@@ -655,6 +655,18 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
       specialFlowOrders: [],
       requiresReviewOrders: []
     })),
+    mergeRowsIntoBacklog: vi.fn().mockResolvedValue(undefined),
+    getDemandBacklog: vi.fn(async () => ({ items: [], pagination: { page: 1, limit: 50, total: 0 } })),
+    getDemandBacklogSummary: vi.fn(async () => ({
+      totalItems: 0,
+      totalOpenQuantity: 0,
+      totalAllocatedQuantity: 0,
+      totalSourceBatches: 0,
+      byStatus: [],
+      byDistributionArea: [],
+      oldestItemSeenAt: null,
+      newestItemSeenAt: null
+    })),
     ...overrides
   };
 }
