@@ -153,6 +153,7 @@ export function AppendModePanel({ shiftId, batchId }: AppendModePanelProps) {
                 orderItemMap={{}}
                 onStartAssign={() => {}}
                 capabilities={APPEND_CAPABILITIES}
+                orderNumberMap={{}}
               />
             ) : (
               <div className="bg-white border border-dashed border-gray-300 rounded-lg p-6 text-center">
