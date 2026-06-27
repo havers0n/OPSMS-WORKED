@@ -7,11 +7,13 @@ export function WorkGroupCard({
   orderItemMap,
   onStartAssign,
   capabilities,
+  orderNumberMap,
 }: {
   workGroup: WorkGroup;
   orderItemMap: Record<string, SourceOrderItem[]>;
   onStartAssign: (workGroupId: string) => void;
   capabilities: SchemeBuilderCapabilities;
+  orderNumberMap: Record<string, string | null>;
 }) {
   const deleteWorkGroup = useSchemeBuilderStore((s) => s.deleteWorkGroup);
   const getWorkGroupItemCount = useSchemeBuilderStore((s) => s.getWorkGroupItemCount);
@@ -22,11 +24,6 @@ export function WorkGroupCard({
   const totalQty = getWorkGroupTotalQuantity(workGroup.id);
   const orderIds = getWorkGroupOrderIds(workGroup.id, orderItemMap);
   const uniqueOrdersCount = orderIds.size;
-
-  function formatOrderId(oid: string): string {
-    if (oid.length === 36 && oid.includes('-')) return oid.slice(0, 13) + '…';
-    return oid;
-  }
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -67,7 +64,7 @@ export function WorkGroupCard({
           <div className="flex flex-wrap gap-1 pt-1">
             {Array.from(orderIds).slice(0, 4).map((oid) => (
               <span key={oid} className="text-[10px] bg-blue-50 text-blue-700 rounded px-1.5 py-0.5 truncate max-w-[110px]">
-                {formatOrderId(oid)}
+                {orderNumberMap[oid] ?? '—'}
               </span>
             ))}
             {orderIds.size > 4 && (

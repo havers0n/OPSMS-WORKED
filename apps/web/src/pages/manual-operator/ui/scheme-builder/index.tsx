@@ -228,6 +228,14 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     return shiftSource?.orders ?? [];
   }, [isDemandMode, demandSource, shiftSource]);
 
+  const orderNumberMap = useMemo(() => {
+    const map: Record<string, string | null> = {};
+    for (const o of allOrders) {
+      map[o.orderId] = o.orderNumber;
+    }
+    return map;
+  }, [allOrders]);
+
   const areaOrders = useMemo(() => {
     if (!allOrders || !selectedAreaName) return [];
     return allOrders.filter((o) => o.areaName === selectedAreaName);
@@ -340,6 +348,36 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
 
   const plMap = useMemo(() => new Map(planningLines.map((pl) => [pl.id, pl])), [planningLines]);
 
+  const BANNER_DISMISS_KEY = 'wos:demand-planning:banner-dismiss';
+  const [userDismissed, setUserDismissed] = useState(false);
+
+  const bannerDismissKey = useMemo(() => {
+    if (!isDemandMode || !batchId || !planningPreview) return null;
+    return `${BANNER_DISMISS_KEY}:${batchId}:${draftId ?? 'no-draft'}:${planningPreview.batch.status}`;
+  }, [isDemandMode, batchId, draftId, planningPreview]);
+
+  const isBannerPermanentDismiss = useMemo(() => {
+    if (!bannerDismissKey) return true;
+    try {
+      return localStorage.getItem(bannerDismissKey) === 'true';
+    } catch {
+      return false;
+    }
+  }, [bannerDismissKey]);
+
+  const isBannerDismissed = userDismissed || isBannerPermanentDismiss;
+
+  const handleDismissBanner = useCallback(() => {
+    if (bannerDismissKey) {
+      try {
+        localStorage.setItem(bannerDismissKey, 'true');
+      } catch {
+        // localStorage may be unavailable
+      }
+      setUserDismissed(true);
+    }
+  }, [bannerDismissKey]);
+
   const handleSaveDraft = useCallback(() => {
     if (!draftId || !capabilities.canSaveDraft) return;
     const buckets = workGroups.map((wg) => {
@@ -407,17 +445,25 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     <div className="flex-1 flex flex-col bg-gray-50" dir="rtl">
 
       {/* Demand mode banner */}
-      {isDemandMode && (
-        <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-2 text-sm">
-          <p className="font-bold text-amber-900">תכנון ביקוש גולמי מ-DataSheet</p>
-          <div className="text-xs text-amber-700 mt-0.5 space-y-0.5">
-            {planningPreview && (
-              <>
+      {isDemandMode && !isBannerDismissed && (
+        <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-2 text-sm flex items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-amber-900">תכנון ביקוש גולמי מ-DataSheet</p>
+            <div className="text-xs text-amber-700 mt-0.5 space-y-0.5">
+              {planningPreview && (
                 <p>קובץ: {planningPreview.batch.sourceFile} | גיליון: {planningPreview.batch.sourceSheet} | סטטוס: {planningPreview.batch.status}</p>
-              </>
-            )}
-            <p>לא שויך למשמרת — הנתונים מגיעים מ-DataSheet ונמצאים בשלב תכנון בלבד</p>
+              )}
+              <p>לא שויך למשמרת — הנתונים מגיעים מ-DataSheet ונמצאים בשלב תכנון בלבד</p>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={handleDismissBanner}
+            className="shrink-0 text-amber-400 hover:text-amber-600 transition-colors p-0.5"
+            aria-label="סגור"
+          >
+            <X size={16} />
+          </button>
         </div>
       )}
 
@@ -509,6 +555,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
                 orderItemMap={orderItemMap}
                 onStartAssign={handleStartAssign}
                 capabilities={capabilities}
+                orderNumberMap={orderNumberMap}
               />
             ) : (
               <div className="bg-white border border-dashed border-gray-300 rounded-lg p-6 text-center">
