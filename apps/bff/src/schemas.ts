@@ -110,7 +110,12 @@ import {
   productControlResponseSchema,
   demandImportAppendDiffResponseSchema as demandImportAppendDiffDtoSchema,
   demandImportAppendExistingLineSchema,
-  demandImportAppendExistingItemSchema
+  demandImportAppendExistingItemSchema,
+  demandBacklogListResponseSchema,
+  demandBacklogSummaryResponseSchema,
+  demandBacklogQuerySchema,
+  demandBacklogItemResponseSchema,
+  demandBacklogSourceBatchSchema
 } from '@wos/domain';
 
 // ── Rack Inspector ──────────────────────────────────────────────────────────
@@ -606,6 +611,9 @@ export const demandImportAppendDiffResponseSchema = demandImportAppendDiffDtoSch
 export const demandImportAppendDiffRequestSchema = z.object({
   shiftId: z.string().uuid()
 });
+
+export { demandBacklogListResponseSchema, demandBacklogSummaryResponseSchema, demandBacklogQuerySchema };
+export { demandBacklogItemResponseSchema, demandBacklogSourceBatchSchema };
 
 // ── Manual shift print ──────────────────────────────────────────────────────────
 

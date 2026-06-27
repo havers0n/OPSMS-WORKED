@@ -35,7 +35,11 @@ import type {
   BucketProductRollupRow,
   DemandPlanningDraft,
   DemandPlanningBucket,
-  DemandPlanningAllocation
+  DemandPlanningAllocation,
+  DemandBacklogItem,
+  DemandBacklogItemStatus,
+  DemandBacklogSourceRow,
+  DemandBacklogMergeAction
 } from '@wos/domain';
 
 export type ProductControlDemandRow = {
@@ -322,6 +326,10 @@ const demandImportBatchColumns =
   'id,tenant_id,source_file,source_sheet,uploaded_by,uploaded_at,status,rows_count,raw_rows_count,warning_rows_count,error_rows_count,special_flow_rows_count,distribution_areas_count,distinct_orders_count,distinct_sku_count';
 const rawDemandRowColumns =
   'id,tenant_id,batch_id,source_sheet,source_row_number,agent,order_date,customer_name,order_number,sku,description,category,quantity,cost,notes,distribution_area,raw_route_line,planned_delivery_date,planned_route_line,planned_work_bucket,planning_status,route_flow,product_handling_flow,note_date_hints,issues,created_at';
+const demandBacklogItemColumns =
+  'id,tenant_id,identity_key,status,total_quantity,order_number,customer_name,sku,description,category,distribution_area,product_handling_flow,route_flow,first_seen_at,last_seen_at,last_quantity_changed_at,created_at,updated_at';
+const demandBacklogSourceColumns =
+  'id,tenant_id,backlog_item_id,raw_demand_row_id,batch_id,merge_action,previous_quantity,new_quantity,quantity_delta,created_at';
 const lineEventColumns =
   'id,tenant_id,shift_id,line_id,event_type,actor_name,actor_profile_id,payload,created_at';
 const eventColumns =
@@ -522,6 +530,80 @@ function mapDemandPlanningAllocationRow(row: DemandPlanningAllocationRow): Deman
     allocatedQuantity: Number(row.allocated_quantity),
     createdAt: row.created_at,
     updatedAt: row.updated_at
+  };
+}
+
+// --- Demand Backlog Row types and mappers ---
+
+type DemandBacklogItemRow = {
+  id: string;
+  tenant_id: string;
+  identity_key: string;
+  status: string;
+  total_quantity: number;
+  order_number: string | null;
+  customer_name: string | null;
+  sku: string | null;
+  description: string | null;
+  category: string | null;
+  distribution_area: string | null;
+  product_handling_flow: string;
+  route_flow: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  last_quantity_changed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type DemandBacklogSourceRowRaw = {
+  id: string;
+  tenant_id: string;
+  backlog_item_id: string;
+  raw_demand_row_id: string;
+  batch_id: string;
+  merge_action: string;
+  previous_quantity: number | null;
+  new_quantity: number | null;
+  quantity_delta: number | null;
+  created_at: string;
+};
+
+function mapDemandBacklogItemRow(row: DemandBacklogItemRow): DemandBacklogItem {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    identityKey: row.identity_key,
+    status: row.status as DemandBacklogItemStatus,
+    totalQuantity: Number(row.total_quantity ?? 0),
+    orderNumber: row.order_number,
+    customerName: row.customer_name,
+    sku: row.sku,
+    description: row.description,
+    category: row.category,
+    distributionArea: row.distribution_area,
+    productHandlingFlow: row.product_handling_flow as DemandBacklogItem['productHandlingFlow'],
+    routeFlow: row.route_flow as DemandBacklogItem['routeFlow'],
+    firstSeenAt: row.first_seen_at,
+    lastSeenAt: row.last_seen_at,
+    lastQuantityChangedAt: row.last_quantity_changed_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function mapDemandBacklogSourceRow(row: DemandBacklogSourceRowRaw): DemandBacklogSourceRow {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    backlogItemId: row.backlog_item_id,
+    rawDemandRowId: row.raw_demand_row_id,
+    batchId: row.batch_id,
+    mergeAction: row.merge_action as DemandBacklogMergeAction,
+    previousQuantity: row.previous_quantity !== null ? Number(row.previous_quantity) : null,
+    newQuantity: row.new_quantity !== null ? Number(row.new_quantity) : null,
+    quantityDelta: row.quantity_delta !== null ? Number(row.quantity_delta) : null,
+    createdAt: row.created_at
   };
 }
 
@@ -1048,6 +1130,107 @@ export type ManualShiftsRepo = {
     tenantId: string;
     rowIds: string[];
   }): Promise<RawDemandRow[]>;
+
+  // --- Demand Backlog ---
+
+  findBacklogItemByIdentityKey(input: {
+    tenantId: string;
+    identityKey: string;
+  }): Promise<DemandBacklogItem | null>;
+
+  findBacklogSourceLinkByRawRowId(input: {
+    tenantId: string;
+    rawDemandRowId: string;
+  }): Promise<DemandBacklogSourceRow | null>;
+
+  createBacklogItem(input: {
+    tenantId: string;
+    identityKey: string;
+    status: DemandBacklogItemStatus;
+    totalQuantity: number;
+    orderNumber: string | null;
+    customerName: string | null;
+    sku: string | null;
+    description: string | null;
+    category: string | null;
+    distributionArea: string | null;
+    productHandlingFlow: string;
+    routeFlow: string;
+  }): Promise<DemandBacklogItem>;
+
+  updateBacklogItem(input: {
+    tenantId: string;
+    backlogItemId: string;
+    patch: {
+      totalQuantity?: number;
+      status?: DemandBacklogItemStatus;
+      description?: string | null;
+      category?: string | null;
+      lastSeenAt?: string;
+      lastQuantityChangedAt?: string | null;
+    };
+  }): Promise<DemandBacklogItem>;
+
+  createBacklogSourceLink(input: {
+    tenantId: string;
+    backlogItemId: string;
+    rawDemandRowId: string;
+    batchId: string;
+    mergeAction: DemandBacklogMergeAction;
+    previousQuantity: number | null;
+    newQuantity: number | null;
+    quantityDelta: number | null;
+  }): Promise<DemandBacklogSourceRow>;
+
+  listBacklogItems(input: {
+    tenantId: string;
+    status: 'open' | 'special_flow' | 'requires_review' | 'all';
+    distributionArea?: string;
+    search?: string;
+    sourceBatchId?: string;
+    page: number;
+    limit: number;
+  }): Promise<{ items: DemandBacklogItem[]; total: number }>;
+
+  listBacklogItemAllocationsSum(input: {
+    tenantId: string;
+    backlogItemIds: string[];
+  }): Promise<Array<{ backlogItemId: string; allocatedQuantity: number }>>;
+
+  listBacklogSourceBatches(input: {
+    tenantId: string;
+    backlogItemIds: string[];
+  }): Promise<Array<{
+    backlogItemId: string;
+    batchId: string;
+    sourceFile: string;
+    uploadedAt: string;
+    mergeAction: string;
+    quantityAtImport: number;
+    previousQuantity: number | null;
+    newQuantity: number | null;
+    quantityDelta: number | null;
+  }>>;
+
+  getBacklogSummary(input: {
+    tenantId: string;
+    status: 'open' | 'special_flow' | 'requires_review' | 'all';
+    distributionArea?: string;
+    search?: string;
+    sourceBatchId?: string;
+  }): Promise<{
+    totalItems: number;
+    byStatus: Array<{ label: string; count: number }>;
+    byDistributionArea: Array<{ distributionArea: string | null; count: number; totalOpenQuantity: number }>;
+    oldestItemSeenAt: string | null;
+    newestItemSeenAt: string | null;
+    totalOpenQuantity: number;
+    totalAllocatedQuantity: number;
+  }>;
+
+  countBacklogDistinctBatches(input: {
+    tenantId: string;
+  }): Promise<number>;
 };
 
 export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRepo {
@@ -2778,6 +2961,409 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       if (error) throw error;
 
       return ((data ?? []) as RawDemandRowRow[]).map(mapRawDemandRow);
+    },
+
+    // --- Demand Backlog implementations ---
+
+    async findBacklogItemByIdentityKey(input) {
+      const { data, error } = await supabase
+        .from('demand_backlog_items')
+        .select(demandBacklogItemColumns)
+        .eq('tenant_id', input.tenantId)
+        .eq('identity_key', input.identityKey)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data ? mapDemandBacklogItemRow(data as DemandBacklogItemRow) : null;
+    },
+
+    async findBacklogSourceLinkByRawRowId(input) {
+      const { data, error } = await supabase
+        .from('demand_backlog_item_sources')
+        .select(demandBacklogSourceColumns)
+        .eq('tenant_id', input.tenantId)
+        .eq('raw_demand_row_id', input.rawDemandRowId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data ? mapDemandBacklogSourceRow(data as DemandBacklogSourceRowRaw) : null;
+    },
+
+    async createBacklogItem(input) {
+      const { data, error } = await supabase
+        .from('demand_backlog_items')
+        .insert({
+          tenant_id: input.tenantId,
+          identity_key: input.identityKey,
+          status: input.status,
+          total_quantity: input.totalQuantity,
+          order_number: input.orderNumber,
+          customer_name: input.customerName,
+          sku: input.sku,
+          description: input.description,
+          category: input.category,
+          distribution_area: input.distributionArea,
+          product_handling_flow: input.productHandlingFlow,
+          route_flow: input.routeFlow
+        })
+        .select(demandBacklogItemColumns)
+        .single();
+
+      if (error) throw error;
+      return mapDemandBacklogItemRow(data as DemandBacklogItemRow);
+    },
+
+    async updateBacklogItem(input) {
+      const { data, error } = await supabase
+        .from('demand_backlog_items')
+        .update({
+          ...(input.patch.totalQuantity !== undefined ? { total_quantity: input.patch.totalQuantity } : {}),
+          ...(input.patch.status !== undefined ? { status: input.patch.status } : {}),
+          ...(input.patch.description !== undefined ? { description: input.patch.description } : {}),
+          ...(input.patch.category !== undefined ? { category: input.patch.category } : {}),
+          ...(input.patch.lastSeenAt !== undefined ? { last_seen_at: input.patch.lastSeenAt } : {}),
+          ...(input.patch.lastQuantityChangedAt !== undefined ? { last_quantity_changed_at: input.patch.lastQuantityChangedAt } : {})
+        })
+        .eq('tenant_id', input.tenantId)
+        .eq('id', input.backlogItemId)
+        .select(demandBacklogItemColumns)
+        .single();
+
+      if (error) throw error;
+      return mapDemandBacklogItemRow(data as DemandBacklogItemRow);
+    },
+
+    async createBacklogSourceLink(input) {
+      const { data, error } = await supabase
+        .from('demand_backlog_item_sources')
+        .insert({
+          tenant_id: input.tenantId,
+          backlog_item_id: input.backlogItemId,
+          raw_demand_row_id: input.rawDemandRowId,
+          batch_id: input.batchId,
+          merge_action: input.mergeAction,
+          previous_quantity: input.previousQuantity,
+          new_quantity: input.newQuantity,
+          quantity_delta: input.quantityDelta
+        })
+        .select(demandBacklogSourceColumns)
+        .single();
+
+      if (error) throw error;
+      return mapDemandBacklogSourceRow(data as DemandBacklogSourceRowRaw);
+    },
+
+    async listBacklogItems(input) {
+      let query = supabase
+        .from('demand_backlog_items')
+        .select(demandBacklogItemColumns, { count: 'exact', head: false })
+        .eq('tenant_id', input.tenantId);
+
+      if (input.status !== 'all') {
+        query = query.eq('status', input.status);
+      }
+
+      if (input.distributionArea) {
+        query = query.eq('distribution_area', input.distributionArea);
+      }
+
+      if (input.search) {
+        const term = `%${input.search}%`;
+        query = query.or(
+          `order_number.ilike.${term},customer_name.ilike.${term},sku.ilike.${term},description.ilike.${term}`
+        );
+      }
+
+      if (input.sourceBatchId) {
+        query = query.filter(
+          'id', 'in',
+          `(select backlog_item_id from demand_backlog_item_sources where batch_id = '${input.sourceBatchId}')`
+        );
+      }
+
+      const from = (input.page - 1) * input.limit;
+      const to = from + input.limit - 1;
+
+      const { data, error, count } = await query
+        .order('first_seen_at', { ascending: false })
+        .range(from, to);
+
+      if (error) throw error;
+
+      return {
+        items: ((data ?? []) as DemandBacklogItemRow[]).map(mapDemandBacklogItemRow),
+        total: count ?? 0
+      };
+    },
+
+    async listBacklogItemAllocationsSum(input) {
+      if (input.backlogItemIds.length === 0) return [];
+
+      const { data, error } = await supabase
+        .from('demand_backlog_item_sources')
+        .select(`
+          backlog_item_id,
+          raw_demand_row_id
+        `)
+        .eq('tenant_id', input.tenantId)
+        .in('backlog_item_id', input.backlogItemIds);
+
+      if (error) throw error;
+
+      const sourceRows = (data ?? []) as Array<{ backlog_item_id: string; raw_demand_row_id: string }>;
+      const rawRowIds = sourceRows.map(r => r.raw_demand_row_id);
+
+      if (rawRowIds.length === 0) {
+        return input.backlogItemIds.map(id => ({ backlogItemId: id, allocatedQuantity: 0 }));
+      }
+
+      const { data: allocData, error: allocError } = await supabase
+        .from('demand_planning_allocations')
+        .select('raw_demand_row_id, allocated_quantity')
+        .in('raw_demand_row_id', rawRowIds);
+
+      if (allocError) throw allocError;
+
+      const allocRows = (allocData ?? []) as Array<{ raw_demand_row_id: string; allocated_quantity: number }>;
+      const allocByRowId = new Map<string, number>();
+      for (const a of allocRows) {
+        allocByRowId.set(a.raw_demand_row_id, (allocByRowId.get(a.raw_demand_row_id) ?? 0) + Number(a.allocated_quantity));
+      }
+
+      const result = new Map<string, number>();
+      for (const id of input.backlogItemIds) {
+        result.set(id, 0);
+      }
+      for (const sr of sourceRows) {
+        const alloc = allocByRowId.get(sr.raw_demand_row_id) ?? 0;
+        result.set(sr.backlog_item_id, (result.get(sr.backlog_item_id) ?? 0) + alloc);
+      }
+
+      return Array.from(result.entries()).map(([backlogItemId, allocatedQuantity]) => ({
+        backlogItemId,
+        allocatedQuantity
+      }));
+    },
+
+    async listBacklogSourceBatches(input) {
+      if (input.backlogItemIds.length === 0) return [];
+
+      const { data, error } = await supabase
+        .from('demand_backlog_item_sources')
+        .select(`
+          backlog_item_id,
+          batch_id,
+          merge_action,
+          previous_quantity,
+          new_quantity,
+          quantity_delta,
+          created_at
+        `)
+        .eq('tenant_id', input.tenantId)
+        .in('backlog_item_id', input.backlogItemIds);
+
+      if (error) throw error;
+
+      const sourceRows = (data ?? []) as Array<{
+        backlog_item_id: string;
+        batch_id: string;
+        merge_action: string;
+        previous_quantity: number | null;
+        new_quantity: number | null;
+        quantity_delta: number | null;
+        created_at: string;
+      }>;
+
+      const batchIds = [...new Set(sourceRows.map(r => r.batch_id))];
+      if (batchIds.length === 0) return [];
+
+      const { data: batchData, error: batchError } = await supabase
+        .from('demand_import_batches')
+        .select('id, source_file, uploaded_at')
+        .in('id', batchIds);
+
+      if (batchError) throw batchError;
+
+      const batchMap = new Map<string, { source_file: string; uploaded_at: string }>();
+      for (const b of (batchData ?? []) as Array<{ id: string; source_file: string; uploaded_at: string }>) {
+        batchMap.set(b.id, { source_file: b.source_file, uploaded_at: b.uploaded_at });
+      }
+
+      return sourceRows.map(sr => {
+        const batch = batchMap.get(sr.batch_id);
+        return {
+          backlogItemId: sr.backlog_item_id,
+          batchId: sr.batch_id,
+          sourceFile: batch?.source_file ?? '',
+          uploadedAt: batch?.uploaded_at ?? sr.created_at,
+          mergeAction: sr.merge_action,
+          quantityAtImport: sr.new_quantity !== null ? Number(sr.new_quantity) : 0,
+          previousQuantity: sr.previous_quantity !== null ? Number(sr.previous_quantity) : null,
+          newQuantity: sr.new_quantity !== null ? Number(sr.new_quantity) : null,
+          quantityDelta: sr.quantity_delta !== null ? Number(sr.quantity_delta) : null
+        };
+      });
+    },
+
+    async getBacklogSummary(input) {
+      let query = supabase
+        .from('demand_backlog_items')
+        .select(demandBacklogItemColumns, { count: 'exact', head: true })
+        .eq('tenant_id', input.tenantId);
+
+      if (input.status !== 'all') {
+        query = query.eq('status', input.status);
+      }
+
+      if (input.distributionArea) {
+        query = query.eq('distribution_area', input.distributionArea);
+      }
+
+      if (input.search) {
+        const term = `%${input.search}%`;
+        query = query.or(
+          `order_number.ilike.${term},customer_name.ilike.${term},sku.ilike.${term},description.ilike.${term}`
+        );
+      }
+
+      if (input.sourceBatchId) {
+        query = query.filter(
+          'id', 'in',
+          `(select backlog_item_id from demand_backlog_item_sources where batch_id = '${input.sourceBatchId}')`
+        );
+      }
+
+      const { count: totalItems, error: countError } = await query;
+      if (countError) throw countError;
+
+      const { data: statusData, error: statusError } = await supabase
+        .from('demand_backlog_items')
+        .select('status, count', { count: 'exact', head: true })
+        .eq('tenant_id', input.tenantId);
+
+      if (statusError) throw statusError;
+
+      const { data: byStatusRaw, error: byStatusError } = await supabase
+        .from('demand_backlog_items')
+        .select('status, count')
+        .eq('tenant_id', input.tenantId);
+
+      if (byStatusError) throw byStatusError;
+
+      const statusCounts = new Map<string, number>();
+      for (const r of (byStatusRaw ?? []) as Array<{ status: string; count: number }>) {
+        statusCounts.set(r.status, Number(r.count ?? 0));
+      }
+
+      const byStatus = Array.from(statusCounts.entries())
+        .map(([label, count]) => ({ label, count }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+
+      const { data: areaRaw, error: areaError } = await supabase
+        .from('demand_backlog_items')
+        .select('distribution_area, count, total_quantity')
+        .eq('tenant_id', input.tenantId);
+
+      if (areaError) throw areaError;
+
+      const areaMap = new Map<string, { count: number; totalOpenQuantity: number }>();
+      for (const r of (areaRaw ?? []) as Array<{ distribution_area: string | null; count: number; total_quantity: number }>) {
+        const key = r.distribution_area ?? '__missing__';
+        const entry = areaMap.get(key) ?? { count: 0, totalOpenQuantity: 0 };
+        entry.count += Number(r.count ?? 0);
+        entry.totalOpenQuantity += Number(r.total_quantity ?? 0);
+        areaMap.set(key, entry);
+      }
+
+      const byDistributionArea = Array.from(areaMap.entries())
+        .map(([key, entry]) => ({
+          distributionArea: key === '__missing__' ? null : key,
+          count: entry.count,
+          totalOpenQuantity: entry.totalOpenQuantity
+        }))
+        .sort((a, b) => {
+          if (a.distributionArea === null) return 1;
+          if (b.distributionArea === null) return -1;
+          return a.distributionArea.localeCompare(b.distributionArea, 'he');
+        });
+
+      const { data: oldestRaw, error: oldestError } = await supabase
+        .from('demand_backlog_items')
+        .select('first_seen_at')
+        .eq('tenant_id', input.tenantId)
+        .order('first_seen_at', { ascending: true })
+        .limit(1);
+
+      if (oldestError) throw oldestError;
+
+      const { data: newestRaw, error: newestError } = await supabase
+        .from('demand_backlog_items')
+        .select('first_seen_at')
+        .eq('tenant_id', input.tenantId)
+        .order('first_seen_at', { ascending: false })
+        .limit(1);
+
+      if (newestError) throw newestError;
+
+      // Compute tenant-wide allocated quantity
+      const { data: sourceLinksRaw, error: sourceLinksError } = await supabase
+        .from('demand_backlog_item_sources')
+        .select('raw_demand_row_id')
+        .eq('tenant_id', input.tenantId);
+
+      if (sourceLinksError) throw sourceLinksError;
+
+      const sourceLinkRowIds = [...new Set((sourceLinksRaw ?? []).map(r => (r as { raw_demand_row_id: string }).raw_demand_row_id))];
+
+      let totalAllocatedQuantity = 0;
+      if (sourceLinkRowIds.length > 0) {
+        const { data: allocRaw, error: allocError } = await supabase
+          .from('demand_planning_allocations')
+          .select('allocated_quantity')
+          .in('raw_demand_row_id', sourceLinkRowIds);
+
+        if (allocError) throw allocError;
+
+        totalAllocatedQuantity = (allocRaw ?? []).reduce(
+          (sum, r) => sum + Number((r as { allocated_quantity: number }).allocated_quantity ?? 0), 0
+        );
+      }
+
+      // Sum total_quantity for open/requires_review statuses
+      const { data: qtyRaw, error: qtyError } = await supabase
+        .from('demand_backlog_items')
+        .select('total_quantity')
+        .eq('tenant_id', input.tenantId)
+        .in('status', ['open', 'requires_review']);
+
+      if (qtyError) throw qtyError;
+
+      const totalDemand = (qtyRaw ?? []).reduce(
+        (sum, r) => sum + Number((r as { total_quantity: number }).total_quantity ?? 0), 0
+      );
+      const totalOpenQuantity = Math.max(totalDemand - totalAllocatedQuantity, 0);
+
+      return {
+        totalItems: totalItems ?? 0,
+        byStatus,
+        byDistributionArea,
+        oldestItemSeenAt: (oldestRaw?.[0] as { first_seen_at?: string } | undefined)?.first_seen_at ?? null,
+        newestItemSeenAt: (newestRaw?.[0] as { first_seen_at?: string } | undefined)?.first_seen_at ?? null,
+        totalOpenQuantity,
+        totalAllocatedQuantity
+      };
+    },
+
+    async countBacklogDistinctBatches(input) {
+      const { data, error } = await supabase
+        .from('demand_backlog_item_sources')
+        .select('batch_id', { count: 'exact', head: true })
+        .eq('tenant_id', input.tenantId);
+
+      if (error) throw error;
+
+      const countResult = data as unknown as { count?: number } | null;
+      return countResult?.count ?? 0;
     }
   };
 }

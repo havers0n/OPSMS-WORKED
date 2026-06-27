@@ -35,11 +35,19 @@ import type {
   ProductControlResponse,
   PickerSheetPrintData,
   PickerSheetWorkGroup,
+  RawDemandRow,
   RawDemandPlanningPreview,
   DemandPlanningDraftWithAssignments,
   DemandImportAppendDiffResponse,
   DemandImportAppendExistingLine,
-  DemandImportAppendExistingItem
+  DemandImportAppendExistingItem,
+  DemandBacklogItem,
+  DemandBacklogItemResponse,
+  DemandBacklogItemStatus,
+  DemandBacklogListResponse,
+  DemandBacklogSummaryResponse,
+  BacklogMergeRowInput,
+  DemandBacklogMergeAction
 } from '@wos/domain';
 import {
   buildProductControlRow,
@@ -56,6 +64,10 @@ import {
   aggregatePickerItems,
   processCollisions,
   getDisplaySku,
+  computeDemandBacklogIdentityKey,
+  computeBacklogMergeAction,
+  computeBacklogItemStatus,
+  computeOpenQuantity,
   type SkuBondedAggregate
 } from '@wos/domain';
 import type { BondedService } from '../bonded/bonded-service.js';
@@ -366,6 +378,31 @@ export type ManualShiftsService = {
       allocatedQuantity: number;
     }>;
   }): Promise<DemandPlanningDraftWithAssignments>;
+
+  // Demand Backlog
+  mergeRowsIntoBacklog(input: {
+    tenantId: string;
+    batchId: string;
+    rows: RawDemandRow[];
+  }): Promise<void>;
+
+  getDemandBacklog(input: {
+    tenantId: string;
+    status: 'open' | 'special_flow' | 'requires_review' | 'all';
+    distributionArea?: string;
+    search?: string;
+    sourceBatchId?: string;
+    page: number;
+    limit: number;
+  }): Promise<DemandBacklogListResponse>;
+
+  getDemandBacklogSummary(input: {
+    tenantId: string;
+    status: 'open' | 'special_flow' | 'requires_review' | 'all';
+    distributionArea?: string;
+    search?: string;
+    sourceBatchId?: string;
+  }): Promise<DemandBacklogSummaryResponse>;
 };
 
 function formatLocalDate(date: Date, timeZone: string) {
@@ -1400,7 +1437,7 @@ export function createManualShiftsServiceFromRepo(
         rows: input.preview.rows
       });
 
-      const [persistedBatch, distributionAreaSummary, sampleRows] = await Promise.all([
+      const [persistedBatch, distributionAreaSummary, allRows, sampleRows] = await Promise.all([
         repo.getDemandImportBatch({
           tenantId: input.tenantId,
           batchId: batch.id
@@ -1411,10 +1448,21 @@ export function createManualShiftsServiceFromRepo(
         }),
         repo.listRawDemandRowsByBatch({
           tenantId: input.tenantId,
+          batchId: batch.id
+        }),
+        repo.listRawDemandRowsByBatch({
+          tenantId: input.tenantId,
           batchId: batch.id,
           limit: 20
         })
       ]);
+
+      // Merge non-error rows into global backlog (using persisted rows with IDs)
+      await this.mergeRowsIntoBacklog({
+        tenantId: input.tenantId,
+        batchId: batch.id,
+        rows: allRows
+      });
 
       return {
         batch: persistedBatch,
@@ -2612,6 +2660,212 @@ export function createManualShiftsServiceFromRepo(
       });
 
       return { draft, buckets, allocations };
+    },
+
+    // --- Demand Backlog implementations ---
+
+    async mergeRowsIntoBacklog(input: {
+      tenantId: string;
+      batchId: string;
+      rows: RawDemandRow[];
+    }): Promise<void> {
+      for (const row of input.rows) {
+        if (row.planningStatus === 'error') continue;
+
+        const identityKey = computeDemandBacklogIdentityKey(
+          row.orderNumber, row.customerName, row.sku, row.distributionArea
+        );
+
+        const existingItem = await repo.findBacklogItemByIdentityKey({
+          tenantId: input.tenantId,
+          identityKey
+        });
+
+        const existingSourceLink = await repo.findBacklogSourceLinkByRawRowId({
+          tenantId: input.tenantId,
+          rawDemandRowId: row.id
+        });
+
+        // Idempotent: skip if this raw row is already linked
+        if (existingSourceLink) continue;
+
+        const mergeInput: BacklogMergeRowInput = {
+          id: row.id,
+          tenantId: input.tenantId,
+          batchId: input.batchId,
+          orderNumber: row.orderNumber,
+          customerName: row.customerName,
+          sku: row.sku,
+          description: row.description,
+          category: row.category,
+          quantity: row.quantity,
+          distributionArea: row.distributionArea,
+          planningStatus: row.planningStatus,
+          routeFlow: row.routeFlow,
+          productHandlingFlow: row.productHandlingFlow
+        };
+
+        const result = computeBacklogMergeAction(mergeInput, existingItem, 0);
+
+        if (result.isNew) {
+          const newItem = await repo.createBacklogItem({
+            tenantId: input.tenantId,
+            identityKey,
+            status: row.planningStatus === 'special_flow' ? 'special_flow' : 'open',
+            totalQuantity: row.quantity ?? 0,
+            orderNumber: row.orderNumber,
+            customerName: row.customerName,
+            sku: row.sku,
+            description: row.description,
+            category: row.category,
+            distributionArea: row.distributionArea,
+            productHandlingFlow: row.productHandlingFlow,
+            routeFlow: row.routeFlow
+          });
+
+          await repo.createBacklogSourceLink({
+            tenantId: input.tenantId,
+            backlogItemId: newItem.id,
+            rawDemandRowId: row.id,
+            batchId: input.batchId,
+            mergeAction: result.mergeAction,
+            previousQuantity: result.previousQuantity,
+            newQuantity: result.newQuantity,
+            quantityDelta: result.newQuantity !== null && result.previousQuantity !== null
+              ? result.newQuantity - result.previousQuantity
+              : null
+          });
+        } else {
+          // Update existing backlog item
+          const now = new Date().toISOString();
+          const patch: {
+            totalQuantity?: number;
+            status?: DemandBacklogItemStatus;
+            description?: string | null;
+            category?: string | null;
+            lastSeenAt?: string;
+            lastQuantityChangedAt?: string | null;
+          } = {
+            lastSeenAt: now
+          };
+
+          if (result.mergeAction === 'quantity_changed' && result.newQuantity !== null) {
+            patch.totalQuantity = result.newQuantity;
+            patch.lastQuantityChangedAt = now;
+
+            const allocs = await repo.listBacklogItemAllocationsSum({
+              tenantId: input.tenantId,
+              backlogItemIds: [existingItem!.id]
+            });
+            const allocatedQty = allocs.length > 0 ? allocs[0].allocatedQuantity : 0;
+            patch.status = computeBacklogItemStatus(result.newQuantity, allocatedQty);
+          }
+
+          if (row.description !== null) patch.description = row.description;
+          if (row.category !== null) patch.category = row.category;
+
+          await repo.updateBacklogItem({
+            tenantId: input.tenantId,
+            backlogItemId: existingItem!.id,
+            patch
+          });
+
+          await repo.createBacklogSourceLink({
+            tenantId: input.tenantId,
+            backlogItemId: existingItem!.id,
+            rawDemandRowId: row.id,
+            batchId: input.batchId,
+            mergeAction: result.mergeAction,
+            previousQuantity: result.previousQuantity,
+            newQuantity: result.newQuantity,
+            quantityDelta: result.newQuantity !== null && result.previousQuantity !== null
+              ? result.newQuantity - result.previousQuantity
+              : null
+          });
+        }
+      }
+    },
+
+    async getDemandBacklog(input) {
+      const { items: backlogItems, total } = await repo.listBacklogItems({
+        tenantId: input.tenantId,
+        status: input.status,
+        distributionArea: input.distributionArea,
+        search: input.search,
+        sourceBatchId: input.sourceBatchId,
+        page: input.page,
+        limit: input.limit
+      });
+
+      if (backlogItems.length === 0) {
+        return { items: [], pagination: { page: input.page, limit: input.limit, total: 0 } };
+      }
+
+      const backlogItemIds = backlogItems.map(i => i.id);
+
+      const [allocSums, sourceBatchesData] = await Promise.all([
+        repo.listBacklogItemAllocationsSum({
+          tenantId: input.tenantId,
+          backlogItemIds
+        }),
+        repo.listBacklogSourceBatches({
+          tenantId: input.tenantId,
+          backlogItemIds
+        })
+      ]);
+
+      const allocByItemId = new Map(allocSums.map(a => [a.backlogItemId, a.allocatedQuantity]));
+
+      // Group source batches by backlog item id
+      const sourceBatchesByItemId = new Map<string, typeof sourceBatchesData>();
+      for (const sb of sourceBatchesData) {
+        const list = sourceBatchesByItemId.get(sb.backlogItemId) ?? [];
+        list.push(sb);
+        sourceBatchesByItemId.set(sb.backlogItemId, list);
+      }
+
+      const items: DemandBacklogItemResponse[] = backlogItems.map(item => {
+        const allocatedQuantity = allocByItemId.get(item.id) ?? 0;
+        const openQuantity = computeOpenQuantity(item.totalQuantity, allocatedQuantity);
+        const sourceBatches = (sourceBatchesByItemId.get(item.id) ?? []).map(sb => ({
+          batchId: sb.batchId,
+          sourceFile: sb.sourceFile,
+          uploadedAt: sb.uploadedAt,
+          mergeAction: sb.mergeAction as DemandBacklogMergeAction,
+          quantityAtImport: sb.quantityAtImport,
+          previousQuantity: sb.previousQuantity,
+          newQuantity: sb.newQuantity,
+          quantityDelta: sb.quantityDelta
+        }));
+
+        return {
+          ...item,
+          allocatedQuantity,
+          openQuantity,
+          sourceBatches
+        };
+      });
+
+      return { items, pagination: { page: input.page, limit: input.limit, total } };
+    },
+
+    async getDemandBacklogSummary(input) {
+      const summaryData = await repo.getBacklogSummary({
+        tenantId: input.tenantId,
+        status: input.status,
+        distributionArea: input.distributionArea,
+        search: input.search,
+        sourceBatchId: input.sourceBatchId
+      });
+
+      const totalSourceBatches = await repo.countBacklogDistinctBatches({
+        tenantId: input.tenantId
+      });
+
+      return {
+        ...summaryData,
+        totalSourceBatches
+      };
     },
   };
 }
