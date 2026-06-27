@@ -1,4 +1,4 @@
-import type { ManualShiftOrderStatus, DemandImportIssue, RawDemandProductHandlingFlow, RawDemandPlanningStatus } from '@wos/domain';
+import type { DeliveryPointMatchStatus, ManualShiftOrderStatus, DemandImportIssue, RawDemandProductHandlingFlow, RawDemandPlanningStatus } from '@wos/domain';
 
 export interface SourceDeliveryLine {
   lineId: string;
@@ -21,6 +21,10 @@ export interface SourceOrder {
   sourceDeliveryLine: SourceDeliveryLine | null;
   areaName: string | null;
   areaDisplayName: string;
+  deliveryPointId: string | null;
+  deliveryPointName: string | null;
+  deliveryPointMatchStatus: DeliveryPointMatchStatus | null;
+  rawDestinationLabel: string | null;
 }
 
 export interface SourceOrderItem {
