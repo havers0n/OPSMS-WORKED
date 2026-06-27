@@ -3744,6 +3744,309 @@ describe('manual shift monthly import apply', () => {
     expect(repo.countMonthlyImportShiftRows).toHaveBeenCalledTimes(1);
     expect(repo.applyMonthlyImport).not.toHaveBeenCalled();
   });
+
+  it('delivery point matching updates orders after monthly import (matched)', async () => {
+    const { repo, service, state } = makeMonthlyApplyService();
+    // Ensure countMonthlyImportShiftRows returns zero so monthly import guard passes
+    vi.mocked(repo.countMonthlyImportShiftRows).mockResolvedValue({
+      shiftId: ids.shift,
+      activeLinesCount: 0,
+      activeOrdersCount: 0,
+      softDeletedLinesCount: 0,
+      softDeletedOrdersCount: 0
+    });
+    vi.mocked(repo.listShiftOrders).mockResolvedValue([
+      {
+        id: 'o1',
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        lineId: ids.line,
+        orderNumber: 'SO-1',
+        customerName: 'לקוח א',
+        pointName: 'נקודה א',
+        lineCount: 1,
+        sortOrder: 1,
+        size: 'M' as const,
+        status: 'queued' as const,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        palletCount: null,
+        pickerName: null,
+        pickerWorkerId: null,
+        checkerName: null,
+        startedAt: null,
+        checkStartedAt: null,
+        waitingCheckAt: null,
+        checkedAt: null,
+        finishedAt: null,
+        comment: null,
+        deletedAt: null,
+        deletedByProfileId: null,
+        deletedByName: null,
+        deleteReason: null,
+        rawRouteLine: null,
+        routeBase: null,
+        workBucketName: null,
+        workBucketType: null,
+        sourceZone: null,
+        rawDestinationLabel: null,
+        deliveryPointId: null,
+        deliveryPointName: null,
+        deliveryPointAliasText: null,
+        deliveryPointAliasId: null
+      }
+    ]);
+    // Mock listShiftLines to return a non-Chita line
+    vi.mocked(repo.listShiftLines).mockResolvedValue([
+      {
+        id: ids.line,
+        tenant_id: ids.tenant,
+        shift_id: ids.shift,
+        name: 'Test Line',
+        distribution_area: null,
+        sort_order: 1,
+        created_at: nowIso,
+        deleted_at: null,
+        deleted_by_profile_id: null,
+        deleted_by_name: null,
+        delete_reason: null
+      }
+    ]);
+
+    const matchingService = {
+      matchAliasesExact: vi.fn(async (aliases: string[]) => [
+        {
+          status: 'matched' as const,
+          input: 'נקודה א',
+          normalizedInput: 'נקודה א',
+          deliveryPoint: {
+            id: 'dp-1',
+            sourceType: 'fuel_admin',
+            sourceExternalId: 'EXT001',
+            officialFuelAdminId: null,
+            displayName: 'נקודה א - סניף ראשי',
+            companyName: 'חברה',
+            siteName: null,
+            address: null,
+            municipality: null,
+            latitude: null,
+            longitude: null,
+            status: 'active' as const,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z'
+          }
+        }
+      ]),
+      matchAliasExact: vi.fn()
+    };
+
+    const serviceWithMatching = createManualShiftsServiceFromRepo(repo, {
+      getNowIso: () => nowIso,
+      deliveryPointAliasMatchingService: matchingService
+    });
+
+    const parsed = buildMonthlyPreview();
+    const plan = planManualShiftMonthlyImportApply(parsed);
+
+    await serviceWithMatching.applyMonthlyImport({
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      selectedDate: '2026-06-14',
+      plan
+    });
+
+    expect(matchingService.matchAliasesExact).toHaveBeenCalled();
+    expect(repo.updateOrder).toHaveBeenCalledWith('o1', expect.objectContaining({
+      deliveryPointId: 'dp-1',
+      deliveryPointName: 'נקודה א - סניף ראשי',
+      deliveryPointMatchStatus: 'matched'
+    }));
+  });
+
+  it('delivery point matching sets not_attempted for Chita delivery_channel orders', async () => {
+    const { repo, service, state } = makeMonthlyApplyService();
+    vi.mocked(repo.countMonthlyImportShiftRows).mockResolvedValue({
+      shiftId: ids.shift,
+      activeLinesCount: 0,
+      activeOrdersCount: 0,
+      softDeletedLinesCount: 0,
+      softDeletedOrdersCount: 0
+    });
+    vi.mocked(repo.listShiftOrders).mockResolvedValue([
+      {
+        id: 'o1',
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        lineId: ids.line,
+        orderNumber: 'SO-1',
+        customerName: 'לקוח א',
+        pointName: 'מרכז',
+        lineCount: 1,
+        sortOrder: 1,
+        size: 'M' as const,
+        status: 'queued' as const,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        palletCount: null,
+        pickerName: null,
+        pickerWorkerId: null,
+        checkerName: null,
+        startedAt: null,
+        checkStartedAt: null,
+        waitingCheckAt: null,
+        checkedAt: null,
+        finishedAt: null,
+        comment: null,
+        deletedAt: null,
+        deletedByProfileId: null,
+        deletedByName: null,
+        deleteReason: null,
+        rawRouteLine: null,
+        routeBase: null,
+        workBucketName: null,
+        workBucketType: null,
+        sourceZone: 'מרכז',
+        rawDestinationLabel: null,
+        deliveryPointId: null,
+        deliveryPointName: null,
+        deliveryPointAliasText: null,
+        deliveryPointAliasId: null
+      }
+    ]);
+    // Mock listShiftLines to return a Chita delivery_channel line
+    vi.mocked(repo.listShiftLines).mockResolvedValue([
+      {
+        id: ids.line,
+        tenant_id: ids.tenant,
+        shift_id: ids.shift,
+        name: "צ'יטה",
+        distribution_area: null,
+        sort_order: 1,
+        created_at: nowIso,
+        deleted_at: null,
+        deleted_by_profile_id: null,
+        deleted_by_name: null,
+        delete_reason: null
+      }
+    ]);
+
+    const matchingService = {
+      matchAliasesExact: vi.fn(async () => []),
+      matchAliasExact: vi.fn()
+    };
+
+    const serviceWithMatching = createManualShiftsServiceFromRepo(repo, {
+      getNowIso: () => nowIso,
+      deliveryPointAliasMatchingService: matchingService
+    });
+
+    const parsed = buildMonthlyPreview();
+    const plan = planManualShiftMonthlyImportApply(parsed);
+
+    await serviceWithMatching.applyMonthlyImport({
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      selectedDate: '2026-06-14',
+      plan
+    });
+
+    // pointName === sourceZone for Chita line → should not attempt matching
+    expect(repo.updateOrder).toHaveBeenCalledWith('o1', expect.objectContaining({
+      deliveryPointMatchStatus: 'not_attempted'
+    }));
+    expect(matchingService.matchAliasesExact).not.toHaveBeenCalled();
+  });
+
+  it('delivery point matching failure does not break import', async () => {
+    const { repo, service, state } = makeMonthlyApplyService();
+    vi.mocked(repo.countMonthlyImportShiftRows).mockResolvedValue({
+      shiftId: ids.shift,
+      activeLinesCount: 0,
+      activeOrdersCount: 0,
+      softDeletedLinesCount: 0,
+      softDeletedOrdersCount: 0
+    });
+    vi.mocked(repo.listShiftOrders).mockResolvedValue([
+      {
+        id: 'o1',
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        lineId: ids.line,
+        orderNumber: 'SO-1',
+        customerName: 'לקוח א',
+        pointName: 'נקודה א',
+        lineCount: 1,
+        sortOrder: 1,
+        size: 'M' as const,
+        status: 'queued' as const,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        palletCount: null,
+        pickerName: null,
+        pickerWorkerId: null,
+        checkerName: null,
+        startedAt: null,
+        checkStartedAt: null,
+        waitingCheckAt: null,
+        checkedAt: null,
+        finishedAt: null,
+        comment: null,
+        deletedAt: null,
+        deletedByProfileId: null,
+        deletedByName: null,
+        deleteReason: null,
+        rawRouteLine: null,
+        routeBase: null,
+        workBucketName: null,
+        workBucketType: null,
+        sourceZone: null,
+        rawDestinationLabel: null,
+        deliveryPointId: null,
+        deliveryPointName: null,
+        deliveryPointAliasText: null,
+        deliveryPointAliasId: null
+      }
+    ]);
+    vi.mocked(repo.listShiftLines).mockResolvedValue([
+      {
+        id: ids.line,
+        tenant_id: ids.tenant,
+        shift_id: ids.shift,
+        name: 'Test Line',
+        distribution_area: null,
+        sort_order: 1,
+        created_at: nowIso,
+        deleted_at: null,
+        deleted_by_profile_id: null,
+        deleted_by_name: null,
+        delete_reason: null
+      }
+    ]);
+
+    const matchingService = {
+      matchAliasesExact: vi.fn(async () => { throw new Error('DB unavailable'); }),
+      matchAliasExact: vi.fn()
+    };
+
+    const serviceWithMatching = createManualShiftsServiceFromRepo(repo, {
+      getNowIso: () => nowIso,
+      deliveryPointAliasMatchingService: matchingService
+    });
+
+    const parsed = buildMonthlyPreview();
+    const plan = planManualShiftMonthlyImportApply(parsed);
+
+    // Should not throw — matching failure is non-blocking
+    const result = await serviceWithMatching.applyMonthlyImport({
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      selectedDate: '2026-06-14',
+      plan
+    });
+
+    expect(result.shiftId).toBe(ids.shift);
+    expect(repo.applyMonthlyImport).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('DataSheet demand staging', () => {

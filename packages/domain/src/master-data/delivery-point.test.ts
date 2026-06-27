@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeDeliveryPointAliasText, deliveryPointSchema, deliveryPointAliasSchema } from './delivery-point.js';
+import { normalizeDeliveryPointAliasText, deliveryPointSchema, deliveryPointAliasSchema, deliveryPointMatchStatusSchema } from './delivery-point.js';
 
 describe('normalizeDeliveryPointAliasText', () => {
   it('normalizes test case 1: regular alias with colon-space', () => {
@@ -128,5 +128,27 @@ describe('deliveryPointAliasSchema', () => {
         confidence: 'bogus'
       })
     ).toThrow();
+  });
+
+  describe('deliveryPointMatchStatusSchema', () => {
+    it('accepts matched', () => {
+      expect(deliveryPointMatchStatusSchema.parse('matched')).toBe('matched');
+    });
+
+    it('accepts unmatched', () => {
+      expect(deliveryPointMatchStatusSchema.parse('unmatched')).toBe('unmatched');
+    });
+
+    it('accepts ambiguous', () => {
+      expect(deliveryPointMatchStatusSchema.parse('ambiguous')).toBe('ambiguous');
+    });
+
+    it('accepts not_attempted', () => {
+      expect(deliveryPointMatchStatusSchema.parse('not_attempted')).toBe('not_attempted');
+    });
+
+    it('rejects invalid status', () => {
+      expect(() => deliveryPointMatchStatusSchema.parse('invalid')).toThrow();
+    });
   });
 });

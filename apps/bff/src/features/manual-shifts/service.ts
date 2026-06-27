@@ -73,6 +73,11 @@ import {
 import type { BondedService } from '../bonded/bonded-service.js';
 import type { WarehouseStockService } from '../warehouse-stock/warehouse-stock-service.js';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type {
+  DeliveryPointAliasMatchResult,
+  DeliveryPointAliasMatchingService
+} from '../delivery-points/delivery-point-matching-service.js';
+import { normalizeDeliveryPointAliasText } from '@wos/domain';
 import {
   invalidManualShiftOrderCreateStatus,
   invalidManualShiftOrderCheckUnitTransition,
@@ -542,6 +547,7 @@ export function createManualShiftsServiceFromRepo(
     getNowIso?: () => string;
     getTodayDate?: () => string;
     warehouseStockService?: WarehouseStockService;
+    deliveryPointAliasMatchingService?: DeliveryPointAliasMatchingService;
   },
   bondedService?: BondedService
 ): ManualShiftsService {
@@ -1639,6 +1645,108 @@ export function createManualShiftsServiceFromRepo(
           });
         }
 
+        // ── DeliveryPoint alias matching for non-Chita orders ──────────
+        if (options?.deliveryPointAliasMatchingService) {
+          try {
+            const matchService = options.deliveryPointAliasMatchingService;
+            const allOrders = await repo.listShiftOrders(input.shiftId);
+            const lines = await repo.listShiftLines(input.shiftId);
+            const isChitaLine = new Map(
+              lines.map((l) => [l.id, l.name.trim().toLowerCase().startsWith("צ'יטה")])
+            );
+
+            // Build per-order match data: rawDestinationLabel + skip Chita
+            const matchRequests: Array<{ orderId: string; label: string | null; skip: boolean }> = [];
+            for (const order of allOrders) {
+              const isChita = isChitaLine.get(order.lineId) ?? false;
+              const sourceZone = order.sourceZone ?? null;
+
+              // For Chita lines, skip matching when pointName equals sourceZone
+              const skip = isChita && (order.pointName === sourceZone || !order.pointName);
+
+              const rawDestinationLabel = order.pointName ?? order.customerName ?? null;
+              matchRequests.push({ orderId: order.id, label: rawDestinationLabel, skip });
+            }
+
+            // Batch-match unique non-skipped labels
+            const uniqueLabels = [...new Set(
+              matchRequests
+                .filter((r) => !r.skip && r.label)
+                .map((r) => r.label as string)
+            )];
+
+            if (uniqueLabels.length > 0) {
+              const matchResults = await matchService.matchAliasesExact(uniqueLabels);
+              const resultByLabel = new Map<string, DeliveryPointAliasMatchResult>();
+              for (const r of matchResults) {
+                resultByLabel.set(r.normalizedInput, r);
+              }
+
+              // Update each order with matching result or 'not_attempted'
+              for (const req of matchRequests) {
+                if (req.skip || !req.label) {
+                  await repo.updateOrder(req.orderId, {
+                    rawDestinationLabel: req.label,
+                    deliveryPointMatchStatus: 'not_attempted'
+                  });
+                  continue;
+                }
+
+                const normalized = normalizeDeliveryPointAliasText(req.label);
+                const matchResult = resultByLabel.get(normalized);
+
+                if (!matchResult) {
+                  await repo.updateOrder(req.orderId, {
+                    rawDestinationLabel: req.label,
+                    deliveryPointMatchStatus: 'not_attempted'
+                  });
+                  continue;
+                }
+
+                switch (matchResult.status) {
+                  case 'matched':
+                    await repo.updateOrder(req.orderId, {
+                      rawDestinationLabel: req.label,
+                      deliveryPointId: matchResult.deliveryPoint.id,
+                      deliveryPointName: matchResult.deliveryPoint.displayName,
+                      deliveryPointMatchStatus: 'matched',
+                      deliveryPointAliasText: matchResult.normalizedInput,
+                      deliveryPointAliasId: undefined
+                    });
+                    break;
+                  case 'unmatched':
+                    await repo.updateOrder(req.orderId, {
+                      rawDestinationLabel: req.label,
+                      deliveryPointMatchStatus: 'unmatched',
+                      deliveryPointAliasText: matchResult.normalizedInput
+                    });
+                    break;
+                  case 'ambiguous':
+                    await repo.updateOrder(req.orderId, {
+                      rawDestinationLabel: req.label,
+                      deliveryPointMatchStatus: 'ambiguous',
+                      deliveryPointAliasText: matchResult.normalizedInput
+                    });
+                    break;
+                }
+              }
+            } else {
+              // All orders skipped — set rawDestinationLabel but skip matching
+              for (const req of matchRequests) {
+                if (req.label) {
+                  await repo.updateOrder(req.orderId, {
+                    rawDestinationLabel: req.label,
+                    deliveryPointMatchStatus: 'not_attempted'
+                  });
+                }
+              }
+            }
+          } catch (matchError) {
+            // Do not fail the import on matching failure; gracefully fallback
+            console.warn('[DeliveryPoint] Alias matching failed during monthly import apply:', matchError);
+          }
+        }
+
         return result;
       } catch (error) {
         const dbError = error as { code?: string; message?: string; hint?: string };
@@ -2672,7 +2780,7 @@ export function createManualShiftsServiceFromRepo(
       for (const row of input.rows) {
         if (row.planningStatus === 'error') continue;
 
-        const identityKey = computeDemandBacklogIdentityKey(
+        const identityKey = await computeDemandBacklogIdentityKey(
           row.orderNumber, row.customerName, row.sku, row.distributionArea
         );
 
@@ -2705,7 +2813,7 @@ export function createManualShiftsServiceFromRepo(
           productHandlingFlow: row.productHandlingFlow
         };
 
-        const result = computeBacklogMergeAction(mergeInput, existingItem, 0);
+        const result = await computeBacklogMergeAction(mergeInput, existingItem, 0);
 
         if (result.isNew) {
           const newItem = await repo.createBacklogItem({
@@ -2873,7 +2981,12 @@ export function createManualShiftsServiceFromRepo(
 export function createManualShiftsService(
   supabase: SupabaseClient,
   bondedService?: BondedService,
-  warehouseStockService?: WarehouseStockService
+  warehouseStockService?: WarehouseStockService,
+  deliveryPointAliasMatchingService?: DeliveryPointAliasMatchingService
 ) {
-  return createManualShiftsServiceFromRepo(createManualShiftsRepo(supabase), { warehouseStockService }, bondedService);
+  return createManualShiftsServiceFromRepo(
+    createManualShiftsRepo(supabase),
+    { warehouseStockService, deliveryPointAliasMatchingService },
+    bondedService
+  );
 }

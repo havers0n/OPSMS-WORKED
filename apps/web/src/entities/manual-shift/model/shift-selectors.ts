@@ -433,6 +433,10 @@ export interface OrderDetail {
   checkStartedAt: string | null;
   finishedAt: string | null;
   ageSeconds: number | null;
+  // DeliveryPoint metadata
+  deliveryPointName?: string | null;
+  deliveryPointMatchStatus?: string | null;
+  rawDestinationLabel?: string | null;
 }
 
 export function summarizeManualShiftOrderCheckUnits(
@@ -1113,6 +1117,9 @@ export function selectOrderDetail(
     checkedAt: order.checkedAt,
     checkStartedAt: order.checkStartedAt ?? null,
     finishedAt: order.finishedAt,
-    ageSeconds: toAgeSeconds(order, now.getTime())
+    ageSeconds: toAgeSeconds(order, now.getTime()),
+    deliveryPointName: (order as Record<string, unknown>).deliveryPointName as string | null ?? null,
+    deliveryPointMatchStatus: (order as Record<string, unknown>).deliveryPointMatchStatus as string | null ?? null,
+    rawDestinationLabel: (order as Record<string, unknown>).rawDestinationLabel as string | null ?? null
   };
 }
