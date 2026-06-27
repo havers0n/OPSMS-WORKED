@@ -52,3 +52,26 @@ Important rules:
 - Alias is not a route, not a driver, not an area, not a work group. Do not mix with manual shift buckets, routeGroups, workBuckets, Product Control, or dispatch.
 - Lookup defaults to `confidence = 'confirmed'`; `review`/`rejected` aliases are excluded by default.
 - If one normalized alias maps to multiple DeliveryPoints, the repository throws `AMBIGUOUS_ALIAS`.
+
+### PR-2 seed import (MVP)
+
+PR-2 imports the confirmed MVP seed:
+- 241 DeliveryPoints
+- 680 clean aliases
+
+Only these files are used:
+- `delivery_points_seed.json`
+- `delivery_point_aliases_seed_clean.json`
+
+Audit/review files are intentionally not imported.
+The code after `:` in customer labels is internal and must not be treated as `מס_מינהל_הדלק`.
+
+Run from `apps/bff/`:
+
+```bash
+# Dry-run (validate without writing):
+npm run seed:delivery-points:local -- --dry-run
+
+# Full import:
+npm run seed:delivery-points:local
+```

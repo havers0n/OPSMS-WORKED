@@ -40,7 +40,8 @@ create trigger set_delivery_points_updated_at
   before update on public.delivery_points
   for each row execute function public.set_updated_at();
 
-grant select on public.delivery_points to authenticated;
+grant select, insert, update on public.delivery_points to authenticated;
+grant select, insert, update on public.delivery_points to service_role;
 
 alter table public.delivery_points enable row level security;
 
@@ -87,7 +88,8 @@ create trigger set_delivery_point_aliases_updated_at
   before update on public.delivery_point_aliases
   for each row execute function public.set_updated_at();
 
-grant select on public.delivery_point_aliases to authenticated;
+grant select, insert, update on public.delivery_point_aliases to authenticated;
+grant select, insert, update on public.delivery_point_aliases to service_role;
 
 alter table public.delivery_point_aliases enable row level security;
 

@@ -1,0 +1,4082 @@
+[
+  {
+    "deliveryPointExternalId": "fuel_admin_1068",
+    "aliasText": "בית שמש",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1068",
+    "aliasText": "דור אלון - בית שמש :987",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1366",
+    "aliasText": "ספרינט מוטורס (סונול) | שרותי כרמיאל : 5",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1366",
+    "aliasText": "שרותי כרמיאל",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1460",
+    "aliasText": "ספרינט מוטורס (סונול) | קוממיות",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1460",
+    "aliasText": "ספרינט מוטורס (סונול) | קוממיות : 98",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1460",
+    "aliasText": "קוממיות",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1533",
+    "aliasText": "חב.לנפט -ניתוב - מנדלבאום",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1533",
+    "aliasText": "חב.לנפט -ניתוב - מנדלבאום : 513 (החזרה על מאה שערים)",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1533",
+    "aliasText": "מנדלבאום",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1533",
+    "aliasText": "פז חב.לנפט -ניתוב - מנדלבאום : 513",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1533",
+    "aliasText": "פז חב.לנפט -ניתוב - מנדלבאום : 513 (החזרה על מאה שערים)",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1538",
+    "aliasText": "אפרידר",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1538",
+    "aliasText": "חב.לנפט - אפרידר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1538",
+    "aliasText": "פז חב.לנפט - אפרידר : 534",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1540",
+    "aliasText": "חב.לנפט - קדימה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1540",
+    "aliasText": "פז חב.לנפט - קדימה : 184",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1540",
+    "aliasText": "קדימה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1548",
+    "aliasText": "חב.לנפט -ניתוב - שוקת",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1548",
+    "aliasText": "פז חב.לנפט -ניתוב - שוקת : 615",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1548",
+    "aliasText": "שוקת",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1550",
+    "aliasText": "בית שאן",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1550",
+    "aliasText": "חב.לנפט -ניתוב-בית שאן",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1550",
+    "aliasText": "פז חב.לנפט -ניתוב-בית שאן : 304",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1553",
+    "aliasText": "אלנבי",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1553",
+    "aliasText": "חב.לנפט -ניתוב - אלנבי",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1553",
+    "aliasText": "פז חב.לנפט -ניתוב - אלנבי : 530",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1573",
+    "aliasText": "חב.לנפט -ניתוב -תענכים",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1573",
+    "aliasText": "פז חב.לנפט -ניתוב -תענכים : 367",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1573",
+    "aliasText": "תענכים",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1576",
+    "aliasText": "חב.לנפט -ניתוב -יפעת",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1576",
+    "aliasText": "יפעת",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1576",
+    "aliasText": "פז חב.לנפט -ניתוב -יפעת : 345",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1579",
+    "aliasText": "חב.לנפט - רשף יבנה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1579",
+    "aliasText": "פז חב.לנפט - רשף יבנה : 244",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1579",
+    "aliasText": "רשף יבנה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1580",
+    "aliasText": "געש",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1580",
+    "aliasText": "חב.לנפט -ניתוב - געש",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1580",
+    "aliasText": "פז חב.לנפט -ניתוב - געש : 147",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1589",
+    "aliasText": "חב.לנפט -ניתוב -מצפה גולן",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1589",
+    "aliasText": "מצפה גולן",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1589",
+    "aliasText": "פז חב.לנפט -ניתוב -מצפה גולן : 352",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1616",
+    "aliasText": "גרנות הגליל",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1616",
+    "aliasText": "חב.לנפט -ניתוב- גרנות הגליל",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1616",
+    "aliasText": "פז חב.לנפט -ניתוב- גרנות הגליל : 399",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1629",
+    "aliasText": "אופקים",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1629",
+    "aliasText": "חב.לנפט -ניתוב - אופקים",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1629",
+    "aliasText": "פז חב.לנפט -ניתוב - אופקים : 616",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1636",
+    "aliasText": "חב.לנפט -ניתוב-חופית",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1636",
+    "aliasText": "חופית",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1636",
+    "aliasText": "פז חב.לנפט -ניתוב-חופית : 342",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1643",
+    "aliasText": "בית יצחק",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1643",
+    "aliasText": "חב.לנפט -ניתוב - בית יצחק",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1643",
+    "aliasText": "פז חב.לנפט -ניתוב - בית יצחק : 375",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1644",
+    "aliasText": "חב.לנפט -ניתוב - נאות מדבר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1644",
+    "aliasText": "נאות מדבר",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1644",
+    "aliasText": "פז חב.לנפט -ניתוב - נאות מדבר : 605",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1646",
+    "aliasText": "חב.לנפט -ניתוב - מויאל",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1646",
+    "aliasText": "מויאל",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1646",
+    "aliasText": "פז חב.לנפט -ניתוב - מויאל : 218",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1647",
+    "aliasText": "חב.לנפט -ניתוב-יציב",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1647",
+    "aliasText": "יציב",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1647",
+    "aliasText": "פז חב.לנפט -ניתוב-יציב : 153",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1657",
+    "aliasText": "חב.לנפט - חוף הכרמל",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1657",
+    "aliasText": "חוף הכרמל",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1657",
+    "aliasText": "פז חב.לנפט - חוף הכרמל : 333",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1698",
+    "aliasText": "השלום",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1698",
+    "aliasText": "חב.לנפט -ניתוב - השלום",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1698",
+    "aliasText": "פז חב.לנפט -ניתוב - השלום : 158",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1718",
+    "aliasText": "חב.לנפט -ניתוב - שיאונה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1718",
+    "aliasText": "פז חב.לנפט -ניתוב - שיאונה : 199",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1718",
+    "aliasText": "שיאונה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1722",
+    "aliasText": "חב.לנפט -ניתוב - צומת האלה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1722",
+    "aliasText": "פז חב.לנפט -ניתוב - צומת האלה : 516",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1722",
+    "aliasText": "צומת האלה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1723",
+    "aliasText": "חב.לנפט -ניתוב-שער הגיא",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1723",
+    "aliasText": "פז חב.לנפט -ניתוב-שער הגיא : 504",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1723",
+    "aliasText": "שער הגיא",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1743",
+    "aliasText": "חב.לנפט - נחלת יהודה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1743",
+    "aliasText": "נחלת יהודה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1743",
+    "aliasText": "פז חב.לנפט - נחלת יהודה : 212",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1744",
+    "aliasText": "חב.לנפט -ניתוב-רונית",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1744",
+    "aliasText": "פז חב.לנפט -ניתוב-רונית : 136",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1744",
+    "aliasText": "רונית",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1757",
+    "aliasText": "חב.לנפט -ניתוב -נצרת עץ הזית",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1757",
+    "aliasText": "עץ הזית",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1757",
+    "aliasText": "פז חב.לנפט -ניתוב -נצרת עץ הזית : 332",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1761",
+    "aliasText": "חב.לנפט -ניתוב-שואבה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1761",
+    "aliasText": "פז חב.לנפט -ניתוב-שואבה : 519",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1761",
+    "aliasText": "שואבה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1763",
+    "aliasText": "חב.לנפט -ניתוב - עין ורד",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1763",
+    "aliasText": "עין ורד",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1763",
+    "aliasText": "פז חב.לנפט -ניתוב - עין ורד : 246",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1928",
+    "aliasText": "דור אלון - חולון דרך השבעה: 868",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_1928",
+    "aliasText": "חולון דרך השבעה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2046",
+    "aliasText": "אשכול",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2046",
+    "aliasText": "חב.לנפט -ניתוב - אשכול",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2046",
+    "aliasText": "פז חב.לנפט -ניתוב - אשכול : 614",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2047",
+    "aliasText": "חב.לנפט -ניתוב - שדרות",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2047",
+    "aliasText": "פז חב.לנפט -ניתוב -  שדרות : 209",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2047",
+    "aliasText": "שדרות",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2055",
+    "aliasText": "חב.לנפט -ניתוב - טירת הכרמל",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2055",
+    "aliasText": "טירת הכרמל",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2055",
+    "aliasText": "פז חב.לנפט -ניתוב - טירת הכרמל : 356",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2056",
+    "aliasText": "חב.לנפט -ניתוב - סביון",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2056",
+    "aliasText": "סביון",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2056",
+    "aliasText": "פז חב.לנפט -ניתוב - סביון : 132",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2057",
+    "aliasText": "חב.לנפט - שרונים",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2057",
+    "aliasText": "פז חב.לנפט - שרונים : 234",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2057",
+    "aliasText": "שרונים",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2060",
+    "aliasText": "אקסודוס",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2060",
+    "aliasText": "חב.לנפט -ניתוב - אקסודוס",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2060",
+    "aliasText": "פז חב.לנפט -ניתוב - אקסודוס : 536",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2065",
+    "aliasText": "הירקון",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2065",
+    "aliasText": "חב.לנפט - הירקון",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2065",
+    "aliasText": "פז חב.לנפט - הירקון : 112",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2069",
+    "aliasText": "חב.לנפט -ניתוב-שפרעם דרום",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2069",
+    "aliasText": "פז חב.לנפט -ניתוב-שפרעם דרום : 383",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2069",
+    "aliasText": "שפרעם דרום",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2070",
+    "aliasText": "חב.לנפט -ניתוב - לב המפרץ",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2070",
+    "aliasText": "לב המפרץ",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2070",
+    "aliasText": "פז חב.לנפט -ניתוב - לב המפרץ : 392",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2073",
+    "aliasText": "אשדוד עיר",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2073",
+    "aliasText": "חב.לנפט -ניתוב - אשדוד עיר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2073",
+    "aliasText": "פז חב.לנפט -ניתוב - אשדוד עיר : 138",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2074",
+    "aliasText": "חב.לנפט -ניתוב - עלית רמת גן",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2074",
+    "aliasText": "עלית רמת גן",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2074",
+    "aliasText": "פז חב.לנפט -ניתוב - עלית רמת גן : 133",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2077",
+    "aliasText": "חב.לנפט -ניתוב-רמה רחובות",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2077",
+    "aliasText": "פז חב.לנפט -ניתוב-רמה רחובות : 134",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2077",
+    "aliasText": "רמה רחובות",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2080",
+    "aliasText": "ברורים",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2080",
+    "aliasText": "חב.לנפט - ברורים",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2080",
+    "aliasText": "פז חב.לנפט - ברורים : 191",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2085",
+    "aliasText": "הנשיאים",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2085",
+    "aliasText": "חב.לנפט - ניתוב -הנשיאים",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2085",
+    "aliasText": "פז חב.לנפט - ניתוב -הנשיאים : 613",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2086",
+    "aliasText": "חב.לנפט -ניתוב - ערד",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2086",
+    "aliasText": "ערד",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2086",
+    "aliasText": "פז חב.לנפט -ניתוב - ערד : 627",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2087",
+    "aliasText": "חב.לנפט -ניתוב - מכר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2087",
+    "aliasText": "מכר",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2087",
+    "aliasText": "פז חב.לנפט -ניתוב - מכר : 360",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2088",
+    "aliasText": "חב.לנפט -ניתוב - עד הלום",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2088",
+    "aliasText": "עד הלום",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2088",
+    "aliasText": "פז חב.לנפט -ניתוב - עד הלום : 193",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2092",
+    "aliasText": "חב.לנפט -ניתוב - עוספיה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2092",
+    "aliasText": "עוספיה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2092",
+    "aliasText": "פז חב.לנפט -ניתוב - עוספיה : 389",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2094",
+    "aliasText": "חב.לנפט -ניתוב- כרמיאל",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2094",
+    "aliasText": "כרמיאל",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2094",
+    "aliasText": "פז חב.לנפט -ניתוב- כרמיאל : 369",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2095",
+    "aliasText": "חב.לנפט -ניתוב - תמרה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2095",
+    "aliasText": "פז חב.לנפט -ניתוב - תמרה : 359",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2095",
+    "aliasText": "תמרה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2107",
+    "aliasText": "חב.לנפט - טבעון",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2107",
+    "aliasText": "טבעון",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2107",
+    "aliasText": "פז חב.לנפט - טבעון : 326",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2110",
+    "aliasText": "אורלי",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2110",
+    "aliasText": "חב.לנפט -ניתוב - אורלי",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2110",
+    "aliasText": "פז חב.לנפט -ניתוב - אורלי : 305",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2111",
+    "aliasText": "חב.לנפט -ניתוב- כוכב יאיר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2111",
+    "aliasText": "כוכב יאיר",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2111",
+    "aliasText": "פז חב.לנפט -ניתוב- כוכב יאיר : 238",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2112",
+    "aliasText": "חב.לנפט -ניתוב - מנחם",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2112",
+    "aliasText": "מנחם",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2112",
+    "aliasText": "פז חב.לנפט -ניתוב - מנחם : 195",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2113",
+    "aliasText": "חב.לנפט -ניתוב - עוקף רמלה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2113",
+    "aliasText": "עוקף רמלה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2113",
+    "aliasText": "פז חב.לנפט -ניתוב - עוקף רמלה : 178",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2116",
+    "aliasText": "חב.לנפט -ניתוב-עכו עיר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2116",
+    "aliasText": "עכו עיר",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2116",
+    "aliasText": "פז חב.לנפט -ניתוב-עכו עיר : 301",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2117",
+    "aliasText": "חב.לנפט -ניתוב - טבריה עילית",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2117",
+    "aliasText": "טבריה עילית",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2117",
+    "aliasText": "פז חב.לנפט -ניתוב - טבריה עילית : 409",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2126",
+    "aliasText": "חב.לנפט -ניתוב - מגדל העמק",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2126",
+    "aliasText": "מגדל העמק",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2126",
+    "aliasText": "פז חב.לנפט -ניתוב - מגדל העמק : 415",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2129",
+    "aliasText": "אור וידר (זכיין סונול אשל השומרון)",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2129",
+    "aliasText": "אשל השומרון",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2133",
+    "aliasText": "חב.לנפט -ניתוב - נצרת עילית",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2133",
+    "aliasText": "נצרת עילית",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2133",
+    "aliasText": "פז חב.לנפט -ניתוב - נצרת עילית : 414",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2137",
+    "aliasText": "חב.לנפט -ניתוב - חדרה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2137",
+    "aliasText": "חדרה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2137",
+    "aliasText": "פז חב.לנפט -ניתוב - חדרה : 308",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2138",
+    "aliasText": "חב.לנפט - כפר סבא מזרח",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2138",
+    "aliasText": "כפר סבא מזרח",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2138",
+    "aliasText": "פז חב.לנפט - כפר סבא מזרח : 251",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2144",
+    "aliasText": "המכבים",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2144",
+    "aliasText": "ספרינט מוטורס (סונול) | המכבים",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2144",
+    "aliasText": "ספרינט מוטורס (סונול) | המכבים : 73",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2147",
+    "aliasText": "דור אלון - מתחם חבצלת השרון",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2147",
+    "aliasText": "חבצלת השרון",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2147",
+    "aliasText": "מתחם חבצלת השרון",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2157",
+    "aliasText": "כפר סבא מזרח",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2157",
+    "aliasText": "ספרינט מוטורס (סונול) | כפר סבא מזרח",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2157",
+    "aliasText": "ספרינט מוטורס (סונול) | כפר סבא מזרח : 123",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2161",
+    "aliasText": "דימונה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2161",
+    "aliasText": "חב.לנפט -ניתוב - דימונה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2161",
+    "aliasText": "פז חב.לנפט -ניתוב - דימונה : 607",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2162",
+    "aliasText": "חב.לנפט -ניתוב-רמת דניה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2162",
+    "aliasText": "פז חב.לנפט -ניתוב-רמת דניה : 506",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2162",
+    "aliasText": "רמת דניה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2163",
+    "aliasText": "חב.לנפט -ניתוב - מסילת ציון",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2163",
+    "aliasText": "מסילת ציון",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2163",
+    "aliasText": "פז חב.לנפט -ניתוב - מסילת ציון : 528",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2168",
+    "aliasText": "בר כוכבא",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2168",
+    "aliasText": "חב.לנפט -ניתוב - בר כוכבא",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2168",
+    "aliasText": "פז חב.לנפט -ניתוב - בר כוכבא : 505",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2169",
+    "aliasText": "אורות",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2169",
+    "aliasText": "חב.לנפט - אורות",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2169",
+    "aliasText": "פז חב.לנפט - אורות : 390",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2170",
+    "aliasText": "חב.לנפט - מעלות",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2170",
+    "aliasText": "מעלות",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2170",
+    "aliasText": "פז חב.לנפט - מעלות : 372",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2171",
+    "aliasText": "היוגב",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2171",
+    "aliasText": "חב.לנפט -ניתוב -היוגב",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2171",
+    "aliasText": "פז חב.לנפט -ניתוב -היוגב : 366",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2172",
+    "aliasText": "בת גלים",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2172",
+    "aliasText": "חב.לנפט -ניתוב - בת גלים",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2172",
+    "aliasText": "פז חב.לנפט -ניתוב - בת גלים : 323",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2174",
+    "aliasText": "חב.לנפט -ניתוב - יזרעאליה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2174",
+    "aliasText": "יזרעאליה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2174",
+    "aliasText": "פז חב.לנפט -ניתוב - יזרעאליה : 353",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2176",
+    "aliasText": "חב.לנפט -ניתוב -כפר תבור",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2176",
+    "aliasText": "כפר תבור",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2176",
+    "aliasText": "פז חב.לנפט -ניתוב -כפר תבור : 328",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2177",
+    "aliasText": "חב.לנפט -ניתוב -כפר יאסיף",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2177",
+    "aliasText": "כפר יאסיף",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2177",
+    "aliasText": "פז חב.לנפט -ניתוב -כפר יאסיף: 407",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2179",
+    "aliasText": "בית הכרם",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2179",
+    "aliasText": "חב.לנפט -ניתוב- בית הכרם",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2179",
+    "aliasText": "פז חב.לנפט -ניתוב- בית הכרם : 417",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2183",
+    "aliasText": "משגב",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2183",
+    "aliasText": "ספרינט מוטורס (סונול) | משגב",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2183",
+    "aliasText": "ספרינט מוטורס (סונול) | משגב : 121",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2186",
+    "aliasText": "דור אלון - נהורה :861",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2186",
+    "aliasText": "נהורה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2191",
+    "aliasText": "גדי פלד (זכיין סונול-עטרת)",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2191",
+    "aliasText": "עטרת",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2201",
+    "aliasText": "חב.לנפט -ניתוב -עפולה עיר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2201",
+    "aliasText": "עפולה עיר",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2201",
+    "aliasText": "פז חב.לנפט -ניתוב -עפולה עיר : 302",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2204",
+    "aliasText": "הוד השרון",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2204",
+    "aliasText": "חב.לנפט -ניתוב - הוד השרון",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2204",
+    "aliasText": "פז חב.לנפט -ניתוב - הוד השרון : 144",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2217",
+    "aliasText": "ספרינט מוטורס (סונול) | פלוגות",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2217",
+    "aliasText": "ספרינט מוטורס (סונול) | פלוגות : 88",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2217",
+    "aliasText": "פלוגות",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2225",
+    "aliasText": "בית אלפא",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2225",
+    "aliasText": "ספרינט מוטורס (סונול) | בית אלפא",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2225",
+    "aliasText": "ספרינט מוטורס (סונול) | בית אלפא : 192",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2235",
+    "aliasText": "חב.לנפט -ניתוב-קרית מנחם",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2235",
+    "aliasText": "פז חב.לנפט -ניתוב-קרית מנחם : 514",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2235",
+    "aliasText": "קרית מנחם",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2241",
+    "aliasText": "חב.לנפט - צמח",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2241",
+    "aliasText": "פז חב.לנפט - צמח : 343",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2241",
+    "aliasText": "צמח",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2249",
+    "aliasText": "חב.לנפט -ניתוב -פקיעין",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2249",
+    "aliasText": "פז חב.לנפט -ניתוב -פקיעין : 371",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2249",
+    "aliasText": "פקיעין",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2250",
+    "aliasText": "חב.לנפט - נווה עוז",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2250",
+    "aliasText": "נווה עוז",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2250",
+    "aliasText": "פז חב.לנפט - נווה עוז : 236",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2252",
+    "aliasText": "חב.לנפט -ניתוב -טבריה עיר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2252",
+    "aliasText": "טבריה עיר",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2252",
+    "aliasText": "פז חב.לנפט -ניתוב -טבריה עיר : 322",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2276",
+    "aliasText": "יסוד המעלה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2276",
+    "aliasText": "ספרינט מוטורס (סונול) | יסוד המעלה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2276",
+    "aliasText": "ספרינט מוטורס (סונול) | יסוד המעלה : 66",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2277",
+    "aliasText": "ירכא",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2277",
+    "aliasText": "ספרינט מוטורס (סונול) | ירכא",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2277",
+    "aliasText": "ספרינט מוטורס (סונול) | ירכא : 68",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2280",
+    "aliasText": "מבואות אתא",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2280",
+    "aliasText": "ספרינט מוטורס (סונול) | מבואות אתא",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2280",
+    "aliasText": "ספרינט מוטורס (סונול) | מבואות אתא : 196",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2289",
+    "aliasText": "חב.לנפט -ניתוב - סילבר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2289",
+    "aliasText": "סילבר",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2289",
+    "aliasText": "פז חב.לנפט -ניתוב -  סילבר : 210",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2291",
+    "aliasText": "מפגש עדה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2291",
+    "aliasText": "ספרינט מוטורס (סונול) | מפגש עדה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2291",
+    "aliasText": "ספרינט מוטורס (סונול) | מפגש עדה : 27",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2305",
+    "aliasText": "ספרינט מוטורס (סונול) | עוקף יקנעם",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2305",
+    "aliasText": "ספרינט מוטורס (סונול) | עוקף יקנעם : 208",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2305",
+    "aliasText": "עוקף יוקנעם",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2306",
+    "aliasText": "ספרינט מוטורס (סונול) | עירון : 4",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2306",
+    "aliasText": "עירון",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2307",
+    "aliasText": "חב.לנפט -ניתוב- מפגש ארבל",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2307",
+    "aliasText": "מפגש ארבל",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2307",
+    "aliasText": "פז חב.לנפט -ניתוב- מפגש ארבל : 378",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2310",
+    "aliasText": "ברק מרקט - ברק ולנטין (זכיין סונול עתלית)",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2310",
+    "aliasText": "עתלית",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2311",
+    "aliasText": "ספרינט מוטורס (סונול) | ערערה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2311",
+    "aliasText": "ספרינט מוטורס (סונול) | ערערה : 259",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2311",
+    "aliasText": "ערערה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2331",
+    "aliasText": "ספרינט מוטורס (סונול) | קרית ים",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2331",
+    "aliasText": "ספרינט מוטורס (סונול) | קרית ים : 25",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2331",
+    "aliasText": "קרית ים",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2332",
+    "aliasText": "ספרינט מוטורס (סונול) | ריינה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2332",
+    "aliasText": "ספרינט מוטורס (סונול) | ריינה : 60",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2332",
+    "aliasText": "ריינה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2333",
+    "aliasText": "ספרינט מוטורס (סונול) | רמת ישי",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2333",
+    "aliasText": "ספרינט מוטורס (סונול) | רמת ישי : 248",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2333",
+    "aliasText": "רמת ישי",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2334",
+    "aliasText": "ספרינט מוטורס (סונול) | שדה עמודים",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2334",
+    "aliasText": "ספרינט מוטורס (סונול) | שדה עמודים : 263",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2334",
+    "aliasText": "שדה עמודים",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2337",
+    "aliasText": "ספרינט מוטורס (סונול) | שער העליה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2337",
+    "aliasText": "ספרינט מוטורס (סונול) | שער העליה : 36",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2337",
+    "aliasText": "שער העליה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2345",
+    "aliasText": "חב.לנפט -ניתוב - פסגת זאב",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2345",
+    "aliasText": "פז חב.לנפט -ניתוב - פסגת זאב : 529",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2345",
+    "aliasText": "פסגת זאב",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2347",
+    "aliasText": "חב.לנפט -ניתוב -שפרעם עיר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2347",
+    "aliasText": "פז חב.לנפט -ניתוב -שפרעם עיר : 321",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2347",
+    "aliasText": "שפרעם עיר",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2354",
+    "aliasText": "חב.לנפט -ניתוב - צבר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2354",
+    "aliasText": "פז חב.לנפט -ניתוב - צבר : 121",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2354",
+    "aliasText": "צבר",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2355",
+    "aliasText": "חב.לנפט -ניתוב-רוממה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2355",
+    "aliasText": "פז חב.לנפט -ניתוב-רוממה : 335",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2355",
+    "aliasText": "רוממה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2359",
+    "aliasText": "סמדר",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2359",
+    "aliasText": "ספרינט מוטורס (סונול) | סמדר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2359",
+    "aliasText": "ספרינט מוטורס (סונול) | סמדר : 133",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2362",
+    "aliasText": "חב.לנפט -ניתוב - טופז",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2362",
+    "aliasText": "טופז",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2362",
+    "aliasText": "פז חב.לנפט -ניתוב - טופז : 179",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2363",
+    "aliasText": "חב.לנפט -ניתוב - כרכור",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2363",
+    "aliasText": "כרכור",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2363",
+    "aliasText": "פז חב.לנפט -ניתוב - כרכור : 312",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2369",
+    "aliasText": "חב.לנפט -ניתוב- טירה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2369",
+    "aliasText": "טירה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2369",
+    "aliasText": "פז חב.לנפט -ניתוב- טירה : 116",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2371",
+    "aliasText": "חב.לנפט -ניתוב - עוז בת גלים",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2371",
+    "aliasText": "עוז בת גלים",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2371",
+    "aliasText": "פז חב.לנפט -ניתוב - עוז בת גלים : 337",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2372",
+    "aliasText": "חב.לנפט -ניתוב-נהריה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2372",
+    "aliasText": "נהריה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2372",
+    "aliasText": "פז חב.לנפט -ניתוב-נהריה : 316",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2373",
+    "aliasText": "אלוף שדה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2373",
+    "aliasText": "חב.לנפט - אלוף שדה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2373",
+    "aliasText": "פז חב.לנפט - אלוף שדה : 151",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2374",
+    "aliasText": "חב.לנפט -ניתוב - עוז רמת גן",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2374",
+    "aliasText": "עוז רמת גן",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2374",
+    "aliasText": "פז חב.לנפט -ניתוב - עוז רמת גן : 160",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2377",
+    "aliasText": "ספרינט מוטורס (סונול) | צומת גולני",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2377",
+    "aliasText": "ספרינט מוטורס (סונול) | צומת גולני : 44",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2377",
+    "aliasText": "צומת גולני",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2380",
+    "aliasText": "חב.לנפט - קיבוץ גלויות",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2380",
+    "aliasText": "פז חב.לנפט - קיבוץ גלויות : 165",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2380",
+    "aliasText": "קיבוץ גלויות",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2382",
+    "aliasText": "הנופר",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2382",
+    "aliasText": "חב.לנפט -ניתוב -הנופר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2382",
+    "aliasText": "פז חב.לנפט -ניתוב -הנופר : 241",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2383",
+    "aliasText": "ספרינט מוטורס (סונול) | צומת שמשון",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2383",
+    "aliasText": "ספרינט מוטורס (סונול) | צומת שמשון : 138",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2383",
+    "aliasText": "צומת שמשון",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2387",
+    "aliasText": "ספרינט מוטורס (סונול) | תלפיות",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2387",
+    "aliasText": "ספרינט מוטורס (סונול) | תלפיות : 146",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2387",
+    "aliasText": "תלפיות",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2389",
+    "aliasText": "אופקים",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2389",
+    "aliasText": "ספרינט מוטורס (סונול) | אופקים",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2389",
+    "aliasText": "ספרינט מוטורס (סונול) | אופקים : 273",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2397",
+    "aliasText": "מצדה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2397",
+    "aliasText": "ספרינט מוטורס (סונול) | מצדה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2397",
+    "aliasText": "ספרינט מוטורס (סונול) | מצדה : 159",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2402",
+    "aliasText": "אילות",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2402",
+    "aliasText": "דור אלון - אילות :969",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2409",
+    "aliasText": "בני ברק ז'בוטינסקי",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2409",
+    "aliasText": "דור אלון -בני ברק ז'בוטינסקי : 977",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2410",
+    "aliasText": "בני דרור",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2410",
+    "aliasText": "דור אלון - בני דרור :808",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2413",
+    "aliasText": "גילון",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2413",
+    "aliasText": "דור אלון - גילון :936",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2417",
+    "aliasText": "דור אלון - הזורע :921",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2417",
+    "aliasText": "הזורע",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2427",
+    "aliasText": "דור אלון - חיפה גרנד קניון :923",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2427",
+    "aliasText": "חיפה גרנד קניון",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2430",
+    "aliasText": "דור אלון - חיפה-פרויד :988",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2430",
+    "aliasText": "חיפה פרויד",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2430",
+    "aliasText": "חיפה-פרויד",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2433",
+    "aliasText": "דור אלון - חצור הגלילית",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2433",
+    "aliasText": "חצור הגלילית",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2436",
+    "aliasText": "דור אלון - יד נתן :901",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2436",
+    "aliasText": "יד נתן",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2436",
+    "aliasText": "יד נתן",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2437",
+    "aliasText": "דור אלון - יהוד סריגי גדי :963",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2437",
+    "aliasText": "יהוד",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2437",
+    "aliasText": "יהוד סריגי גדי",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2438",
+    "aliasText": "דור אלון - יקום :955",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2438",
+    "aliasText": "יקום",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2438",
+    "aliasText": "יקום",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2443",
+    "aliasText": "דור אלון - כפר טרומן :952",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2443",
+    "aliasText": "כפר טרומן",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2443",
+    "aliasText": "כפר טרומן",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2444",
+    "aliasText": "דור אלון - נין :956",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2444",
+    "aliasText": "נין",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2445",
+    "aliasText": "דור אלון - כרמיאל :939",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2445",
+    "aliasText": "כרמיאל",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2448",
+    "aliasText": "דור אלון - מורן :989",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2448",
+    "aliasText": "מורן",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2450",
+    "aliasText": "דור אלון - מענית :922",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2450",
+    "aliasText": "מענית",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2450",
+    "aliasText": "מענית",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2452",
+    "aliasText": "דור אלון - משען :904",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2452",
+    "aliasText": "משען",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2453",
+    "aliasText": "דור אלון - נגבה :902",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2453",
+    "aliasText": "נגבה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2453",
+    "aliasText": "נגבה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2454",
+    "aliasText": "דור אלון - נס ציונה :908",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2454",
+    "aliasText": "נס ציונה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2461",
+    "aliasText": "דור אלון - פתחיה :944",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2461",
+    "aliasText": "פתחיה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2461",
+    "aliasText": "פתחיה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2468",
+    "aliasText": "דור אלון - שימרון :986",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2468",
+    "aliasText": "שימרון",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2470",
+    "aliasText": "דור אלון - תדהר :930",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2470",
+    "aliasText": "תדהר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2470",
+    "aliasText": "תדהר",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2472",
+    "aliasText": "דור אלון - תפן :966",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2472",
+    "aliasText": "תפן",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2473",
+    "aliasText": "אלקנה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2473",
+    "aliasText": "אלקנה (סופר אלונית)",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2473",
+    "aliasText": "דור אלון - אלקנה (סופר אלונית)",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2475",
+    "aliasText": "אורים",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2475",
+    "aliasText": "אורים",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2475",
+    "aliasText": "דור אלון - אורים :651",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2476",
+    "aliasText": "אלומות",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2476",
+    "aliasText": "אלומות",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2476",
+    "aliasText": "דור אלון - אלומות :650",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2478",
+    "aliasText": "באר שבע ביג",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2478",
+    "aliasText": "דור אלון - באר שבע ביג :812",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2479",
+    "aliasText": "בית דגן",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2479",
+    "aliasText": "בית דגן אלונית",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2479",
+    "aliasText": "דור אלון - בית דגן אלונית  :918",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2481",
+    "aliasText": "בית השיטה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2481",
+    "aliasText": "בית השיטה סופר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2481",
+    "aliasText": "דור אלון - בית השיטה סופר :652",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2482",
+    "aliasText": "בית קשת",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2482",
+    "aliasText": "בית קשת",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2482",
+    "aliasText": "דור אלון -בית קשת :645",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2484",
+    "aliasText": "גאליה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2484",
+    "aliasText": "גאליה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2484",
+    "aliasText": "דור אלון - גאליה :928",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2485",
+    "aliasText": "גבים",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2485",
+    "aliasText": "גבים",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2485",
+    "aliasText": "דור אלון - גבים :905",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2486",
+    "aliasText": "גבעת עוז",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2486",
+    "aliasText": "גבעת עוז",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2486",
+    "aliasText": "דור אלון - גבעת עוז :661",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2487",
+    "aliasText": "גן הצפון",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2487",
+    "aliasText": "גן הצפון",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2487",
+    "aliasText": "דור אלון - גן הצפון :912",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2489",
+    "aliasText": "גן יבנה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2489",
+    "aliasText": "גן יבנה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2489",
+    "aliasText": "דור אלון - גן יבנה :903",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2490",
+    "aliasText": "גני חוגה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2490",
+    "aliasText": "גני חוגה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2490",
+    "aliasText": "דור אלון - גני חוגה :933",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2495",
+    "aliasText": "דור אלון - דלית אל כרמל :857",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2495",
+    "aliasText": "דלית אל כרמל",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2496",
+    "aliasText": "דור אלון - האון :804",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2496",
+    "aliasText": "האון",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2496",
+    "aliasText": "האון",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2496",
+    "aliasText": "האון (סיגריות בלבד)",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2497",
+    "aliasText": "דור אלון - חוקוק :914",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2497",
+    "aliasText": "חוקוק",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2497",
+    "aliasText": "חוקוק",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2503",
+    "aliasText": "דור אלון - יסודות :950",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2503",
+    "aliasText": "יסודות",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2505",
+    "aliasText": "דור אלון -יסעור :644",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2505",
+    "aliasText": "יסעור",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2505",
+    "aliasText": "יסעור",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2507",
+    "aliasText": "דור אלון - כפר עזה :653",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2507",
+    "aliasText": "כפר עזה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2507",
+    "aliasText": "כפר עזה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2509",
+    "aliasText": "דור אלון - להב :654",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2509",
+    "aliasText": "להב",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2509",
+    "aliasText": "להב",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2512",
+    "aliasText": "בית ג'אן",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2512",
+    "aliasText": "ספרינט מוטורס (סונול) | בית ג'אן",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2512",
+    "aliasText": "ספרינט מוטורס (סונול) | בית ג'אן : 231",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2518",
+    "aliasText": "דור אלון - להבות חביבה סופר",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2518",
+    "aliasText": "להבות חביבה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2518",
+    "aliasText": "להבות חביבה סופר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2519",
+    "aliasText": "דור אלון - לטרון :935",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2519",
+    "aliasText": "לטרון",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2519",
+    "aliasText": "לטרון",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2523",
+    "aliasText": "דור אלון - מזרע",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2523",
+    "aliasText": "מזרע",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2523",
+    "aliasText": "מזרע",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2525",
+    "aliasText": "דור אלון - ניר אליהו : 600",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2525",
+    "aliasText": "ניר אליהו",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2527",
+    "aliasText": "דור אלון - נתב\"ג",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2527",
+    "aliasText": "נתב\"ג",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2529",
+    "aliasText": "דור אלון - צומת עופר :910",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2529",
+    "aliasText": "צומת עופר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2530",
+    "aliasText": "דור אלון - עין כרמל :911",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2530",
+    "aliasText": "עין כרמל",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2530",
+    "aliasText": "עין כרמל",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2531",
+    "aliasText": "דור אלון - עין שמר",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2531",
+    "aliasText": "דור אלון - עין שמר סופר אלונית :656",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2531",
+    "aliasText": "עין שמר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2531",
+    "aliasText": "עין שמר",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2531",
+    "aliasText": "עין שמר סופר אלונית",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2532",
+    "aliasText": "דור אלון - עינת :666",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2532",
+    "aliasText": "דור אלון - עינת-סופר אלונית",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2532",
+    "aliasText": "עינת",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2532",
+    "aliasText": "עינת",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2532",
+    "aliasText": "עינת-סופר אלונית",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2533",
+    "aliasText": "דור אלון - משמר השרון :664",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2533",
+    "aliasText": "משמר השרון",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2535",
+    "aliasText": "דור אלון - ערד :949",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2535",
+    "aliasText": "ערד",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2535",
+    "aliasText": "ערד",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2539",
+    "aliasText": "דור אלון - צומת יובלים :967",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2539",
+    "aliasText": "צומת יובלים",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2541",
+    "aliasText": "דור אלון - צומת הגומא :658",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2541",
+    "aliasText": "צומת הגומא",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2541",
+    "aliasText": "צומת הגומא",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2543",
+    "aliasText": "דור אלון - צפת מצפה הימים :913",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2543",
+    "aliasText": "צפת מצפה הימים",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2543",
+    "aliasText": "צפת מצפה הימים",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2556",
+    "aliasText": "דור אלון - תל יצחק :925",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2556",
+    "aliasText": "תל יצחק",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2558",
+    "aliasText": "דור אלון - תל מונד :981",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2558",
+    "aliasText": "תל מונד",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2558",
+    "aliasText": "תל מונד",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2560",
+    "aliasText": "גבעת עדה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2560",
+    "aliasText": "דור אלון - גבעת עדה :995",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2567",
+    "aliasText": "בית שמש",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2567",
+    "aliasText": "חב.לנפט -ניתוב - בית שמש",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2567",
+    "aliasText": "פז חב.לנפט -ניתוב - בית שמש : 518",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2572",
+    "aliasText": "מפגש העמק",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2572",
+    "aliasText": "ספרינט מוטורס (סונול) | מפגש העמק",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2572",
+    "aliasText": "ספרינט מוטורס (סונול) | מפגש העמק : 16",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2579",
+    "aliasText": "כפר אדומים",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2579",
+    "aliasText": "שרית אנרגיה בע\"מ (זכיין סונול כפר אדומים)",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2595",
+    "aliasText": "הדס",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2595",
+    "aliasText": "פרץ חן-חנניה ( זכיין סונול הדס )",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2624",
+    "aliasText": "בוקעתא",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2624",
+    "aliasText": "ספרינט מוטורס (סונול) | בוקעתא",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2624",
+    "aliasText": "ספרינט מוטורס (סונול) | בוקעתא : 294",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2633",
+    "aliasText": "דור אלון - חיפה חוף שמן :954",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2633",
+    "aliasText": "חיפה חוף שמן",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2636",
+    "aliasText": "הצור",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2636",
+    "aliasText": "ספרינט מוטורס (סונול) | הצור",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2636",
+    "aliasText": "ספרינט מוטורס (סונול) | הצור : 219",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2668",
+    "aliasText": "הדסים",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2668",
+    "aliasText": "חב.לנפט -ניתוב -הדסים",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2668",
+    "aliasText": "פז חב.לנפט -ניתוב -הדסים : 254",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2670",
+    "aliasText": "חב.לנפט -ניתוב - מודיעין ליגד",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2670",
+    "aliasText": "מודיעין ליגד",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2670",
+    "aliasText": "פז חב.לנפט -ניתוב - מודיעין ליגד : 253",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2678",
+    "aliasText": "אשקלון עמיצור",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2678",
+    "aliasText": "אשקלון עמיצור",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2678",
+    "aliasText": "דור אלון - אשקלון עמיצור :957",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2680",
+    "aliasText": "דור אלון - עכו :960",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2680",
+    "aliasText": "עכו",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2681",
+    "aliasText": "דור אלון - קבוצת יבנה :962",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2681",
+    "aliasText": "קבוצת יבנה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2693",
+    "aliasText": "דרור כרמיאל",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2693",
+    "aliasText": "חב.לנפט -ניתוב- דרור כרמיאל",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2693",
+    "aliasText": "פז חב.לנפט -ניתוב- דרור כרמיאל : 424",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2695",
+    "aliasText": "חב.לנפט -מבוא עתלית",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2695",
+    "aliasText": "מבוא עתלית",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2695",
+    "aliasText": "פז חב.לנפט -מבוא עתלית : 418",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2714",
+    "aliasText": "חב.לנפט -ניתוב -כפר כנא",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2714",
+    "aliasText": "כפר כנא",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2714",
+    "aliasText": "פז חב.לנפט -ניתוב -כפר כנא: 423",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2715",
+    "aliasText": "גילי",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2715",
+    "aliasText": "חב.לנפט -ניתוב - גילי",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2715",
+    "aliasText": "פז חב.לנפט -ניתוב - גילי : 267",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2738",
+    "aliasText": "דור אלון - נווה ירק :978",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2738",
+    "aliasText": "נווה ירק",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2739",
+    "aliasText": "דור אלון - שדי חמד :982",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2739",
+    "aliasText": "שדי חמד",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2740",
+    "aliasText": "דור אלון - יפיע :974",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2740",
+    "aliasText": "יפיע",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2740",
+    "aliasText": "יפיע",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2752",
+    "aliasText": "חב.לנפט -ניתוב - קרית עקרון",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2752",
+    "aliasText": "פז חב.לנפט -ניתוב - קרית עקרון : 260",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2752",
+    "aliasText": "קרית עקרון",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2761",
+    "aliasText": "דור אלון - טל שחר :961",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2761",
+    "aliasText": "טל שחר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2761",
+    "aliasText": "טל שחר",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2771",
+    "aliasText": "בית שמש הצומת",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2771",
+    "aliasText": "חב.לנפט -ניתוב - הצומת בית שמש",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2771",
+    "aliasText": "פז חב.לנפט -ניתוב - הצומת בית שמש : 538",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2778",
+    "aliasText": "ביר אל מכסור",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2778",
+    "aliasText": "חב.לנפט -ניתוב -ביר אל מכסור",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2778",
+    "aliasText": "פז חב.לנפט -ניתוב -ביר אל מכסור: 425",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2790",
+    "aliasText": "אלישמע",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2790",
+    "aliasText": "חב.לנפט -ניתוב - אלישמע",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2790",
+    "aliasText": "פז חב.לנפט -ניתוב - אלישמע : 270",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2795",
+    "aliasText": "משמר הירדן",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2795",
+    "aliasText": "ספרינט מוטורס (סונול) | משמר הירדן",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2795",
+    "aliasText": "ספרינט מוטורס (סונול) | משמר הירדן : 203",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2799",
+    "aliasText": "בני ראם",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2799",
+    "aliasText": "דור אלון - בני ראם :802",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2811",
+    "aliasText": "דור אלון - נתניה-עיר ימים :807",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2811",
+    "aliasText": "נתניה עיר ימים",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2811",
+    "aliasText": "נתניה-עיר ימים",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2820",
+    "aliasText": "חב.לנפט -ניתוב- צומת כוח",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2820",
+    "aliasText": "פז חב.לנפט -ניתוב- צומת כוח : 430",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2820",
+    "aliasText": "צומת כח",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2822",
+    "aliasText": "חב.לנפט -ניתוב- קצרין",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2822",
+    "aliasText": "פז חב.לנפט -ניתוב- קצרין : 428",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2822",
+    "aliasText": "קצרין",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2842",
+    "aliasText": "בני דרום",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2842",
+    "aliasText": "דור אלון - בני דרום :809",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2851",
+    "aliasText": "דור אלון - מצפה רמון :811",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2851",
+    "aliasText": "מצפה רמון",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2851",
+    "aliasText": "מצפה רמון",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2868",
+    "aliasText": "דור אלון - רמלה-דוכיפת :818",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2868",
+    "aliasText": "רמלה דוכיפת",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2868",
+    "aliasText": "רמלה-דוכיפת",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2873",
+    "aliasText": "דור אלון - נהריה :819",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2873",
+    "aliasText": "נהריה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2876",
+    "aliasText": "גדרה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2876",
+    "aliasText": "חב.לנפט -ניתוב - גדרה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2876",
+    "aliasText": "פז חב.לנפט -ניתוב - גדרה : 633",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2877",
+    "aliasText": "דור אלון - מעלות העיר :829",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2877",
+    "aliasText": "מעלות העיר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2913",
+    "aliasText": "דור אלון - ציפורית :832",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2913",
+    "aliasText": "ציפורית",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2929",
+    "aliasText": "דור אלון - טירת הכרמל :833",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2929",
+    "aliasText": "טירת הכרמל",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2931",
+    "aliasText": "חב.לנפט -ניתוב -ירכא",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2931",
+    "aliasText": "ירכא",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2931",
+    "aliasText": "פז חב.לנפט -ניתוב -ירכא : 433",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2981",
+    "aliasText": "אשקלון דרום",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2981",
+    "aliasText": "חב.לנפט -ניתוב - אשקלון דרום",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2981",
+    "aliasText": "פז חב.לנפט -ניתוב - אשקלון דרום : 543",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2992",
+    "aliasText": "דור אלון - כפר יונה :865",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2992",
+    "aliasText": "כפר יונה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2999",
+    "aliasText": "המשתלה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2999",
+    "aliasText": "ספרינט מוטורס (סונול) | המשתלה בית חי",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_2999",
+    "aliasText": "ספרינט מוטורס (סונול) | המשתלה בית חי : 313",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3001",
+    "aliasText": "ספרינט מוטורס (סונול) | צומת עדי",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3001",
+    "aliasText": "ספרינט מוטורס (סונול) | צומת עדי : 335",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3001",
+    "aliasText": "צומת עדי",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3011",
+    "aliasText": "דור אלון - צומת חנניה",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3011",
+    "aliasText": "צומת חנניה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3011",
+    "aliasText": "צומת חנניה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3012",
+    "aliasText": "דור אלון - רחובות האצ\"ל",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3012",
+    "aliasText": "רחובות האצ\"ל",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3023",
+    "aliasText": "דור אלון - קרני שומרון : 841",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3023",
+    "aliasText": "קרני שומרון",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3047",
+    "aliasText": "דור אלון - עמיעד (סופר אלונית)",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3047",
+    "aliasText": "עמיעד",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3047",
+    "aliasText": "עמיעד (סופר אלונית)",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3053",
+    "aliasText": "אריאל",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3053",
+    "aliasText": "חב.לנפט -ניתוב - פז אריאל",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3053",
+    "aliasText": "פז חב.לנפט -ניתוב - פז אריאל : 275",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3059",
+    "aliasText": "דור אלון - יזרעאל : 852",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3059",
+    "aliasText": "יזרעאל",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3059",
+    "aliasText": "יזרעאל",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3064",
+    "aliasText": "דור אלון - חריש :853",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3064",
+    "aliasText": "חריש",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3082",
+    "aliasText": "חב.לנפט -ניתוב - יוקנעם",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3082",
+    "aliasText": "יוקנעם",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3082",
+    "aliasText": "פז חב.לנפט -ניתוב - יוקנעם : 368",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3091",
+    "aliasText": "ביר אל אמיר",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3091",
+    "aliasText": "חב.לנפט - ביר אל אמיר",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_3091",
+    "aliasText": "פז חב.לנפט - ביר אל אמיר : 373",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_909",
+    "aliasText": "דור אלון - צומת מסובים :900",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_909",
+    "aliasText": "צומת מסובים",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_909",
+    "aliasText": "צומת מסובים",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_928",
+    "aliasText": "דור אלון - ניר בנים",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_928",
+    "aliasText": "ניר בנים",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_942",
+    "aliasText": "חב.לנפט -ניתוב-קיסריה",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_942",
+    "aliasText": "פז חב.לנפט -ניתוב-קיסריה : 355",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_942",
+    "aliasText": "קיסריה",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_944",
+    "aliasText": "חב.לנפט -ניתוב - מוזיאון",
+    "aliasSource": "extracted_customer_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_944",
+    "aliasText": "מוזיאון",
+    "aliasSource": "extracted_station_label",
+    "confidence": "confirmed"
+  },
+  {
+    "deliveryPointExternalId": "fuel_admin_944",
+    "aliasText": "פז חב.לנפט -ניתוב - מוזיאון : 531",
+    "aliasSource": "raw_customer_name",
+    "confidence": "confirmed"
+  }
+]
