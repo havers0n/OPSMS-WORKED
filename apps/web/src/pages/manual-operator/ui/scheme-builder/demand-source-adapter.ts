@@ -108,6 +108,10 @@ export function adaptDemandPlanningPreviewToSource(
         sourceDeliveryLine: null,
         areaName,
         areaDisplayName: displayName,
+        deliveryPointId: null,
+        deliveryPointName: null,
+        deliveryPointMatchStatus: null,
+        rawDestinationLabel: null,
       };
 
       if (items.length > 0) {

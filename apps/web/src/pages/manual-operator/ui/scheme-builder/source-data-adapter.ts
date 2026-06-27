@@ -31,6 +31,10 @@ export function adaptWorkHierarchyToSource(response: ManualShiftWorkHierarchyRes
             sourceDeliveryLine: deliveryLine,
             areaName: area.areaName,
             areaDisplayName: area.displayName,
+            deliveryPointId: order.deliveryPointId ?? null,
+            deliveryPointName: order.deliveryPointName ?? null,
+            deliveryPointMatchStatus: order.deliveryPointMatchStatus ?? null,
+            rawDestinationLabel: order.rawDestinationLabel ?? null,
           });
         }
       }
@@ -52,6 +56,10 @@ export function adaptWorkHierarchyToSource(response: ManualShiftWorkHierarchyRes
               sourceDeliveryLine: deliveryLine,
               areaName: area.areaName,
               areaDisplayName: area.displayName,
+              deliveryPointId: order.deliveryPointId ?? null,
+              deliveryPointName: order.deliveryPointName ?? null,
+              deliveryPointMatchStatus: order.deliveryPointMatchStatus ?? null,
+              rawDestinationLabel: order.rawDestinationLabel ?? null,
             });
           }
         }

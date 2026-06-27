@@ -18,6 +18,10 @@ function makeOrder(overrides: Partial<SourceOrder> = {}): SourceOrder {
     sourceDeliveryLine: { lineId: 'line-1', lineGroupName: 'דרומי 1', distributionArea: 'דרום', lineKind: 'delivery_channel' },
     areaName: 'south',
     areaDisplayName: 'דרום',
+    deliveryPointId: null,
+    deliveryPointName: null,
+    deliveryPointMatchStatus: null,
+    rawDestinationLabel: null,
     ...overrides,
   };
 }
