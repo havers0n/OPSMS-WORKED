@@ -39,3 +39,16 @@
 - DB/RPC enforces concurrency-safe and tenant-scoped constraints.
 - Policy data (`sku_location_policies`) determines preferred storage preset usage for a location/product pair.
 - Location occupancy and container snapshot views are the runtime read model for most UI inventory surfaces.
+
+## Delivery Point Master Data
+
+**DeliveryPoint** represents a confirmed physical delivery destination with address and coordinates. Data comes from strict company + station/site name matching against the official fuel admin registry.
+
+**DeliveryPointAlias** is an alternative/raw name used in Excel, Priority, or orders that maps to exactly one DeliveryPoint via exact normalized text matching.
+
+Important rules:
+- The numeric code after `:` in order customer labels (e.g. `:950`) is an internal customer/site code and **must not** be treated as `מס_מינהל_הדלק` (official fuel admin id).
+- Aliases are exact normalized names — no fuzzy matching is allowed in MVP.
+- Alias is not a route, not a driver, not an area, not a work group. Do not mix with manual shift buckets, routeGroups, workBuckets, Product Control, or dispatch.
+- Lookup defaults to `confidence = 'confirmed'`; `review`/`rejected` aliases are excluded by default.
+- If one normalized alias maps to multiple DeliveryPoints, the repository throws `AMBIGUOUS_ALIAS`.
