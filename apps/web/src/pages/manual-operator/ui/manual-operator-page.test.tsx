@@ -10,6 +10,11 @@ vi.mock('@/shared/api/bff/client', async (importOriginal) => {
   return { ...actual, bffRequest: vi.fn() };
 });
 
+let desktopOverride = false;
+vi.mock('@/shared/hooks/use-media-query', () => ({
+  useMediaQuery: () => desktopOverride,
+}));
+
 let authState: { currentTenantId: string | null; memberships: TenantMembership[] } = {
   currentTenantId: 'tenant-1',
   memberships: [{
@@ -55,6 +60,8 @@ async function selectMobileDate(date: string) {
 describe('ManualOperatorPage queue import placement', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    desktopOverride = false;
+    localStorage.clear();
     authState = {
       currentTenantId: 'tenant-1',
       memberships: [{
@@ -408,6 +415,133 @@ it('past date with a closed shift hides import actions', async () => {
 
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: /ייבוא מחדש והחלפת עבודה קיימת/ })).toBeTruthy();
+    });
+  });
+
+  describe('demand planning last context', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      localStorage.clear();
+      desktopOverride = true;
+      authState = {
+        currentTenantId: 'tenant-1',
+        memberships: [{
+          tenantId: 'tenant-1',
+          tenantCode: 'default',
+          tenantName: 'Default',
+          role: 'tenant_admin'
+        }]
+      };
+      mockedBffRequest.mockResolvedValue({ shift: null, lines: [] });
+    });
+
+    function renderAt(initialUrl: string) {
+      const qc = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
+      });
+      return render(
+        <MemoryRouter initialEntries={[initialUrl]}>
+          <QueryClientProvider client={qc}>
+            <ManualOperatorPage />
+          </QueryClientProvider>
+        </MemoryRouter>
+      );
+    }
+
+    it('shows resume banner in normal lines mode when saved demand context exists', async () => {
+      localStorage.setItem('wos:demand-planning:last-context', JSON.stringify({
+        mode: 'demand',
+        batchId: 'batch-999',
+        draftId: 'draft-888',
+        url: '/operator/manual/lines?batchId=batch-999&draftId=draft-888&mode=demand',
+        savedAt: new Date().toISOString(),
+        sourceFile: 'test.xlsx',
+        sourceSheet: 'DataSheet',
+      }));
+
+      renderAt('/operator/manual/lines?date=2026-06-27');
+
+      await waitFor(() => {
+        expect(screen.getByText('יש טיוטת DataSheet פעילה')).toBeTruthy();
+      });
+      expect(screen.getByText((content) => content.includes('test.xlsx'))).toBeTruthy();
+      expect(screen.getByText('פתח טיוטה')).toBeTruthy();
+      expect(screen.getByText('בטל')).toBeTruthy();
+    });
+
+    it('does not show resume banner in demand mode', async () => {
+      localStorage.setItem('wos:demand-planning:last-context', JSON.stringify({
+        mode: 'demand',
+        batchId: 'batch-999',
+        draftId: 'draft-888',
+        url: '/operator/manual/lines?batchId=batch-999&draftId=draft-888&mode=demand',
+        savedAt: new Date().toISOString(),
+      }));
+
+      renderAt('/operator/manual/lines?batchId=batch-999&draftId=draft-888&mode=demand');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('manual-section-switcher-trigger')).toBeTruthy();
+      });
+      expect(screen.queryByText('יש טיוטת DataSheet פעילה')).toBeNull();
+    });
+
+    it('does not show resume banner when no saved context', async () => {
+      renderAt('/operator/manual/lines?date=2026-06-27');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('manual-section-switcher-trigger')).toBeTruthy();
+      });
+      expect(screen.queryByText('יש טיוטת DataSheet פעילה')).toBeNull();
+    });
+
+    it('shows append button in demand mode when shift is available', async () => {
+      mockedBffRequest.mockImplementation((url: string) => {
+        if (String(url).includes('/api/manual-shifts/by-date')) {
+          return Promise.resolve({
+            shift: {
+              id: 'shift-demand',
+              tenantId: 'tenant-1', date: '2026-06-27', name: 'Shift', status: 'active',
+              createdBy: null, createdAt: new Date().toISOString(), closedAt: null,
+            },
+            lines: []
+          });
+        }
+        return Promise.resolve({ shift: null, lines: [] });
+      });
+
+      renderAt('/operator/manual/lines?batchId=batch-999&draftId=draft-888&mode=demand');
+
+      await waitFor(() => {
+        expect(screen.getByText('הוסף לקווים קיימים')).toBeTruthy();
+      });
+    });
+
+    it('shows disabled message when no shift is available in demand mode', async () => {
+      renderAt('/operator/manual/lines?batchId=batch-999&draftId=draft-888&mode=demand');
+
+      await waitFor(() => {
+        expect(screen.getByText('בחר תאריך/משמרת כדי להוסיף לקווים קיימים')).toBeTruthy();
+      });
+    });
+
+    it('clears saved context when dismiss button is clicked', async () => {
+      localStorage.setItem('wos:demand-planning:last-context', JSON.stringify({
+        mode: 'demand',
+        batchId: 'batch-999',
+        draftId: 'draft-888',
+        url: '/operator/manual/lines?batchId=batch-999&draftId=draft-888&mode=demand',
+        savedAt: new Date().toISOString(),
+      }));
+
+      renderAt('/operator/manual/lines?date=2026-06-27');
+
+      await waitFor(() => {
+        expect(screen.getByText('בטל')).toBeTruthy();
+      });
+
+      fireEvent.click(screen.getByText('בטל'));
+      expect(localStorage.getItem('wos:demand-planning:last-context')).toBeNull();
     });
   });
 

@@ -1,9 +1,10 @@
-﻿import { useState, useMemo, useCallback, useEffect } from 'react';
+﻿import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, ChevronDown, ChevronUp, Save, Search, X } from 'lucide-react';
 import { workHierarchyQueryOptions, orderItemsQueryOptions } from '@/entities/manual-shift/api/queries';
 import { demandPlanningPreviewQueryOptions, demandPlanningDraftQueryOptions } from '@/entities/demand/api/queries';
 import { usePutDemandPlanningPlan } from '@/entities/demand/api/mutations';
+import { saveDemandLastContext } from '@/entities/demand/lib/last-context';
 import { useSchemeBuilderStore } from './scheme-store';
 import { adaptWorkHierarchyToSource, adaptOrderItemsToSource } from './source-data-adapter';
 import { adaptDemandPlanningPreviewToSource } from './demand-source-adapter';
@@ -131,6 +132,8 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     return `${draftWithAssignments.draft.id}:${draftWithAssignments.allocations.length}:${draftWithAssignments.buckets.length}`;
   }, [isDemandMode, draftWithAssignments]);
 
+  const demandContextSavedRef = useRef(false);
+
   useEffect(() => {
     if (!isDemandMode || !draftWithAssignments) return;
     const { buckets, allocations } = draftWithAssignments;
@@ -160,6 +163,19 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     }));
 
     hydrateFromDraft({ planningLines, workGroups, itemAllocations });
+
+    if (draftId && batchId && !demandContextSavedRef.current) {
+      demandContextSavedRef.current = true;
+      saveDemandLastContext({
+        mode: 'demand',
+        batchId,
+        draftId,
+        url: window.location.pathname + window.location.search,
+        savedAt: new Date().toISOString(),
+        sourceFile: planningPreview?.batch.sourceFile,
+        sourceSheet: planningPreview?.batch.sourceSheet,
+      });
+    }
   }, [isDemandMode, lastDraftKey]);
 
   /* Cleanup when leaving demand mode */

@@ -26,6 +26,7 @@ import { SchemeBuilder } from './scheme-builder';
 import { AppendModePanel } from './scheme-builder/append-mode-panel';
 import { PrintingHomePage } from '../printing/routes/PrintingHomePage';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { getDemandLastContext, clearDemandLastContext } from '@/entities/demand/lib/last-context';
 
 const LAST_SECTION_PATH_PREFIX = 'manual-operator:last-section:';
 
@@ -195,6 +196,13 @@ export function ManualOperatorPage() {
   }
 
   function handleChangeSection(nextSection: ManualOperatorSection) {
+    if (nextSection === 'lines') {
+      const savedCtx = getDemandLastContext();
+      if (savedCtx?.url) {
+        navigate(savedCtx.url);
+        return;
+      }
+    }
     navigate(getStoredSectionPath(nextSection) ?? manualOperatorSectionPath(nextSection, selectedDate));
   }
 
@@ -269,14 +277,59 @@ export function ManualOperatorPage() {
               הוספת ביקוש גולמי לקווים קיימים
             </span>
           ) : isDesktop && section === 'lines' && mode === 'demand' && batchId && draftId ? (
-            <span className="rounded border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
-              תכנון ביקוש גולמי מ-DataSheet — לא שויך למשמרת
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="rounded border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+                תכנון ביקוש גולמי מ-DataSheet
+              </span>
+              {shift ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate(`/operator/manual/lines?shiftId=${shift.id}&batchId=${batchId}&mode=append`)
+                  }
+                  className="rounded border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
+                >
+                  הוסף לקווים קיימים
+                </button>
+              ) : (
+                <span className="rounded border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-medium text-gray-400 cursor-not-allowed">
+                  בחר תאריך/משמרת כדי להוסיף לקווים קיימים
+                </span>
+              )}
+            </div>
           ) : isDesktop && section === 'lines' ? (
             <span className="rounded border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
               טיוטה מקומית בלבד
             </span>
           ) : undefined
+        }
+        contextualRow={
+          isDesktop && section === 'lines' && mode !== 'demand' && mode !== 'append' ? (() => {
+            const savedCtx = getDemandLastContext();
+            if (!savedCtx) return null;
+            return (
+              <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm">
+                <span className="font-medium text-amber-900">יש טיוטת DataSheet פעילה</span>
+                {savedCtx.sourceFile && (
+                  <span className="text-xs text-amber-700">({savedCtx.sourceFile})</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => navigate(savedCtx.url)}
+                  className="ms-auto rounded-md bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700 transition-colors"
+                >
+                  פתח טיוטה
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { clearDemandLastContext(); window.location.reload(); }}
+                  className="rounded-md border border-amber-300 px-3 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100 transition-colors"
+                >
+                  בטל
+                </button>
+              </div>
+            );
+          })() : undefined
         }
       >
         {isLoading ? (

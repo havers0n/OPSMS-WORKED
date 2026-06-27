@@ -11,6 +11,7 @@ import { demandPlanningPreviewQueryOptions } from '@/entities/demand/api/queries
 import { BffRequestError } from '@/shared/api/bff/client';
 import { translateBffError } from '@/shared/i18n';
 import { useNavigate } from 'react-router-dom';
+import { saveDemandLastContext } from '@/entities/demand/lib/last-context';
 
 export function DatasheetImportPanel({ shiftId }: { shiftId?: string | null }) {
   const navigate = useNavigate();
@@ -325,7 +326,17 @@ export function DatasheetImportPanel({ shiftId }: { shiftId?: string | null }) {
           onClick={() => {
             createDraftMutation.mutate(batchId, {
               onSuccess: (result) => {
-                navigate(`/operator/manual/lines?batchId=${batchId}&draftId=${result.draft.id}&mode=demand`);
+                const url = `/operator/manual/lines?batchId=${batchId}&draftId=${result.draft.id}&mode=demand`;
+                saveDemandLastContext({
+                  mode: 'demand',
+                  batchId,
+                  draftId: result.draft.id,
+                  url,
+                  savedAt: new Date().toISOString(),
+                  sourceFile: planningPreview?.batch.sourceFile,
+                  sourceSheet: planningPreview?.batch.sourceSheet,
+                });
+                navigate(url);
               },
             });
           }}
