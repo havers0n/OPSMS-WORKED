@@ -33,6 +33,15 @@ import { bffRequest } from '@/shared/api/bff/client';
 
 const mockedBffRequest = vi.mocked(bffRequest);
 
+function todayIsrael(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date());
+}
+
 function makeQueryClient() {
   return new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
@@ -78,7 +87,7 @@ describe('ManualOperatorPage queue import placement', () => {
       shift: {
         id: 'shift-1',
         tenantId: 'tenant-1',
-        date: '2026-06-01',
+        date: todayIsrael(),
         name: 'Shift',
         status: 'active',
         createdBy: null,
@@ -213,7 +222,7 @@ describe('ManualOperatorPage queue import placement', () => {
       shift: {
         id: 'shift-1',
         tenantId: 'tenant-1',
-        date: '2026-06-01',
+        date: todayIsrael(),
         name: 'Shift',
         status: 'active',
         createdBy: null,

@@ -719,6 +719,18 @@ export function createManualShiftsServiceFromRepo(
       };
     },
 
+    async getShiftById(tenantId, shiftId) {
+      const shift = await requireShift(shiftId);
+      if (shift.tenantId !== tenantId) {
+        throw manualShiftNotFound(shiftId);
+      }
+
+      return {
+        shift,
+        lines: await buildShiftLineSummariesLite(repo, shift.id, tenantId)
+      };
+    },
+
     async createShift(input) {
       const date = input.date ?? getTodayDate();
       const existing = await repo.findActiveShiftByDate(input.tenantId, date);

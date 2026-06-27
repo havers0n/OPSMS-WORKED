@@ -363,6 +363,18 @@ export function registerManualShiftsRoutes(
     return parseOrThrow(manualShiftTodayResponseSchema, response);
   });
 
+  app.get('/api/manual-shifts/:shiftId', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const shiftId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { shiftId: string }).shiftId
+    }).id;
+    const response = await getManualShiftsService(auth).getShiftById(tenantId, shiftId);
+    return parseOrThrow(manualShiftTodayResponseSchema, response);
+  });
+
   app.post('/api/manual-shifts', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;

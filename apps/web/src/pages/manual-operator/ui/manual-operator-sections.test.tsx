@@ -16,6 +16,8 @@ vi.mock('@/shared/hooks/use-media-query', () => ({
   useMediaQuery: () => isDesktop
 }));
 
+let authMembershipRole = 'tenant_admin';
+
 vi.mock('@/app/providers/auth-provider', () => ({
   useAuth: () => ({
     currentTenantId: 'tenant-1',
@@ -24,7 +26,7 @@ vi.mock('@/app/providers/auth-provider', () => ({
         tenantId: 'tenant-1',
         tenantCode: 'default',
         tenantName: 'Default',
-        role: 'tenant_admin'
+        role: authMembershipRole
       }
     ]
   })
@@ -204,6 +206,9 @@ function mockWorkspaceData(options?: {
   mockedBffRequest.mockImplementation((url: string) => {
     const path = String(url);
     if (path.includes('/api/manual-shifts/by-date')) return Promise.resolve({ shift, lines });
+    if (path.match(/\/api\/manual-shifts\/[^/]+$/) && !path.includes('/by-date') && !path.includes('/today')) {
+      return Promise.resolve({ shift, lines });
+    }
     if (path.endsWith(`/api/manual-shifts/${shift.id}/work-hierarchy`)) return Promise.resolve(workHierarchyData);
     if (path.endsWith(`/api/manual-shifts/${shift.id}/day-summary`)) return Promise.resolve(daySummary);
     if (path.endsWith(`/api/manual-shifts/${shift.id}/orders`)) return Promise.resolve(orders);
@@ -1268,6 +1273,122 @@ describe('ManualOperatorPage URL sections', () => {
     fireEvent.click(screen.getByTestId('area-card-south'));
     await waitFor(() => {
       expect(screen.getByTestId('work-bucket-card-Point A')).toBeTruthy();
+    });
+  });
+
+  describe('import shift gating regression', () => {
+    it('shiftId in URL enables import even when selectedDate/today differs', async () => {
+      const pastShift = {
+        id: 'shift-past',
+        tenantId: 'tenant-1',
+        date: '2026-06-03',
+        name: 'Wednesday, 3 June 2026',
+        status: 'active' as const,
+        createdBy: null,
+        createdAt: '2026-06-03T19:10:00.000Z',
+        closedAt: null
+      };
+
+      mockedBffRequest.mockImplementation((url: string) => {
+        const path = String(url);
+        if (path.includes('/api/manual-shifts/by-date')) return Promise.resolve({ shift: null, lines: [] });
+        if (path.endsWith('/api/manual-shifts/shift-past')) return Promise.resolve({ shift: pastShift, lines: [] });
+        return Promise.resolve([]);
+      });
+
+      renderAt('/operator/manual/import?shiftId=shift-past');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('manual-import-section')).toBeTruthy();
+      });
+
+      const dailyBtn = screen.getByRole('button', { name: 'פתיחת ייבוא יומי' });
+      const monthlyBtn = screen.getByRole('button', { name: 'פתיחת ייבוא הזמנות לתאריך נבחר' });
+      expect(dailyBtn.hasAttribute('disabled')).toBe(false);
+      expect(monthlyBtn.hasAttribute('disabled')).toBe(false);
+    });
+
+    it('shiftId with closed shift disables import with explicit reason', async () => {
+      const closedShift = {
+        id: 'shift-closed',
+        tenantId: 'tenant-1',
+        date: '2026-06-03',
+        name: 'Wednesday, 3 June 2026',
+        status: 'closed' as const,
+        createdBy: null,
+        createdAt: '2026-06-03T19:10:00.000Z',
+        closedAt: '2026-06-03T22:00:00.000Z'
+      };
+
+      mockedBffRequest.mockImplementation((url: string) => {
+        const path = String(url);
+        if (path.includes('/api/manual-shifts/by-date')) return Promise.resolve({ shift: null, lines: [] });
+        if (path.endsWith('/api/manual-shifts/shift-closed')) return Promise.resolve({ shift: closedShift, lines: [] });
+        return Promise.resolve([]);
+      });
+
+      renderAt('/operator/manual/import?shiftId=shift-closed');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('manual-import-section')).toBeTruthy();
+      });
+
+      expect(screen.getAllByText('המשמרת סגורה. יש לפתוח משמרת פעילה.').length).toBeGreaterThanOrEqual(1);
+      const dailyBtn = screen.getByRole('button', { name: 'פתיחת ייבוא יומי' });
+      expect(dailyBtn.hasAttribute('disabled')).toBe(true);
+    });
+
+    it('no import permission shows explicit disabled reason', async () => {
+      authMembershipRole = 'operator';
+
+      const activeShift = {
+        id: 'shift-op',
+        tenantId: 'tenant-1',
+        date: '2026-06-03',
+        name: 'Shift',
+        status: 'active' as const,
+        createdBy: null,
+        createdAt: new Date().toISOString(),
+        closedAt: null
+      };
+
+      mockedBffRequest.mockImplementation((url: string) => {
+        const path = String(url);
+        if (path.includes('/api/manual-shifts/by-date')) return Promise.resolve({ shift: null, lines: [] });
+        if (path.endsWith('/api/manual-shifts/shift-op')) return Promise.resolve({ shift: activeShift, lines: [] });
+        return Promise.resolve([]);
+      });
+
+      renderAt('/operator/manual/import?shiftId=shift-op');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('manual-import-section')).toBeTruthy();
+      });
+
+      expect(screen.getAllByText('אין לך הרשאת ייבוא. נדרשת הרשאת מנהל.').length).toBeGreaterThanOrEqual(1);
+      const dailyBtn = screen.getByRole('button', { name: 'פתיחת ייבוא יומי' });
+      expect(dailyBtn.hasAttribute('disabled')).toBe(true);
+
+      authMembershipRole = 'tenant_admin';
+    });
+
+    it('no shift disables import with correct reason', async () => {
+      mockedBffRequest.mockImplementation((url: string) => {
+        const path = String(url);
+        if (path.includes('/api/manual-shifts/by-date')) return Promise.resolve({ shift: null, lines: [] });
+        if (path.match(/\/api\/manual-shifts\/[^/]+$/)) return Promise.resolve({ shift: null, lines: [] });
+        return Promise.resolve([]);
+      });
+
+      renderAt('/operator/manual/import');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('manual-import-section')).toBeTruthy();
+      });
+
+      expect(screen.getAllByText('לא נבחרה משמרת. יש לבחור תאריך או לפתוח משמרת.').length).toBeGreaterThanOrEqual(1);
+      const dailyBtn = screen.getByRole('button', { name: 'פתיחת ייבוא יומי' });
+      expect(dailyBtn.hasAttribute('disabled')).toBe(true);
     });
   });
 });

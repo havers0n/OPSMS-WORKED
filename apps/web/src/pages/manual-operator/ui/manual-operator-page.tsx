@@ -2,13 +2,12 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import type { ManualShiftLineSummary, ManualShiftSession } from '@wos/domain';
-import { shiftByDateQueryOptions } from '@/entities/manual-shift/api/queries';
+import { shiftByDateQueryOptions, shiftByIdQueryOptions } from '@/entities/manual-shift/api/queries';
 import { useCreateShift } from '@/entities/manual-shift/api/mutations';
 import { useMediaQuery } from '@/shared/hooks/use-media-query';
 import { useAuth } from '@/app/providers/auth-provider';
 import {
   isManualOperatorSection,
-  manualOperatorSectionPath,
   type ManualOperatorSection,
   routes
 } from '@/shared/config/routes';
@@ -76,7 +75,9 @@ function ManualOperatorSectionContent({
   draftId,
   mode,
   shiftIdFromParams,
-  targetDate
+  targetDate,
+  isLoading,
+  canImportExcelByRole
 }: {
   section: ManualOperatorSection;
   shift: ManualShiftSession | null;
@@ -90,6 +91,8 @@ function ManualOperatorSectionContent({
   mode: string | null;
   shiftIdFromParams: string | null;
   targetDate: string | null;
+  isLoading: boolean;
+  canImportExcelByRole: boolean;
 }) {
   if (section === 'summary') {
     return shift ? (
@@ -137,6 +140,8 @@ function ManualOperatorSectionContent({
         selectedDate={selectedDate}
         canMonthlyImport={canMonthlyImport}
         hasExistingWork={hasExistingWork}
+        isLoading={isLoading}
+        canImportExcelByRole={canImportExcelByRole}
       />
     );
   }
@@ -172,11 +177,21 @@ export function ManualOperatorPage() {
   const targetDate = searchParams.get('targetDate');
   const [showTargetDatePicker, setShowTargetDatePicker] = useState(false);
 
-  const isToday = selectedDate === todayDate;
-  const { data: shiftData, isLoading } = useQuery(shiftByDateQueryOptions(selectedDate));
-  const shift = shiftData?.shift ?? null;
-  const lines = shiftData?.lines ?? [];
-  const isReadOnly = !isToday || shift?.status === 'closed';
+  const hasShiftIdParam = !!shiftIdFromParams;
+
+  const byDateQuery = useQuery(
+    shiftByDateQueryOptions(hasShiftIdParam ? '' : selectedDate)
+  );
+  const byIdQuery = useQuery(
+    shiftByIdQueryOptions(shiftIdFromParams ?? '')
+  );
+  const { data: shiftData, isLoading } = hasShiftIdParam ? byIdQuery : byDateQuery;
+  const resolvedShift = shiftData?.shift ?? null;
+  const resolvedLines = shiftData?.lines ?? [];
+  const effectiveDate = resolvedShift?.date ?? selectedDate;
+  const effectiveToday = effectiveDate === todayDate;
+  const isReadOnly = !effectiveToday || resolvedShift?.status === 'closed';
+  const hasExistingWork = resolvedLines.length > 0;
 
   const { data: targetShiftData, isLoading: isTargetShiftLoading } = useQuery({
     ...shiftByDateQueryOptions(targetDate ?? ''),
@@ -190,8 +205,7 @@ export function ManualOperatorPage() {
     : memberships[0] ?? null;
   const canImportExcelByRole =
     currentMembership?.role === 'tenant_admin' || currentMembership?.role === 'platform_admin';
-  const canMonthlyImport = !!shift && shift.status === 'active' && canImportExcelByRole;
-  const hasExistingWork = lines.length > 0;
+  const canMonthlyImport = !!resolvedShift && resolvedShift.status === 'active' && canImportExcelByRole;
 
   useEffect(() => {
     if (!section || typeof window === 'undefined') return;
@@ -221,7 +235,14 @@ export function ManualOperatorPage() {
   }, [targetDate, mode, batchId, draftId, location.pathname, location.search]);
 
   function handleCreateShift() {
-    createShift.mutate({ name: generateShiftName(), date: selectedDate });
+    const date = effectiveDate;
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('date', date);
+      next.delete('shiftId');
+      return next;
+    });
+    createShift.mutate({ name: generateShiftName(date), date });
   }
 
   function handleSelectTargetDate(date: string) {
@@ -248,6 +269,7 @@ export function ManualOperatorPage() {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set('date', date);
+      next.delete('shiftId');
       return next;
     });
   }
@@ -260,7 +282,23 @@ export function ManualOperatorPage() {
         return;
       }
     }
-    navigate(getStoredSectionPath(nextSection) ?? manualOperatorSectionPath(nextSection, selectedDate));
+    const stored = getStoredSectionPath(nextSection);
+    if (stored) {
+      navigate(stored);
+      return;
+    }
+    const base = `/operator/manual/${nextSection}`;
+    const params = new URLSearchParams();
+    if (selectedDate) params.set('date', effectiveDate);
+    if (shiftIdFromParams) params.set('shiftId', shiftIdFromParams);
+    if (nextSection === 'lines') {
+      if (batchId) params.set('batchId', batchId);
+      if (draftId) params.set('draftId', draftId);
+      if (mode) params.set('mode', mode);
+      if (targetDate) params.set('targetDate', targetDate);
+    }
+    const qs = params.toString();
+    navigate(qs ? `${base}?${qs}` : base);
   }
 
   if (section === null) {
@@ -270,10 +308,10 @@ export function ManualOperatorPage() {
   const sectionContent = (
     <ManualOperatorSectionContent
       section={section}
-      shift={shift}
-      lines={lines}
+      shift={resolvedShift}
+      lines={resolvedLines}
       isReadOnly={isReadOnly}
-      selectedDate={selectedDate}
+      selectedDate={effectiveDate}
       canMonthlyImport={canMonthlyImport}
       hasExistingWork={hasExistingWork}
       batchId={batchId}
@@ -281,6 +319,8 @@ export function ManualOperatorPage() {
       mode={mode}
       shiftIdFromParams={shiftIdFromParams}
       targetDate={targetDate}
+      isLoading={isLoading}
+      canImportExcelByRole={canImportExcelByRole}
     />
   );
   const renderSectionWithoutShift = section === 'import' || section === 'printing' || (section === 'lines' && mode === 'demand' && !!batchId && !!draftId) || (section === 'lines' && mode === 'append' && !!shiftIdFromParams);
@@ -289,16 +329,16 @@ export function ManualOperatorPage() {
     return (
       <>
         <ManualOperatorWorkSection
-          key={selectedDate}
-          shift={shift}
-          lines={lines}
+          key={effectiveDate}
+          shift={resolvedShift}
+          lines={resolvedLines}
           isLoading={isLoading}
           isReadOnly={isReadOnly}
-          isToday={isToday}
+          isToday={effectiveToday}
           canMonthlyImport={canMonthlyImport}
           hasExistingWork={hasExistingWork}
           isDesktop={isDesktop}
-          selectedDate={selectedDate}
+          selectedDate={effectiveDate}
           todayDate={todayDate}
           onChangeDate={handleSelectDate}
           onOpenDatePicker={() => setShowDatePicker(true)}
@@ -323,7 +363,7 @@ export function ManualOperatorPage() {
       <ManualOperatorShell
         activeSection={section}
         onChangeSection={handleChangeSection}
-        shift={shift}
+        shift={resolvedShift}
         selectedDate={selectedDate}
         todayDate={todayDate}
         onOpenDatePicker={() => setShowDatePicker(true)}
@@ -385,8 +425,8 @@ export function ManualOperatorPage() {
           <div className="flex items-center justify-center py-20" dir="rtl">
             <Loader2 size={32} className="animate-spin text-gray-400" />
           </div>
-        ) : !shift && !renderSectionWithoutShift ? (
-          <ShiftEmptyState onCreateShift={handleCreateShift} isCreating={createShift.isPending} isToday={isToday} />
+        ) : !resolvedShift && !renderSectionWithoutShift ? (
+          <ShiftEmptyState onCreateShift={handleCreateShift} isCreating={createShift.isPending} isToday={effectiveToday} />
         ) : isDesktop && section !== 'lines' && section !== 'products' ? (
           <div className="mx-auto max-w-4xl px-4 py-6">
             {sectionContent}

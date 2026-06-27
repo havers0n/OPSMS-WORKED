@@ -15,6 +15,8 @@ interface ManualOperatorImportSectionProps {
   selectedDate: string;
   canMonthlyImport: boolean;
   hasExistingWork: boolean;
+  isLoading: boolean;
+  canImportExcelByRole: boolean;
 }
 
 function ImportEntryCard({
@@ -55,7 +57,9 @@ export function ManualOperatorImportSection({
   shift,
   selectedDate,
   canMonthlyImport,
-  hasExistingWork
+  hasExistingWork,
+  isLoading,
+  canImportExcelByRole
 }: ManualOperatorImportSectionProps) {
   const [showBondedSheet, setShowBondedSheet] = useState(false);
   const [showWarehouseStockSheet, setShowWarehouseStockSheet] = useState(false);
@@ -64,6 +68,14 @@ export function ManualOperatorImportSection({
   const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
 
   const canFetchReplaceSafety = canMonthlyImport && hasExistingWork && !!shift?.id;
+
+  function getDisabledReason(): string | undefined {
+    if (isLoading) return 'טוען מידע על המשמרת...';
+    if (!shift) return 'לא נבחרה משמרת. יש לבחור תאריך או לפתוח משמרת.';
+    if (shift.status === 'closed') return 'המשמרת סגורה. יש לפתוח משמרת פעילה.';
+    if (!canImportExcelByRole) return 'אין לך הרשאת ייבוא. נדרשת הרשאת מנהל.';
+    return undefined;
+  }
   const { data: replaceSafety } = useQuery({
     ...monthlyReplaceSafetyQueryOptions(shift?.id ?? ''),
     enabled: canFetchReplaceSafety
@@ -103,7 +115,7 @@ export function ManualOperatorImportSection({
             description="פתיחת גיליון הייבוא היומי עבור המשמרת והתאריך שנבחרו."
             actionLabel="פתיחת ייבוא יומי"
             disabled={!canMonthlyImport}
-            disabledMessage="נדרשת משמרת פעילה עם הרשאת ייבוא כדי לבצע ייבוא יומי."
+            disabledMessage={getDisabledReason()}
             onClick={() => setShowImportExcel(true)}
           />
           <ImportEntryCard
@@ -111,7 +123,7 @@ export function ManualOperatorImportSection({
             description="בדיקת קובץ אקסל חודשי לפי תאריך נבחר לפני ייבוא."
             actionLabel={hasExistingWork ? 'פתיחת החלפת ייבוא לפי תאריך' : 'פתיחת ייבוא הזמנות לתאריך נבחר'}
             disabled={!canMonthlyImport}
-            disabledMessage="נדרשת משמרת פעילה עם הרשאת ייבוא כדי לבצע ייבוא הזמנות."
+            disabledMessage={getDisabledReason()}
             onClick={() => setShowMonthlyPreview(true)}
           />
         </div>
