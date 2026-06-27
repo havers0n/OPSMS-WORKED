@@ -32,6 +32,7 @@ import { registerWarehouseLabelRoutes } from './features/warehouse-labels/routes
 import { registerBondedRoutes } from './features/bonded/routes.js';
 import { registerBondedCoverageRoutes } from './features/bonded/bonded-coverage-routes.js';
 import { registerWarehouseStockRoutes } from './features/warehouse-stock/routes.js';
+import { registerDeliveryPointsRoutes } from './features/delivery-points/routes.js';
 
 const MANUAL_SHIFT_IMPORT_FILE_SIZE_LIMIT_BYTES = 20 * 1024 * 1024;
 const MANUAL_SHIFT_IMPORT_BODY_LIMIT_BYTES = 20 * 1024 * 1024;
@@ -186,6 +187,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerBondedRoutes(app, { getAuthContext, getBondedService: deps.getBondedService });
   registerBondedCoverageRoutes(app, { getAuthContext, getBondedCoverageService: deps.getBondedCoverageService });
   registerWarehouseStockRoutes(app, { getAuthContext, getWarehouseStockService: deps.getWarehouseStockService });
+  registerDeliveryPointsRoutes(app, { getAuthContext, getUserSupabase });
   registerPickerRoutes(app, { getAuthContext, getUserSupabase });
 
   app.setErrorHandler((error, request, reply) => {
