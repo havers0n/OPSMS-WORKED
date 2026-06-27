@@ -24,9 +24,10 @@ import { ManualOperatorShell } from './manual-operator-shell';
 import { ManualOperatorWorkSection } from './manual-operator-work-section';
 import { SchemeBuilder } from './scheme-builder';
 import { AppendModePanel } from './scheme-builder/append-mode-panel';
+import { DemandTargetDateSelector } from './demand-target-date-selector';
 import { PrintingHomePage } from '../printing/routes/PrintingHomePage';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { getDemandLastContext, clearDemandLastContext } from '@/entities/demand/lib/last-context';
+import { getDemandLastContext, clearDemandLastContext, saveDemandLastContext } from '@/entities/demand/lib/last-context';
 
 const LAST_SECTION_PATH_PREFIX = 'manual-operator:last-section:';
 
@@ -39,13 +40,16 @@ function getTodayDateIsrael(): string {
   }).format(new Date());
 }
 
-function generateShiftName(): string {
+function generateShiftName(dateStr?: string): string {
+  const date = dateStr
+    ? new Date(Number(dateStr.slice(0, 4)), Number(dateStr.slice(5, 7)) - 1, Number(dateStr.slice(8, 10)))
+    : new Date();
   return new Intl.DateTimeFormat('he-IL', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
     year: 'numeric'
-  }).format(new Date());
+  }).format(date);
 }
 
 function getSectionFromPathname(pathname: string): ManualOperatorSection | null {
@@ -71,7 +75,8 @@ function ManualOperatorSectionContent({
   batchId,
   draftId,
   mode,
-  shiftIdFromParams
+  shiftIdFromParams,
+  targetDate
 }: {
   section: ManualOperatorSection;
   shift: ManualShiftSession | null;
@@ -84,6 +89,7 @@ function ManualOperatorSectionContent({
   draftId: string | null;
   mode: string | null;
   shiftIdFromParams: string | null;
+  targetDate: string | null;
 }) {
   if (section === 'summary') {
     return shift ? (
@@ -109,7 +115,7 @@ function ManualOperatorSectionContent({
       return <AppendModePanel shiftId={shiftIdFromParams} batchId={batchId} />;
     }
     if (isDemandMode) {
-      return <SchemeBuilder mode="demand" batchId={batchId} draftId={draftId} />;
+      return <SchemeBuilder mode="demand" batchId={batchId} draftId={draftId} targetDate={targetDate} />;
     }
     if (batchId && !draftId) {
       return (
@@ -163,12 +169,20 @@ export function ManualOperatorPage() {
   const draftId = searchParams.get('draftId');
   const mode = searchParams.get('mode');
   const shiftIdFromParams = searchParams.get('shiftId');
+  const targetDate = searchParams.get('targetDate');
+  const [showTargetDatePicker, setShowTargetDatePicker] = useState(false);
 
   const isToday = selectedDate === todayDate;
   const { data: shiftData, isLoading } = useQuery(shiftByDateQueryOptions(selectedDate));
   const shift = shiftData?.shift ?? null;
   const lines = shiftData?.lines ?? [];
   const isReadOnly = !isToday || shift?.status === 'closed';
+
+  const { data: targetShiftData, isLoading: isTargetShiftLoading } = useQuery({
+    ...shiftByDateQueryOptions(targetDate ?? ''),
+    enabled: mode === 'demand' && !!targetDate,
+  });
+  const targetShift = targetShiftData?.shift ?? null;
 
   const createShift = useCreateShift();
   const currentMembership = currentTenantId
@@ -187,12 +201,55 @@ export function ManualOperatorPage() {
     );
   }, [location.pathname, location.search, section]);
 
+  useEffect(() => {
+    if (mode !== 'demand' || !batchId || !draftId || typeof window === 'undefined') return;
+    const saved = localStorage.getItem('wos:demand-planning:last-context');
+    if (!saved) return;
+    try {
+      const ctx = JSON.parse(saved);
+      if (ctx.mode === 'demand' && ctx.batchId === batchId && ctx.draftId === draftId) {
+        saveDemandLastContext({
+          ...ctx,
+          url: `${location.pathname}${location.search}`,
+          targetDate: targetDate ?? ctx.targetDate,
+          savedAt: new Date().toISOString(),
+        });
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }, [targetDate, mode, batchId, draftId, location.pathname, location.search]);
+
   function handleCreateShift() {
     createShift.mutate({ name: generateShiftName(), date: selectedDate });
   }
 
+  function handleSelectTargetDate(date: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('targetDate', date);
+      return next;
+    });
+  }
+
+  function handleCreateTargetShift() {
+    if (!targetDate) return;
+    createShift.mutate(
+      { name: generateShiftName(targetDate), date: targetDate },
+      {
+        onSuccess: () => {
+          // Shift created; targetDate shift query auto-refetches via invalidation in useCreateShift
+        },
+      }
+    );
+  }
+
   function handleSelectDate(date: string) {
-    setSearchParams({ date });
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('date', date);
+      return next;
+    });
   }
 
   function handleChangeSection(nextSection: ManualOperatorSection) {
@@ -223,6 +280,7 @@ export function ManualOperatorPage() {
       draftId={draftId}
       mode={mode}
       shiftIdFromParams={shiftIdFromParams}
+      targetDate={targetDate}
     />
   );
   const renderSectionWithoutShift = section === 'import' || section === 'printing' || (section === 'lines' && mode === 'demand' && !!batchId && !!draftId) || (section === 'lines' && mode === 'append' && !!shiftIdFromParams);
@@ -277,26 +335,17 @@ export function ManualOperatorPage() {
               הוספת ביקוש גולמי לקווים קיימים
             </span>
           ) : isDesktop && section === 'lines' && mode === 'demand' && batchId && draftId ? (
-            <div className="flex items-center gap-2">
-              <span className="rounded border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
-                תכנון ביקוש גולמי מ-DataSheet
-              </span>
-              {shift ? (
-                <button
-                  type="button"
-                  onClick={() =>
-                    navigate(`/operator/manual/lines?shiftId=${shift.id}&batchId=${batchId}&mode=append`)
-                  }
-                  className="rounded border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
-                >
-                  הוסף לקווים קיימים
-                </button>
-              ) : (
-                <span className="rounded border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-medium text-gray-400 cursor-not-allowed">
-                  בחר תאריך/משמרת כדי להוסיף לקווים קיימים
-                </span>
-              )}
-            </div>
+            <DemandTargetDateSelector
+              targetDate={targetDate}
+              targetShift={targetShift}
+              isTargetShiftLoading={isTargetShiftLoading}
+              onSelectTargetDate={() => setShowTargetDatePicker(true)}
+              onCreateTargetShift={handleCreateTargetShift}
+              isCreatingShift={createShift.isPending}
+              onNavigateToAppend={(shiftId) =>
+                navigate(`/operator/manual/lines?shiftId=${shiftId}&batchId=${batchId}&mode=append`)
+              }
+            />
           ) : isDesktop && section === 'lines' ? (
             <span className="rounded border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
               טיוטה מקומית בלבד
@@ -352,6 +401,14 @@ export function ManualOperatorPage() {
           todayDate={todayDate}
           onSelect={handleSelectDate}
           onClose={() => setShowDatePicker(false)}
+        />
+      )}
+      {showTargetDatePicker && (
+        <ShiftDatePicker
+          selectedDate={targetDate ?? todayDate}
+          todayDate={todayDate}
+          onSelect={handleSelectTargetDate}
+          onClose={() => setShowTargetDatePicker(false)}
         />
       )}
     </>
