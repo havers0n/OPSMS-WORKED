@@ -4,8 +4,9 @@ import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 const WEEK_DAYS_SHORT = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
 
 interface ShiftDatePickerProps {
-  selectedDate: string; // YYYY-MM-DD
-  todayDate: string;    // YYYY-MM-DD
+  selectedDate: string;     // YYYY-MM-DD
+  todayDate: string;        // YYYY-MM-DD
+  maxSelectableDate?: string; // YYYY-MM-DD (defaults to todayDate)
   onSelect: (date: string) => void;
   onClose: () => void;
 }
@@ -44,6 +45,7 @@ function getCalendarCells(year: number, month: number): CalendarCell[] {
 export function ShiftDatePicker({
   selectedDate,
   todayDate,
+  maxSelectableDate,
   onSelect,
   onClose
 }: ShiftDatePickerProps) {
@@ -52,9 +54,10 @@ export function ShiftDatePicker({
 
   const cells = getCalendarCells(viewYear, viewMonth);
 
-  const todayYear = Number(todayDate.slice(0, 4));
-  const todayMonth = Number(todayDate.slice(5, 7)) - 1;
-  const isCurrentMonth = viewYear === todayYear && viewMonth === todayMonth;
+  const maxDateStr = maxSelectableDate ?? todayDate;
+  const maxYear = Number(maxDateStr.slice(0, 4));
+  const maxMonth = Number(maxDateStr.slice(5, 7)) - 1;
+  const isAtMaxMonth = viewYear > maxYear || (viewYear === maxYear && viewMonth >= maxMonth);
 
   const monthLabel = new Intl.DateTimeFormat('he-IL', {
     month: 'long',
@@ -71,7 +74,7 @@ export function ShiftDatePicker({
   }
 
   function goToNextMonth() {
-    if (isCurrentMonth) return;
+    if (isAtMaxMonth) return;
     if (viewMonth === 11) {
       setViewYear(y => y + 1);
       setViewMonth(0);
@@ -117,7 +120,7 @@ export function ShiftDatePicker({
           {/* RIGHT side in RTL = next month */}
           <button
             onClick={goToNextMonth}
-            disabled={isCurrentMonth}
+            disabled={isAtMaxMonth}
             className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 active:bg-gray-200 disabled:opacity-25 transition-opacity"
             aria-label="חודש הבא"
           >
@@ -152,7 +155,7 @@ export function ShiftDatePicker({
               return <div key={`empty-${i}`} />;
             }
 
-            const isFuture = cell.dateStr > todayDate;
+            const isFuture = cell.dateStr > maxDateStr;
             const isToday = cell.dateStr === todayDate;
             const isSelected = cell.dateStr === selectedDate;
 
