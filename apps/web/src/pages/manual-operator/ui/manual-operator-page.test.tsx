@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -861,6 +862,62 @@ it('past date with a closed shift hides import actions', async () => {
       await waitFor(() => {
         expect(screen.getByText('בחר תאריך עבודה')).toBeTruthy();
       });
+    });
+
+    it('opening target date picker in demand mode shows calendar with selectable dates', async () => {
+      mockNoShift();
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand');
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'בחר תאריך עבודה' })).toBeTruthy();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'בחר תאריך עבודה' }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'בחר תאריך' })).toBeTruthy();
+      });
+    });
+
+    it('selecting a future date as targetDate shows no-shift state and preserves demand context in URL', async () => {
+      mockNoShift();
+      const tomorrow = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Jerusalem',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+      }).format(new Date(Date.now() + 86400000));
+
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand');
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'בחר תאריך עבודה' })).toBeTruthy();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'בחר תאריך עבודה' }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: tomorrow })).toBeTruthy();
+      });
+
+      expect(screen.getByRole('button', { name: tomorrow })).not.toBeDisabled();
+
+      fireEvent.click(screen.getByRole('button', { name: tomorrow }));
+
+      await waitFor(() => {
+        expect(screen.getByText('אין משמרת לתאריך הזה')).toBeTruthy();
+      });
+
+      expect(screen.getByRole('button', { name: 'פתח צור משמרת לתאריך' })).toBeTruthy();
+    });
+
+    it('append button works when targetDate has a shift (no regression)', async () => {
+      mockShiftExists('shift-target-1', '2026-07-01');
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand&targetDate=2026-07-01');
+
+      await waitFor(() => {
+        expect(screen.getByText('משמרת פעילה נמצאה')).toBeTruthy();
+      });
+
+      expect(screen.getByText('הוסף לקווים קיימים')).toBeTruthy();
     });
   });
 });

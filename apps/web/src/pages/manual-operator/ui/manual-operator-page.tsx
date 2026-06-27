@@ -39,6 +39,15 @@ function getTodayDateIsrael(): string {
   }).format(new Date());
 }
 
+function addDays(dateStr: string, n: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + n);
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
 function generateShiftName(dateStr?: string): string {
   const date = dateStr
     ? new Date(Number(dateStr.slice(0, 4)), Number(dateStr.slice(5, 7)) - 1, Number(dateStr.slice(8, 10)))
@@ -176,6 +185,7 @@ export function ManualOperatorPage() {
   const shiftIdFromParams = searchParams.get('shiftId');
   const targetDate = searchParams.get('targetDate');
   const [showTargetDatePicker, setShowTargetDatePicker] = useState(false);
+  const targetMaxDate = addDays(todayDate, 90);
 
   const hasShiftIdParam = !!shiftIdFromParams;
 
@@ -447,6 +457,7 @@ export function ManualOperatorPage() {
         <ShiftDatePicker
           selectedDate={targetDate ?? todayDate}
           todayDate={todayDate}
+          maxSelectableDate={targetMaxDate}
           onSelect={handleSelectTargetDate}
           onClose={() => setShowTargetDatePicker(false)}
         />
