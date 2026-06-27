@@ -6,6 +6,7 @@ interface DemandLastContext {
   draftId: string;
   url: string;
   savedAt: string;
+  targetDate?: string;
   sourceFile?: string;
   sourceSheet?: string;
 }

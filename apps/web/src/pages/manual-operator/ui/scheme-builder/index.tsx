@@ -30,6 +30,7 @@ interface DemandModeProps {
   mode: 'demand';
   batchId: string;
   draftId: string;
+  targetDate?: string | null;
   shiftId?: never;
 }
 
@@ -40,6 +41,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   const shiftId = !isDemandMode ? (props as ShiftModeProps).shiftId : undefined;
   const batchId = isDemandMode ? (props as DemandModeProps).batchId : undefined;
   const draftId = isDemandMode ? (props as DemandModeProps).draftId : undefined;
+  const targetDate = isDemandMode ? (props as DemandModeProps).targetDate : undefined;
 
   const capabilities: SchemeBuilderCapabilities = useMemo(() => ({
     canCreatePlanningLines: !isDemandMode || true,
@@ -166,12 +168,14 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
 
     if (draftId && batchId && !demandContextSavedRef.current) {
       demandContextSavedRef.current = true;
+      const params = new URLSearchParams(window.location.search);
       saveDemandLastContext({
         mode: 'demand',
         batchId,
         draftId,
         url: window.location.pathname + window.location.search,
         savedAt: new Date().toISOString(),
+        targetDate: targetDate ?? params.get('targetDate') ?? undefined,
         sourceFile: planningPreview?.batch.sourceFile,
         sourceSheet: planningPreview?.batch.sourceSheet,
       });

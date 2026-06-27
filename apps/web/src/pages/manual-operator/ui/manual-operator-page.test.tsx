@@ -495,9 +495,9 @@ it('past date with a closed shift hides import actions', async () => {
       expect(screen.queryByText('יש טיוטת DataSheet פעילה')).toBeNull();
     });
 
-    it('shows append button in demand mode when shift is available', async () => {
+    it('shows append button in demand mode when targetDate shift is available', async () => {
       mockedBffRequest.mockImplementation((url: string) => {
-        if (String(url).includes('/api/manual-shifts/by-date')) {
+        if (String(url).includes('/api/manual-shifts/by-date?date=2026-06-27')) {
           return Promise.resolve({
             shift: {
               id: 'shift-demand',
@@ -507,21 +507,31 @@ it('past date with a closed shift hides import actions', async () => {
             lines: []
           });
         }
+        if (String(url).includes('/planning-preview')) {
+          return Promise.resolve({
+            batch: { id: 'batch-999', sourceFile: 'test.xlsx', sourceSheet: 'DataSheet', status: 'ready', rowsCount: 0 },
+            summary: { rowsCount: 0, normalRowsCount: 0, specialFlowRowsCount: 0, errorRowsCount: 0, distributionAreasCount: 0, ordersCount: 0, skuCount: 0, totalQuantity: 0 },
+            distributionAreas: [], specialFlows: [], errors: []
+          });
+        }
+        if (String(url).includes('/demand-planning-drafts/')) {
+          return Promise.resolve({ draft: { id: 'draft-888', tenantId: 'tenant-1', batchId: 'batch-999', status: 'draft', createdBy: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, buckets: [], allocations: [] });
+        }
         return Promise.resolve({ shift: null, lines: [] });
       });
 
-      renderAt('/operator/manual/lines?batchId=batch-999&draftId=draft-888&mode=demand');
+      renderAt('/operator/manual/lines?batchId=batch-999&draftId=draft-888&mode=demand&targetDate=2026-06-27');
 
       await waitFor(() => {
         expect(screen.getByText('הוסף לקווים קיימים')).toBeTruthy();
       });
     });
 
-    it('shows disabled message when no shift is available in demand mode', async () => {
+    it('shows target date prompt when no targetDate in demand mode', async () => {
       renderAt('/operator/manual/lines?batchId=batch-999&draftId=draft-888&mode=demand');
 
       await waitFor(() => {
-        expect(screen.getByText('בחר תאריך/משמרת כדי להוסיף לקווים קיימים')).toBeTruthy();
+        expect(screen.getByText('בחר תאריך עבודה')).toBeTruthy();
       });
     });
 
@@ -589,6 +599,259 @@ it('past date with a closed shift hides import actions', async () => {
       expect(postCall).toBeTruthy();
       const body = JSON.parse((postCall![1] as RequestInit).body as string);
       expect(body.date).toBe('2026-06-14');
+    });
+  });
+
+  describe('targetDate in demand mode', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      localStorage.clear();
+      desktopOverride = true;
+      authState = {
+        currentTenantId: 'tenant-1',
+        memberships: [{
+          tenantId: 'tenant-1',
+          tenantCode: 'default',
+          tenantName: 'Default',
+          role: 'tenant_admin'
+        }]
+      };
+    });
+
+    function mockNoShift() {
+      mockedBffRequest.mockImplementation((url: string) => {
+        if (String(url).includes('/api/manual-shifts/by-date')) {
+          return Promise.resolve({ shift: null, lines: [] });
+        }
+        if (String(url).includes('/planning-preview')) {
+          return Promise.resolve({
+            batch: { id: 'batch-demand-1', sourceFile: 'data.xlsx', sourceSheet: 'DataSheet', status: 'ready', rowsCount: 5 },
+            summary: { rowsCount: 5, normalRowsCount: 5, specialFlowRowsCount: 0, errorRowsCount: 0, distributionAreasCount: 1, ordersCount: 2, skuCount: 3, totalQuantity: 100 },
+            distributionAreas: [], specialFlows: [], errors: []
+          });
+        }
+        if (String(url).includes('/demand-planning-drafts/')) {
+          return Promise.resolve({ draft: { id: 'draft-demand-1', tenantId: 'tenant-1', batchId: 'batch-demand-1', status: 'draft', createdBy: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, buckets: [], allocations: [] });
+        }
+        return Promise.resolve([]);
+      });
+    }
+
+    function mockShiftExists(shiftId: string, date: string) {
+      mockedBffRequest.mockImplementation((url: string) => {
+        if (String(url).includes(`/api/manual-shifts/by-date?date=${date}`)) {
+          return Promise.resolve({
+            shift: { id: shiftId, tenantId: 'tenant-1', date, name: 'Target Shift', status: 'active', createdBy: null, createdAt: new Date().toISOString(), closedAt: null },
+            lines: []
+          });
+        }
+        if (String(url).includes('/api/manual-shifts/by-date') && !String(url).includes(date)) {
+          return Promise.resolve({ shift: null, lines: [] });
+        }
+        if (String(url).includes('/planning-preview')) {
+          return Promise.resolve({
+            batch: { id: 'batch-demand-1', sourceFile: 'data.xlsx', sourceSheet: 'DataSheet', status: 'ready', rowsCount: 5 },
+            summary: { rowsCount: 5, normalRowsCount: 5, specialFlowRowsCount: 0, errorRowsCount: 0, distributionAreasCount: 1, ordersCount: 2, skuCount: 3, totalQuantity: 100 },
+            distributionAreas: [], specialFlows: [], errors: []
+          });
+        }
+        if (String(url).includes('/demand-planning-drafts/')) {
+          return Promise.resolve({ draft: { id: 'draft-demand-1', tenantId: 'tenant-1', batchId: 'batch-demand-1', status: 'draft', createdBy: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, buckets: [], allocations: [] });
+        }
+        return Promise.resolve([]);
+      });
+    }
+
+    function renderAt(initialUrl: string) {
+      const qc = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
+      });
+      return render(
+        <MemoryRouter initialEntries={[initialUrl]}>
+          <QueryClientProvider client={qc}>
+            <ManualOperatorPage />
+          </QueryClientProvider>
+        </MemoryRouter>
+      );
+    }
+
+    it('demand mode without targetDate shows בחר תאריך עבודה prompt', async () => {
+      mockNoShift();
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand');
+
+      await waitFor(() => {
+        expect(screen.getByText('בחר תאריך עבודה')).toBeTruthy();
+      });
+    });
+
+    it('demand mode without targetDate shows select date CTA button', async () => {
+      mockNoShift();
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand');
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'בחר תאריך עבודה' })).toBeTruthy();
+      });
+    });
+
+    it('append button disabled when no targetDate', async () => {
+      mockNoShift();
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand');
+
+      await waitFor(() => {
+        expect(screen.getByText('בחר תאריך עבודה')).toBeTruthy();
+      });
+
+      expect(screen.queryByText('הוסף לקווים קיימים')).toBeNull();
+    });
+
+    it('targetDate selected but no shift shows אין משמרת לתאריך הזה', async () => {
+      mockNoShift();
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand&targetDate=2026-07-01');
+
+      await waitFor(() => {
+        expect(screen.getByText('אין משמרת לתאריך הזה')).toBeTruthy();
+      });
+    });
+
+    it('create/open shift CTA appears when targetDate has no shift', async () => {
+      mockNoShift();
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand&targetDate=2026-07-01');
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'פתח צור משמרת לתאריך' })).toBeTruthy();
+      });
+    });
+
+    it('no shift is created automatically on render (no POST to manual-shifts)', async () => {
+      const postFn = vi.fn();
+      mockedBffRequest.mockImplementation((url: string, init?: RequestInit) => {
+        if (String(url).includes('/api/manual-shifts') && init?.method === 'POST') {
+          postFn();
+          return Promise.resolve({ id: 'shift-auto', tenantId: 'tenant-1', date: '2026-07-01', name: 'Auto Shift', status: 'active', createdBy: null, createdAt: new Date().toISOString(), closedAt: null });
+        }
+        if (String(url).includes('/api/manual-shifts/by-date')) {
+          return Promise.resolve({ shift: null, lines: [] });
+        }
+        if (String(url).includes('/planning-preview')) {
+          return Promise.resolve({
+            batch: { id: 'batch-demand-1', sourceFile: 'data.xlsx', sourceSheet: 'DataSheet', status: 'ready', rowsCount: 5 },
+            summary: { rowsCount: 5, normalRowsCount: 5, specialFlowRowsCount: 0, errorRowsCount: 0, distributionAreasCount: 1, ordersCount: 2, skuCount: 3, totalQuantity: 100 },
+            distributionAreas: [], specialFlows: [], errors: []
+          });
+        }
+        if (String(url).includes('/demand-planning-drafts/')) {
+          return Promise.resolve({ draft: { id: 'draft-demand-1', tenantId: 'tenant-1', batchId: 'batch-demand-1', status: 'draft', createdBy: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, buckets: [], allocations: [] });
+        }
+        return Promise.resolve([]);
+      });
+
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand&targetDate=2026-07-01');
+
+      await waitFor(() => {
+        expect(screen.getByText('אין משמרת לתאריך הזה')).toBeTruthy();
+      });
+
+      expect(postFn).not.toHaveBeenCalled();
+    });
+
+    it('create shift CTA calls POST with targetDate on explicit click', async () => {
+      const createShiftResponse = { id: 'shift-new', tenantId: 'tenant-1', date: '2026-07-01', name: 'New Shift', status: 'active', createdBy: null, createdAt: new Date().toISOString(), closedAt: null };
+
+      mockedBffRequest.mockImplementation((url: string, init?: RequestInit) => {
+        if (String(url).includes('/api/manual-shifts') && init?.method === 'POST') {
+          return Promise.resolve(createShiftResponse);
+        }
+        if (String(url).includes('/api/manual-shifts/by-date')) {
+          return Promise.resolve({ shift: null, lines: [] });
+        }
+        if (String(url).includes('/planning-preview')) {
+          return Promise.resolve({
+            batch: { id: 'batch-demand-1', sourceFile: 'data.xlsx', sourceSheet: 'DataSheet', status: 'ready', rowsCount: 5 },
+            summary: { rowsCount: 5, normalRowsCount: 5, specialFlowRowsCount: 0, errorRowsCount: 0, distributionAreasCount: 1, ordersCount: 2, skuCount: 3, totalQuantity: 100 },
+            distributionAreas: [], specialFlows: [], errors: []
+          });
+        }
+        if (String(url).includes('/demand-planning-drafts/')) {
+          return Promise.resolve({ draft: { id: 'draft-demand-1', tenantId: 'tenant-1', batchId: 'batch-demand-1', status: 'draft', createdBy: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, buckets: [], allocations: [] });
+        }
+        return Promise.resolve([]);
+      });
+
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand&targetDate=2026-07-01');
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'פתח צור משמרת לתאריך' })).toBeTruthy();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'פתח צור משמרת לתאריך' }));
+
+      await waitFor(() => {
+        const postCall = mockedBffRequest.mock.calls.find(
+          ([url, init]) =>
+            String(url).includes('/api/manual-shifts') &&
+            (init as RequestInit | undefined)?.method === 'POST'
+        );
+        expect(postCall).toBeTruthy();
+        const body = JSON.parse((postCall![1] as RequestInit).body as string);
+        expect(body.date).toBe('2026-07-01');
+      });
+    });
+
+    it('append button disabled when targetDate exists but no shift', async () => {
+      mockNoShift();
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand&targetDate=2026-07-01');
+
+      await waitFor(() => {
+        expect(screen.getByText('אין משמרת לתאריך הזה')).toBeTruthy();
+      });
+
+      expect(screen.queryByText('הוסף לקווים קיימים')).toBeNull();
+    });
+
+    it('append button enabled when targetDate has a shift', async () => {
+      mockShiftExists('shift-target-1', '2026-07-01');
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand&targetDate=2026-07-01');
+
+      await waitFor(() => {
+        expect(screen.getByText('משמרת פעילה נמצאה')).toBeTruthy();
+      });
+
+      expect(screen.getByText('הוסף לקווים קיימים')).toBeTruthy();
+    });
+
+    it('append button navigates to append mode URL', async () => {
+      mockShiftExists('shift-target-1', '2026-07-01');
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand&targetDate=2026-07-01');
+
+      await waitFor(() => {
+        expect(screen.getByText('הוסף לקווים קיימים')).toBeTruthy();
+      });
+
+      fireEvent.click(screen.getByText('הוסף לקווים קיימים'));
+
+      await waitFor(() => {
+        expect(screen.getByText('הוספת ביקוש גולמי לקווים קיימים')).toBeTruthy();
+      });
+    });
+
+    it('demand mode renders DemandTargetDateSelector header when params present', async () => {
+      mockNoShift();
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand');
+
+      await waitFor(() => {
+        expect(screen.getByText('בחר תאריך עבודה')).toBeTruthy();
+      });
+
+      expect(screen.getByRole('button', { name: 'בחר תאריך עבודה' })).toBeTruthy();
+    });
+
+    it('normal date mode rendering does not clear demand context from header', async () => {
+      mockNoShift();
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand');
+
+      await waitFor(() => {
+        expect(screen.getByText('בחר תאריך עבודה')).toBeTruthy();
+      });
     });
   });
 });
