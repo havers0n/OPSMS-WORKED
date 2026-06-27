@@ -789,6 +789,78 @@ describe('manual shift order item schema', () => {
     const item = manualShiftOrderItemSchema.parse({ ...validItem, sourceRows: [747, 748] });
     expect(item.sourceRows).toEqual([747, 748]);
   });
+
+  describe('manualShiftOrderSchema — DeliveryPoint fields', () => {
+    const orderBase = {
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      tenantId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      shiftId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      lineId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      orderNumber: 'ORD-001',
+      customerName: 'לקוח',
+      pointName: 'נקודה',
+      palletCount: null,
+      pickerName: null,
+      pickerWorkerId: null,
+      checkerName: null,
+      lineCount: null,
+      sortOrder: null,
+      size: 'M' as const,
+      status: 'queued' as const,
+      startedAt: null,
+      checkStartedAt: null,
+      waitingCheckAt: null,
+      checkedAt: null,
+      finishedAt: null,
+      comment: null,
+      createdAt: '2026-06-01T10:00:00.000Z',
+      updatedAt: '2026-06-01T10:00:00.000Z',
+      deletedAt: null,
+      deletedByProfileId: null,
+      deletedByName: null,
+      deleteReason: null
+    };
+
+    it('deliveryPointMatchStatus is undefined when omitted', () => {
+      const order = manualShiftOrderSchema.parse(orderBase);
+      expect(order.deliveryPointMatchStatus).toBeUndefined();
+    });
+
+    it('parses all match status values', () => {
+      for (const status of ['matched', 'unmatched', 'ambiguous', 'not_attempted'] as const) {
+        const order = manualShiftOrderSchema.parse({
+          ...orderBase,
+          deliveryPointMatchStatus: status
+        });
+        expect(order.deliveryPointMatchStatus).toBe(status);
+      }
+    });
+
+    it('accepts deliveryPointId as uuid', () => {
+      const id = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+      const order = manualShiftOrderSchema.parse({
+        ...orderBase,
+        deliveryPointId: id,
+        deliveryPointName: 'Test Point',
+        deliveryPointMatchStatus: 'matched',
+        rawDestinationLabel: 'Test Label',
+        deliveryPointAliasText: 'test label'
+      });
+      expect(order.deliveryPointId).toBe(id);
+      expect(order.deliveryPointName).toBe('Test Point');
+      expect(order.rawDestinationLabel).toBe('Test Label');
+      expect(order.deliveryPointAliasText).toBe('test label');
+    });
+
+    it('deliveryPointMatchStatus rejects invalid value', () => {
+      expect(() =>
+        manualShiftOrderSchema.parse({
+          ...orderBase,
+          deliveryPointMatchStatus: 'invalid_status'
+        })
+      ).toThrow();
+    });
+  });
 });
 
 

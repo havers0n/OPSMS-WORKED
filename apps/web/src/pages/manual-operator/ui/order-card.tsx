@@ -37,6 +37,11 @@ export function OrderCard({ order, onSelect }: OrderCardProps) {
               {order.pointName ?? 'ללא נקודה'}
             </span>
             {isError && <AlertCircle size={18} className="text-red-500" strokeWidth={2.5} />}
+            {order.deliveryPointMatchStatus === 'matched' && order.deliveryPointName && (
+              <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
+                {order.deliveryPointName}
+              </span>
+            )}
           </div>
           {order.pickerName && (
             <span className="text-gray-600 font-medium text-sm">{order.pickerName}</span>

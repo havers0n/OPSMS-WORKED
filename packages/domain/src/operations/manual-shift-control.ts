@@ -4,6 +4,7 @@ import {
   routeGroupKindSchema,
   workBucketKindSchema
 } from './manual-shift-route-classification';
+import { deliveryPointMatchStatusSchema } from '../master-data/delivery-point';
 
 export const manualShiftWorkerRoleSchema = z.enum(['picker', 'checker', 'packer', 'other']);
 export type ManualShiftWorkerRole = z.infer<typeof manualShiftWorkerRoleSchema>;
@@ -165,7 +166,13 @@ export const manualShiftOrderSchema = z.object({
   workBucketName: z.string().nullable().optional(),
   workBucketType: z.string().nullable().optional(),
   sourceZone: z.string().nullable().optional(),
-  rawDestinationLabel: z.string().nullable().optional()
+  // DeliveryPoint metadata
+  rawDestinationLabel: z.string().nullable().optional(),
+  deliveryPointId: z.string().uuid().nullable().optional(),
+  deliveryPointName: z.string().nullable().optional(),
+  deliveryPointMatchStatus: deliveryPointMatchStatusSchema.optional(),
+  deliveryPointAliasText: z.string().nullable().optional(),
+  deliveryPointAliasId: z.string().uuid().nullable().optional()
 });
 export type ManualShiftOrder = z.infer<typeof manualShiftOrderSchema>;
 
@@ -555,7 +562,13 @@ export const manualShiftWorkHierarchyOrderSchema = z.object({
   lineCount: z.number().min(0),
   totalQuantity: z.number().min(0),
   hasAshlama: z.boolean(),
-  hasCheckUnits: z.boolean()
+  hasCheckUnits: z.boolean(),
+  // DeliveryPoint metadata
+  rawDestinationLabel: z.string().nullable().optional(),
+  deliveryPointId: z.string().uuid().nullable().optional(),
+  deliveryPointName: z.string().nullable().optional(),
+  deliveryPointMatchStatus: deliveryPointMatchStatusSchema.optional(),
+  deliveryPointAliasText: z.string().nullable().optional()
 });
 export type ManualShiftWorkHierarchyOrder = z.infer<typeof manualShiftWorkHierarchyOrderSchema>;
 
