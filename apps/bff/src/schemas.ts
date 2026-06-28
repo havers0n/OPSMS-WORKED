@@ -96,7 +96,11 @@ import {
   demandPlanningBucketSchema,
   demandPlanningAllocationSchema,
   demandPlanningDraftWithAssignmentsSchema,
+  demandPlanningPreviewQuerySchema,
+  demandPlanningCreateDraftRequestSchema,
   demandPlanningPutPlanRequestSchema,
+  demandPlanningPublishToShiftRequestSchema,
+  demandPlanningPublishToShiftResponseSchema,
   manualShiftMonthlyPreviewSchema,
   manualShiftMonthlyApplyResponseSchema as manualShiftMonthlyApplyResponseDtoSchema,
   manualShiftMonthlyReplaceSafetySchema as manualShiftMonthlyReplaceSafetyDtoSchema,
@@ -595,7 +599,11 @@ export const demandImportDataSheetCreateResponseSchema = demandImportDataSheetCr
 export const rawDemandPlanningPreviewResponseSchema = rawDemandPlanningPreviewDtoSchema;
 export const demandImportBatchResponseSchema = demandImportBatchSchema;
 export const demandPlanningDraftWithAssignmentsResponseSchema = demandPlanningDraftWithAssignmentsSchema;
+export const demandPlanningPreviewQueryParamsSchema = demandPlanningPreviewQuerySchema;
+export const demandPlanningCreateDraftRequestBodySchema = demandPlanningCreateDraftRequestSchema;
 export const demandPlanningPutPlanRequestBodySchema = demandPlanningPutPlanRequestSchema;
+export const demandPlanningPublishToShiftRequestBodySchema = demandPlanningPublishToShiftRequestSchema;
+export const demandPlanningPublishToShiftResponseBodySchema = demandPlanningPublishToShiftResponseSchema;
 export const manualShiftMonthlyImportPreviewResponseSchema = z.object({
   preview: manualShiftMonthlyPreviewSchema
 });

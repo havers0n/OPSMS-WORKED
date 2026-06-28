@@ -273,6 +273,9 @@ begin
   delete from public.manual_shift_orders where shift_id = shift_a;
   delete from public.manual_shift_lines where shift_id = shift_a;
   update public.demand_planning_drafts set status = 'draft' where id = draft_a;
+  execute 'reset role';
+  delete from public.demand_planning_published_allocations where draft_id = draft_a;
+  execute 'set local role authenticated';
 
   -- ============================================================
   -- Test 2: Repeat publish blocked after applied
@@ -295,6 +298,9 @@ begin
 
   -- Reset draft for further tests
   update public.demand_planning_drafts set status = 'draft' where id = draft_a;
+  execute 'reset role';
+  delete from public.demand_planning_published_allocations where draft_id = draft_a;
+  execute 'set local role authenticated';
 
   -- ============================================================
   -- Test 3: Error rows are skipped
@@ -336,6 +342,9 @@ begin
   delete from public.manual_shift_orders where shift_id = shift_a;
   delete from public.manual_shift_lines where shift_id = shift_a;
   update public.demand_planning_drafts set status = 'draft' where id = draft_a;
+  execute 'reset role';
+  delete from public.demand_planning_published_allocations where draft_id = draft_a;
+  execute 'set local role authenticated';
 
   -- ============================================================
   -- Test 4: Special flow rows skipped with warning
@@ -376,6 +385,9 @@ begin
   delete from public.manual_shift_orders where shift_id = shift_a;
   delete from public.manual_shift_lines where shift_id = shift_a;
   update public.demand_planning_drafts set status = 'draft' where id = draft_a;
+  execute 'reset role';
+  delete from public.demand_planning_published_allocations where draft_id = draft_a;
+  execute 'set local role authenticated';
 
   -- ============================================================
   -- Test 5: Date mismatch blocked
@@ -483,6 +495,9 @@ begin
   delete from public.manual_shift_orders where shift_id = shift_a;
   delete from public.manual_shift_lines where shift_id = shift_a;
   update public.demand_planning_drafts set status = 'draft' where id = draft_a;
+  execute 'reset role';
+  delete from public.demand_planning_published_allocations where draft_id = draft_a;
+  execute 'set local role authenticated';
 
   -- ============================================================
   -- Test 8: Missing customerName/orderNumber — rows do not merge incorrectly
@@ -516,6 +531,9 @@ begin
   delete from public.manual_shift_orders where shift_id = shift_a;
   delete from public.manual_shift_lines where shift_id = shift_a;
   update public.demand_planning_drafts set status = 'draft' where id = draft_a;
+  execute 'reset role';
+  delete from public.demand_planning_published_allocations where draft_id = draft_a;
+  execute 'set local role authenticated';
 
   -- ============================================================
   -- Test 9: Raw rows remain immutable after publish
@@ -551,6 +569,9 @@ begin
   delete from public.manual_shift_orders where shift_id = shift_a;
   delete from public.manual_shift_lines where shift_id = shift_a;
   update public.demand_planning_drafts set status = 'draft' where id = draft_a;
+  execute 'reset role';
+  delete from public.demand_planning_published_allocations where draft_id = draft_a;
+  execute 'set local role authenticated';
 
   -- ============================================================
   -- Test 10: NO_PUBLISHABLE_ROWS when all rows are filtered out

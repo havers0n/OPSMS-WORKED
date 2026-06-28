@@ -8,19 +8,20 @@ import { bffRequest } from '@/shared/api/bff/client';
 
 export const demandImportKeys = {
   all: ['demand-import'] as const,
-  planningPreview: (batchId: string) => [...demandImportKeys.all, 'planning-preview', batchId] as const,
+  planningPreview: (batchId: string, scope: 'all' | 'remaining' = 'all') => [...demandImportKeys.all, 'planning-preview', batchId, scope] as const,
   draft: (draftId: string) => [...demandImportKeys.all, 'draft', draftId] as const,
   appendDiff: (batchId: string, shiftId: string) => [...demandImportKeys.all, 'append-diff', batchId, shiftId] as const
 };
 
-async function fetchDemandPlanningPreview(batchId: string): Promise<RawDemandPlanningPreview> {
-  return bffRequest<RawDemandPlanningPreview>(`/api/demand-imports/${batchId}/planning-preview`);
+async function fetchDemandPlanningPreview(batchId: string, scope: 'all' | 'remaining'): Promise<RawDemandPlanningPreview> {
+  const suffix = scope === 'remaining' ? '?scope=remaining' : '';
+  return bffRequest<RawDemandPlanningPreview>(`/api/demand-imports/${batchId}/planning-preview${suffix}`);
 }
 
-export function demandPlanningPreviewQueryOptions(batchId: string) {
+export function demandPlanningPreviewQueryOptions(batchId: string, scope: 'all' | 'remaining' = 'all') {
   return queryOptions({
-    queryKey: demandImportKeys.planningPreview(batchId),
-    queryFn: () => fetchDemandPlanningPreview(batchId),
+    queryKey: demandImportKeys.planningPreview(batchId, scope),
+    queryFn: () => fetchDemandPlanningPreview(batchId, scope),
     enabled: !!batchId,
     staleTime: 30_000
   });

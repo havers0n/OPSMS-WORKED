@@ -463,6 +463,7 @@ type DemandPlanningDraftRow = {
   tenant_id: string;
   batch_id: string;
   status: string;
+  source_scope?: string;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -474,6 +475,7 @@ function mapDemandPlanningDraftRow(row: DemandPlanningDraftRow): DemandPlanningD
     tenantId: row.tenant_id,
     batchId: row.batch_id,
     status: row.status as DemandPlanningDraft['status'],
+    sourceScope: (row.source_scope ?? 'all') as DemandPlanningDraft['sourceScope'],
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -1080,6 +1082,7 @@ export type ManualShiftsRepo = {
     tenantId: string;
     batchId: string;
     createdBy: string | null;
+    sourceScope?: 'all' | 'remaining';
   }): Promise<DemandPlanningDraft>;
   getDemandPlanningDraft(input: {
     tenantId: string;
@@ -1131,6 +1134,10 @@ export type ManualShiftsRepo = {
     tenantId: string;
     rowIds: string[];
   }): Promise<RawDemandRow[]>;
+  listPublishedDemandQuantities?(input: {
+    tenantId: string;
+    batchId: string;
+  }): Promise<Array<{ rawDemandRowId: string; publishedQuantity: number }>>;
   publishDemandPlanningDraftToShift(input: {
     tenantId: string;
     draftId: string;
@@ -2826,7 +2833,8 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         .insert({
           tenant_id: input.tenantId,
           batch_id: input.batchId,
-          created_by: input.createdBy
+          created_by: input.createdBy,
+          source_scope: input.sourceScope ?? 'all'
         })
         .select()
         .single();
@@ -2969,6 +2977,20 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       return ((data ?? []) as RawDemandRowRow[]).map(mapRawDemandRow);
     },
 
+    async listPublishedDemandQuantities(input) {
+      const { data, error } = await supabase
+        .from('demand_planning_published_allocations')
+        .select('raw_demand_row_id, published_quantity')
+        .eq('tenant_id', input.tenantId)
+        .eq('batch_id', input.batchId);
+
+      if (error) throw error;
+
+      return (data ?? []).map((row) => ({
+        rawDemandRowId: String(row.raw_demand_row_id),
+        publishedQuantity: Number(row.published_quantity)
+      }));
+    },
     async publishDemandPlanningDraftToShift(input) {
       const { data, error } = await supabase.rpc('manual_shift_publish_demand_planning_draft', {
         p_tenant_id: input.tenantId,

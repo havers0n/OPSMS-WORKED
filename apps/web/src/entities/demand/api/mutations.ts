@@ -24,9 +24,14 @@ async function createDataSheetDemandImport(file: File): Promise<DemandImportData
   });
 }
 
-async function createDemandPlanningDraft(batchId: string): Promise<DemandPlanningDraftWithAssignments> {
+type CreateDemandPlanningDraftInput = string | { batchId: string; scope: 'all' | 'remaining' };
+
+async function createDemandPlanningDraft(input: CreateDemandPlanningDraftInput): Promise<DemandPlanningDraftWithAssignments> {
+  const batchId = typeof input === 'string' ? input : input.batchId;
+  const scope = typeof input === 'string' ? 'all' : input.scope;
   return bffRequest<DemandPlanningDraftWithAssignments>(`/api/demand-imports/${batchId}/planning-drafts`, {
-    method: 'POST'
+    method: 'POST',
+    body: JSON.stringify({ scope })
   });
 }
 
@@ -86,6 +91,7 @@ export function usePublishDemandPlanningDraftToShift() {
       publishDemandPlanningDraftToShift(draftId, body),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['demand-import', 'draft', data.draftId] });
+      queryClient.invalidateQueries({ queryKey: ['demand-import', 'planning-preview'] });
       queryClient.invalidateQueries({ queryKey: ['manual-shift', 'work-hierarchy', data.shiftId] });
       queryClient.invalidateQueries({ queryKey: ['manual-shift', 'lines', data.shiftId] });
       queryClient.invalidateQueries({ queryKey: ['manual-shift', 'orders', data.shiftId] });
