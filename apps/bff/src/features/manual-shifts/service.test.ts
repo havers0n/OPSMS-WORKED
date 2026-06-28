@@ -5939,6 +5939,14 @@ describe('demand planning draft — publish to shift', () => {
         const shiftOrders = state.orders.filter((order) => order.shiftId === id && order.deletedAt === null);
         const shiftItems = state.items.filter((item) => item.shiftId === id);
 
+        const computeBreakdown = (orders: ReadonlyArray<{ status: string }>) => ({
+          queued: orders.filter((o) => o.status === 'queued').length,
+          picking: orders.filter((o) => o.status === 'picking').length,
+          waitingCheck: orders.filter((o) => o.status === 'waiting_check').length,
+          returned: orders.filter((o) => o.status === 'returned').length,
+          done: orders.filter((o) => o.status === 'done').length
+        });
+
         return {
           shiftId: id,
           areas: shiftLines.map((line) => {
@@ -5954,13 +5962,7 @@ describe('demand planning draft — publish to shift', () => {
               totalBuckets: 1,
               totalOrders: lineOrders.length,
               totalQuantity,
-              statusBreakdown: {
-                queued: lineOrders.length,
-                picking: 0,
-                waitingCheck: 0,
-                returned: 0,
-                done: 0
-              },
+              statusBreakdown: computeBreakdown(lineOrders),
               lines: [{
                 lineId: line.id,
                 lineGroupName: line.name,
@@ -5970,25 +5972,13 @@ describe('demand planning draft — publish to shift', () => {
                 totalBuckets: 1,
                 totalOrders: lineOrders.length,
                 totalQuantity,
-                statusBreakdown: {
-                  queued: lineOrders.length,
-                  picking: 0,
-                  waitingCheck: 0,
-                  returned: 0,
-                  done: 0
-                },
+                statusBreakdown: computeBreakdown(lineOrders),
                 buckets: [{
                   bucketName: lineOrders[0]?.workBucketName ?? null,
                   displayName: lineOrders[0]?.workBucketName ?? 'כללי',
                   totalOrders: lineOrders.length,
                   totalQuantity,
-                  statusBreakdown: {
-                    queued: lineOrders.length,
-                    picking: 0,
-                    waitingCheck: 0,
-                    returned: 0,
-                    done: 0
-                  },
+                  statusBreakdown: computeBreakdown(lineOrders),
                   orders: lineOrders.map((order) => ({
                     orderId: order.id,
                     orderNumber: order.orderNumber,
@@ -6399,6 +6389,143 @@ describe('demand planning draft — publish to shift', () => {
     expect(hierarchy.shiftId).toBe(shiftId);
     expect(hierarchy.areas[0]?.lines[0]?.lineName).toBe('קו א');
     expect(hierarchy.areas[0]?.lines[0]?.buckets[0]?.orders[0]?.orderNumber).toBe('SO-1');
+  });
+
+  it('work hierarchy shows mixed statuses after append into active shift', async () => {
+    const { repo, state } = createPublishRepo();
+    seedPublishRows(state);
+
+    // Pre-populate existing line and order (simulating prior publication's picking order)
+    state.lines.push({
+      id: lineId,
+      tenant_id: ids.tenant,
+      shift_id: shiftId,
+      name: 'קו א',
+      distribution_area: 'דרום',
+      sort_order: 0,
+      created_at: nowIso,
+      deleted_at: null,
+      deleted_by_profile_id: null,
+      deleted_by_name: null,
+      delete_reason: null
+    });
+    state.orders.push({
+      id: ids.order,
+      tenantId: ids.tenant,
+      shiftId,
+      lineId,
+      orderNumber: 'SO-OLD',
+      customerName: 'Old Customer',
+      pointName: 'Old Customer',
+      palletCount: null,
+      pickerName: 'Picker1',
+      pickerWorkerId: 'worker-1',
+      checkerName: null,
+      lineCount: 1,
+      sortOrder: 0,
+      size: 'unknown',
+      status: 'picking',
+      startedAt: nowIso,
+      checkStartedAt: null,
+      waitingCheckAt: null,
+      checkedAt: null,
+      finishedAt: null,
+      comment: null,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      deletedAt: null,
+      deletedByProfileId: null,
+      deletedByName: null,
+      deleteReason: null,
+      rawRouteLine: 'קו א/סיגריות',
+      routeBase: 'קו א',
+      workBucketName: 'סיגריות',
+      workBucketType: null,
+      sourceZone: null,
+      rawDestinationLabel: null,
+      deliveryPointId: null,
+      deliveryPointName: null,
+      deliveryPointMatchStatus: 'not_attempted',
+      deliveryPointAliasText: null,
+      deliveryPointAliasId: null
+    });
+    state.items.push({
+      id: 'item-existing-1',
+      tenantId: ids.tenant,
+      shiftId,
+      lineId,
+      orderId: ids.order,
+      sku: 'SKU-EXISTING',
+      description: null,
+      category: null,
+      quantity: 10,
+      notes: null,
+      zone: null,
+      sourceSheet: null,
+      sourceRows: null,
+      sourceFile: null,
+      sortOrder: 1,
+      createdAt: nowIso
+    });
+
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+
+    // Publish new demand — this creates a queued order alongside the existing picking order
+    await service.publishDemandPlanningDraftToShift({
+      tenantId: ids.tenant,
+      draftId,
+      targetShiftId: shiftId
+    });
+
+    // Read hierarchy
+    const hierarchy = await service.getShiftWorkHierarchy({
+      tenantId: ids.tenant,
+      shiftId
+    });
+
+    expect(hierarchy.shiftId).toBe(shiftId);
+    expect(hierarchy.areas).toHaveLength(1);
+
+    // Area-level: 1 picking + 1 queued
+    expect(hierarchy.areas[0].statusBreakdown).toEqual({
+      queued: 1,
+      picking: 1,
+      waitingCheck: 0,
+      returned: 0,
+      done: 0
+    });
+
+    // Line-level
+    const line = hierarchy.areas[0].lines[0];
+    expect(line.lineName).toBe('קו א');
+    expect(line.totalOrders).toBe(2);
+    expect(line.statusBreakdown).toEqual({
+      queued: 1,
+      picking: 1,
+      waitingCheck: 0,
+      returned: 0,
+      done: 0
+    });
+
+    // Bucket-level
+    const bucket = line.buckets[0];
+    expect(bucket.totalOrders).toBe(2);
+    expect(bucket.statusBreakdown).toEqual({
+      queued: 1,
+      picking: 1,
+      waitingCheck: 0,
+      returned: 0,
+      done: 0
+    });
+
+    // Individual orders — both present and in correct status
+    expect(bucket.orders).toHaveLength(2);
+    const oldOrder = bucket.orders.find((o) => o.orderNumber === 'SO-OLD');
+    const newOrder = bucket.orders.find((o) => o.orderNumber === 'SO-1');
+    expect(oldOrder).toBeDefined();
+    expect(newOrder).toBeDefined();
+    expect(oldOrder!.status).toBe('picking');
+    expect(newOrder!.status).toBe('queued');
   });
 });
 
