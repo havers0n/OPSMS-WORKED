@@ -89,6 +89,7 @@ import {
   ,
   dailyManualShiftImportPreviewSchema,
   demandImportBatchSchema,
+  demandImportAvailableBatchesResponseSchema as demandImportAvailableBatchesDtoSchema,
   demandImportDataSheetCreateResponseSchema as demandImportDataSheetCreateDtoSchema,
   demandImportDataSheetPreviewSchema,
   rawDemandPlanningPreviewSchema as rawDemandPlanningPreviewDtoSchema,
@@ -101,6 +102,7 @@ import {
   demandPlanningPutPlanRequestSchema,
   demandPlanningPublishToShiftRequestSchema,
   demandPlanningPublishToShiftResponseSchema,
+  demandAvailableDemandResponseSchema as demandAvailableDemandResponseDtoSchema,
   manualShiftMonthlyPreviewSchema,
   manualShiftMonthlyApplyResponseSchema as manualShiftMonthlyApplyResponseDtoSchema,
   manualShiftMonthlyReplaceSafetySchema as manualShiftMonthlyReplaceSafetyDtoSchema,
@@ -119,7 +121,9 @@ import {
   demandBacklogSummaryResponseSchema,
   demandBacklogQuerySchema,
   demandBacklogItemResponseSchema,
-  demandBacklogSourceBatchSchema
+  demandBacklogSourceBatchSchema,
+  demandPlanningPublicationSchema,
+  demandPlanningRevertPublicationResponseSchema
 } from '@wos/domain';
 
 // ── Rack Inspector ──────────────────────────────────────────────────────────
@@ -596,6 +600,7 @@ export const manualShiftImportPreviewResponseSchema = z.object({
 export const demandImportDataSheetPreviewResponseSchema = z.object({
   preview: demandImportDataSheetPreviewSchema
 });
+export const demandImportAvailableBatchesResponseSchema = demandImportAvailableBatchesDtoSchema;
 export const demandImportDataSheetCreateResponseSchema = demandImportDataSheetCreateDtoSchema;
 export const rawDemandPlanningPreviewResponseSchema = rawDemandPlanningPreviewDtoSchema;
 export const demandImportBatchResponseSchema = demandImportBatchSchema;
@@ -605,6 +610,9 @@ export const demandPlanningCreateDraftRequestBodySchema = demandPlanningCreateDr
 export const demandPlanningPutPlanRequestBodySchema = demandPlanningPutPlanRequestSchema;
 export const demandPlanningPublishToShiftRequestBodySchema = demandPlanningPublishToShiftRequestSchema;
 export const demandPlanningPublishToShiftResponseBodySchema = demandPlanningPublishToShiftResponseSchema;
+export const demandPlanningPublicationResponseSchema = demandPlanningPublicationSchema;
+export const demandPlanningRevertPublicationResponseBodySchema = demandPlanningRevertPublicationResponseSchema;
+export const demandAvailableDemandResponseSchema = demandAvailableDemandResponseDtoSchema;
 export const manualShiftMonthlyImportPreviewResponseSchema = z.object({
   preview: manualShiftMonthlyPreviewSchema
 });

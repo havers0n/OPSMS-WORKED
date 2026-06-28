@@ -774,6 +774,8 @@ function createRepo() {
     getBacklogSummary: vi.fn().mockResolvedValue({}),
     countBacklogDistinctBatches: vi.fn().mockResolvedValue(0),
 
+    listDemandImportBatches: vi.fn().mockResolvedValue([]),
+    listAvailableDemandImportBatches: vi.fn().mockResolvedValue([]),
     getDemandPlanningPublication: vi.fn().mockResolvedValue(null),
     revertDemandPlanningPublication: vi.fn().mockResolvedValue({
       publicationId: '',
@@ -5452,14 +5454,20 @@ describe('demand planning draft — create', () => {
           return alloc;
         });
       }) as unknown as ManualShiftsRepo['insertDemandPlanningAllocations'],
-      listDemandPlanningAllocations: vi.fn(async (input: { tenantId: string; draftId: string }) => {
-        return state.allocations.filter((a) => a.tenantId === input.tenantId && a.draftId === input.draftId);
-      }) as unknown as ManualShiftsRepo['listDemandPlanningAllocations'],
-      listRawDemandRowsByIds: vi.fn(async (input: { tenantId: string; rowIds: string[] }) => {
-        return state.rows.filter((r) => r.tenantId === input.tenantId && input.rowIds.includes(r.id));
-      }) as unknown as ManualShiftsRepo['listRawDemandRowsByIds'],
-      listPublishedDemandQuantities: vi.fn(async () => state.published),
-    };
+    listDemandPlanningAllocations: vi.fn(async (input: { tenantId: string; draftId: string }) => {
+      return state.allocations.filter((a) => a.tenantId === input.tenantId && a.draftId === input.draftId);
+    }) as unknown as ManualShiftsRepo['listDemandPlanningAllocations'],
+    listRawDemandRowsByIds: vi.fn(async (input: { tenantId: string; rowIds: string[] }) => {
+      return state.rows.filter((r) => r.tenantId === input.tenantId && input.rowIds.includes(r.id));
+    }) as unknown as ManualShiftsRepo['listRawDemandRowsByIds'],
+    listPublishedDemandQuantities: vi.fn(async () => state.published),
+    getAvailableDemandSnapshot: vi.fn(async () => ({
+      backlogItems: [],
+      sourceLinks: [],
+      sourceBatches: [],
+      publishedAllocations: []
+    })) as unknown as ManualShiftsRepo['getAvailableDemandSnapshot'],
+  };
 
     return { repo, state };
   }
@@ -5538,6 +5546,65 @@ describe('demand planning draft — create', () => {
     expect(preview.summary.totalQuantity).toBe(6);
     expect(preview.distributionAreas[0].orders[0].items[0].rawDemandRowId).toBe(rowId1);
     expect(draft.draft.sourceScope).toBe('remaining');
+  });
+
+  it('builds available demand from applied publications only', async () => {
+    const { repo } = createDemandRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    vi.mocked(repo.getAvailableDemandSnapshot!).mockResolvedValue({
+      backlogItems: [
+        {
+          id: '99999999-9999-4999-8999-999999999999',
+          tenantId: ids.tenant,
+          identityKey: 'k1',
+          status: 'open',
+          totalQuantity: 10,
+          orderNumber: 'SO-1',
+          customerName: 'Customer',
+          sku: 'SKU-1',
+          description: null,
+          category: null,
+          distributionArea: 'North',
+          productHandlingFlow: 'regular',
+          routeFlow: 'unassigned',
+          firstSeenAt: '2026-06-27T00:00:00.000Z',
+          lastSeenAt: '2026-06-27T00:00:00.000Z',
+          lastQuantityChangedAt: null,
+          createdAt: '2026-06-27T00:00:00.000Z',
+          updatedAt: '2026-06-27T00:00:00.000Z'
+        }
+      ],
+      sourceLinks: [
+        {
+          backlogItemId: '99999999-9999-4999-8999-999999999999',
+          rawDemandRowId: '22222222-2222-4222-a222-222222222222',
+          batchId: '33333333-3333-4333-a333-333333333333'
+        }
+      ],
+      sourceBatches: [
+        {
+          batchId: '33333333-3333-4333-a333-333333333333',
+          sourceFile: 'same.xlsx',
+          uploadedAt: '2026-06-27T00:00:00.000Z'
+        }
+      ],
+      publishedAllocations: [
+        {
+          rawDemandRowId: '22222222-2222-4222-a222-222222222222',
+          publishedQuantity: 3,
+          publicationStatus: 'applied'
+        }
+      ]
+    });
+
+    const result = await service.getAvailableDemand({ tenantId: ids.tenant });
+
+    expect(result.canPlan).toBe(true);
+    expect(result.summary.totalQuantity).toBe(7);
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0]!.availableQuantity).toBe(7);
+    expect(repo.listDemandPlanningAllocations).not.toHaveBeenCalled();
   });
 });
 

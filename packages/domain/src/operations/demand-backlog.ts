@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { createHash } from 'node:crypto';
 import {
   rawDemandProductHandlingFlowSchema,
   rawDemandRouteFlowSchema,
@@ -12,12 +11,19 @@ import {
 
 const IDENTITY_KEY_SEP = '\x00';
 
-export function computeDemandBacklogIdentityKey(
+async function sha256Hex(input: string): Promise<string> {
+  const data = new TextEncoder().encode(input);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function computeDemandBacklogIdentityKey(
   orderNumber: string | null,
   customerName: string | null,
   sku: string | null,
   distributionArea: string | null
-): string {
+): Promise<string> {
   const parts = [
     (orderNumber ?? '').trim().toLowerCase(),
     (customerName ?? '').trim().toLowerCase(),
@@ -25,7 +31,7 @@ export function computeDemandBacklogIdentityKey(
     (distributionArea ?? '').trim().toLowerCase()
   ];
   const normalized = parts.join(IDENTITY_KEY_SEP);
-  return createHash('sha256').update(normalized, 'utf8').digest('hex');
+  return sha256Hex(normalized);
 }
 
 // ──── Status ────────────────────────────────────────────────────────────────
@@ -131,6 +137,204 @@ export const demandBacklogSummaryResponseSchema = z.object({
 });
 export type DemandBacklogSummaryResponse = z.infer<typeof demandBacklogSummaryResponseSchema>;
 
+// ──── Canonical available demand response ─────────────────────────────────
+
+export const demandAvailableDemandSourceBatchSchema = z.object({
+  batchId: z.string().uuid(),
+  sourceFile: z.string().min(1),
+  uploadedAt: z.string().datetime({ offset: true }),
+  rowCount: z.number().int().min(0),
+  backlogItemCount: z.number().int().min(0)
+});
+export type DemandAvailableDemandSourceBatch = z.infer<typeof demandAvailableDemandSourceBatchSchema>;
+
+export const demandAvailableDemandGroupSchema = z.object({
+  backlogItemId: z.string().uuid(),
+  identityKey: z.string().min(1),
+  status: demandBacklogItemStatusSchema,
+  orderNumber: z.string().nullable(),
+  customerName: z.string().nullable(),
+  sku: z.string().nullable(),
+  distributionArea: z.string().nullable(),
+  totalQuantity: z.number().min(0),
+  consumedQuantity: z.number().min(0),
+  availableQuantity: z.number().min(0),
+  sourceBatchIds: z.array(z.string().uuid()),
+  sourceRowCount: z.number().int().min(0),
+  firstSeenAt: z.string().datetime({ offset: true }),
+  lastSeenAt: z.string().datetime({ offset: true })
+});
+export type DemandAvailableDemandGroup = z.infer<typeof demandAvailableDemandGroupSchema>;
+
+export const demandAvailableDemandSummarySchema = z.object({
+  ordersCount: z.number().int().min(0),
+  rowsCount: z.number().int().min(0),
+  totalQuantity: z.number().min(0),
+  distributionAreasCount: z.number().int().min(0)
+});
+export type DemandAvailableDemandSummary = z.infer<typeof demandAvailableDemandSummarySchema>;
+
+export const demandAvailableDemandExcludedCountsSchema = z.object({
+  specialFlowItems: z.number().int().min(0),
+  fullyConsumedItems: z.number().int().min(0),
+  duplicateSourceFiles: z.number().int().min(0)
+});
+export type DemandAvailableDemandExcludedCounts = z.infer<typeof demandAvailableDemandExcludedCountsSchema>;
+
+export const demandAvailableDemandResponseSchema = z.object({
+  summary: demandAvailableDemandSummarySchema,
+  groups: z.array(demandAvailableDemandGroupSchema),
+  sourceBatches: z.array(demandAvailableDemandSourceBatchSchema),
+  excludedCounts: demandAvailableDemandExcludedCountsSchema,
+  warnings: z.array(z.string()),
+  canPlan: z.boolean()
+});
+export type DemandAvailableDemandResponse = z.infer<typeof demandAvailableDemandResponseSchema>;
+
+export type DemandAvailableDemandSnapshot = {
+  backlogItems: DemandBacklogItem[];
+  sourceLinks: Array<{
+    backlogItemId: string;
+    rawDemandRowId: string;
+    batchId: string;
+  }>;
+  sourceBatches: Array<{
+    batchId: string;
+    sourceFile: string;
+    uploadedAt: string;
+  }>;
+  publishedAllocations: Array<{
+    rawDemandRowId: string;
+    publishedQuantity: number;
+    publicationStatus: 'applied' | 'reverted' | null;
+  }>;
+};
+
+export function buildAvailableDemandResponse(
+  snapshot: DemandAvailableDemandSnapshot
+): DemandAvailableDemandResponse {
+  const publishedQuantityByRowId = new Map<string, number>();
+  for (const allocation of snapshot.publishedAllocations) {
+    if (allocation.publicationStatus !== 'applied') continue;
+    publishedQuantityByRowId.set(
+      allocation.rawDemandRowId,
+      (publishedQuantityByRowId.get(allocation.rawDemandRowId) ?? 0) + Number(allocation.publishedQuantity ?? 0)
+    );
+  }
+
+  const sourceLinksByBacklogItemId = new Map<string, Array<{ rawDemandRowId: string; batchId: string }>>();
+  for (const link of snapshot.sourceLinks) {
+    const list = sourceLinksByBacklogItemId.get(link.backlogItemId) ?? [];
+    list.push({ rawDemandRowId: link.rawDemandRowId, batchId: link.batchId });
+    sourceLinksByBacklogItemId.set(link.backlogItemId, list);
+  }
+
+  const sourceBatchUsageById = new Map<string, { rowCount: number; backlogItemIds: Set<string> }>();
+  for (const link of snapshot.sourceLinks) {
+    const entry = sourceBatchUsageById.get(link.batchId) ?? {
+      rowCount: 0,
+      backlogItemIds: new Set<string>()
+    };
+    entry.rowCount += 1;
+    entry.backlogItemIds.add(link.backlogItemId);
+    sourceBatchUsageById.set(link.batchId, entry);
+  }
+
+  const duplicateSourceFilesByName = new Map<string, Array<{ batchId: string; sourceFile: string; uploadedAt: string }>>();
+  for (const batch of snapshot.sourceBatches) {
+    const list = duplicateSourceFilesByName.get(batch.sourceFile) ?? [];
+    list.push(batch);
+    duplicateSourceFilesByName.set(batch.sourceFile, list);
+  }
+
+  const warnings: string[] = [];
+  for (const [sourceFile, batches] of duplicateSourceFilesByName) {
+    if (batches.length > 1) {
+      warnings.push(`Source file "${sourceFile}" was uploaded ${batches.length} times.`);
+    }
+  }
+
+  const groups: DemandAvailableDemandGroup[] = [];
+  let specialFlowItems = 0;
+  let fullyConsumedItems = 0;
+
+  for (const item of snapshot.backlogItems) {
+    if (item.status === 'special_flow') {
+      specialFlowItems += 1;
+      continue;
+    }
+
+    const links = sourceLinksByBacklogItemId.get(item.id) ?? [];
+    const consumedQuantity = links.reduce(
+      (sum, link) => sum + (publishedQuantityByRowId.get(link.rawDemandRowId) ?? 0),
+      0
+    );
+    const availableQuantity = Math.max(Number(item.totalQuantity ?? 0) - consumedQuantity, 0);
+    if (availableQuantity <= 0) {
+      fullyConsumedItems += 1;
+      continue;
+    }
+
+    groups.push({
+      backlogItemId: item.id,
+      identityKey: item.identityKey,
+      status: item.status,
+      orderNumber: item.orderNumber,
+      customerName: item.customerName,
+      sku: item.sku,
+      distributionArea: item.distributionArea,
+      totalQuantity: Number(item.totalQuantity ?? 0),
+      consumedQuantity,
+      availableQuantity,
+      sourceBatchIds: [...new Set(links.map((link) => link.batchId))],
+      sourceRowCount: links.length,
+      firstSeenAt: item.firstSeenAt,
+      lastSeenAt: item.lastSeenAt
+    });
+  }
+
+  const sourceBatches = snapshot.sourceBatches
+    .map((batch) => {
+      const usage = sourceBatchUsageById.get(batch.batchId);
+      return {
+        batchId: batch.batchId,
+        sourceFile: batch.sourceFile,
+        uploadedAt: batch.uploadedAt,
+        rowCount: usage?.rowCount ?? 0,
+        backlogItemCount: usage?.backlogItemIds.size ?? 0
+      };
+    })
+    .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt) || a.batchId.localeCompare(b.batchId));
+
+  const ordersCount = new Set(groups.map((group) => group.orderNumber).filter((value): value is string => value !== null)).size;
+  const distributionAreasCount = new Set(
+    groups.map((group) => group.distributionArea).filter((value): value is string => value !== null)
+  ).size;
+  const totalQuantity = groups.reduce((sum, group) => sum + group.availableQuantity, 0);
+  const duplicateSourceFiles = [...duplicateSourceFilesByName.values()].reduce(
+    (count, batches) => count + Math.max(batches.length - 1, 0),
+    0
+  );
+
+  return {
+    summary: {
+      ordersCount,
+      rowsCount: groups.length,
+      totalQuantity,
+      distributionAreasCount
+    },
+    groups: groups.sort((a, b) => b.firstSeenAt.localeCompare(a.firstSeenAt) || a.backlogItemId.localeCompare(b.backlogItemId)),
+    sourceBatches,
+    excludedCounts: {
+      specialFlowItems,
+      fullyConsumedItems,
+      duplicateSourceFiles
+    },
+    warnings,
+    canPlan: groups.length > 0
+  };
+}
+
 // ──── Source row type (repo row, not exported in API) ───────────────────────
 
 export const demandBacklogSourceRowSchema = z.object({
@@ -177,16 +381,16 @@ export type BacklogMergeResult = z.infer<typeof backlogMergeResultSchema>;
 
 // ──── Merge logic (pure domain function) ─────────────────────────────────────
 
-export function computeBacklogMergeAction(
+export async function computeBacklogMergeAction(
   row: BacklogMergeRowInput,
   existingItem: DemandBacklogItem | null,
   existingSourceCount: number
-): BacklogMergeResult {
+): Promise<BacklogMergeResult> {
   if (row.planningStatus === 'error') {
     throw new Error('Cannot merge error rows into backlog. Filter before calling merge.');
   }
 
-  const identityKey = computeDemandBacklogIdentityKey(
+  const identityKey = await computeDemandBacklogIdentityKey(
     row.orderNumber, row.customerName, row.sku, row.distributionArea
   );
 
