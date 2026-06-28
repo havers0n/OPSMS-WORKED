@@ -533,7 +533,7 @@ it('past date with a closed shift hides import actions', async () => {
       renderAt('/operator/manual/lines?batchId=batch-999&draftId=draft-888&mode=demand&targetDate=2026-06-27');
 
       await waitFor(() => {
-        expect(screen.getByText('הוסף לקווים קיימים')).toBeTruthy();
+        expect(screen.getByText('בדוק התאמה למשמרת')).toBeTruthy();
       });
     });
 
@@ -711,7 +711,8 @@ it('past date with a closed shift hides import actions', async () => {
         expect(screen.getByText('בחר תאריך עבודה')).toBeTruthy();
       });
 
-      expect(screen.queryByText('הוסף לקווים קיימים')).toBeNull();
+      expect(screen.queryByText('בדוק התאמה למשמרת')).toBeNull();
+      expect(screen.queryByText('בדוק התאמה למשמרת')).toBeNull();
     });
 
     it('targetDate selected but no shift shows אין משמרת לתאריך הזה', async () => {
@@ -815,7 +816,8 @@ it('past date with a closed shift hides import actions', async () => {
         expect(screen.getByText('אין משמרת לתאריך הזה')).toBeTruthy();
       });
 
-      expect(screen.queryByText('הוסף לקווים קיימים')).toBeNull();
+      expect(screen.queryByText('בדוק התאמה למשמרת')).toBeNull();
+      expect(screen.queryByText('בדוק התאמה למשמרת')).toBeNull();
     });
 
     it('append button enabled when targetDate has a shift', async () => {
@@ -823,10 +825,10 @@ it('past date with a closed shift hides import actions', async () => {
       renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand&targetDate=2026-07-01');
 
       await waitFor(() => {
-        expect(screen.getByText('משמרת פעילה נמצאה')).toBeTruthy();
+        expect(screen.getByText('בדוק התאמה למשמרת')).toBeTruthy();
       });
 
-      expect(screen.getByText('הוסף לקווים קיימים')).toBeTruthy();
+      expect(screen.queryByText('משמרת פעילה נמצאה')).toBeNull();
     });
 
     it('append button navigates to append mode URL', async () => {
@@ -834,10 +836,10 @@ it('past date with a closed shift hides import actions', async () => {
       renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand&targetDate=2026-07-01');
 
       await waitFor(() => {
-        expect(screen.getByText('הוסף לקווים קיימים')).toBeTruthy();
+        expect(screen.getByText('בדוק התאמה למשמרת')).toBeTruthy();
       });
 
-      fireEvent.click(screen.getByText('הוסף לקווים קיימים'));
+      fireEvent.click(screen.getByText('בדוק התאמה למשמרת'));
 
       await waitFor(() => {
         expect(screen.getByText('הוספת ביקוש גולמי לקווים קיימים')).toBeTruthy();
@@ -914,10 +916,174 @@ it('past date with a closed shift hides import actions', async () => {
       renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand&targetDate=2026-07-01');
 
       await waitFor(() => {
-        expect(screen.getByText('משמרת פעילה נמצאה')).toBeTruthy();
+        expect(screen.getByText('בדוק התאמה למשמרת')).toBeTruthy();
       });
 
-      expect(screen.getByText('הוסף לקווים קיימים')).toBeTruthy();
+      expect(screen.queryByText('משמרת פעילה נמצאה')).toBeNull();
+    });
+
+    function mockShiftWithLines(shiftId: string, date: string) {
+      mockedBffRequest.mockImplementation((url: string) => {
+        if (String(url).includes(`/api/manual-shifts/by-date?date=${date}`)) {
+          return Promise.resolve({
+            shift: { id: shiftId, tenantId: 'tenant-1', date, name: 'Target Shift', status: 'active', createdBy: null, createdAt: new Date().toISOString(), closedAt: null },
+            lines: [{
+              line: { id: 'line-1', tenantId: 'tenant-1', shiftId, name: 'Line 1', sortOrder: 1, status: 'open', createdAt: new Date().toISOString(), deletedAt: null, deletedByProfileId: null, deletedByName: null, deleteReason: null },
+              totalOrders: 2, queuedOrders: 2, pickingOrders: 0, waitingCheckOrders: 0, returnedOrders: 0, doneOrders: 0, errorCount: 0
+            }]
+          });
+        }
+        if (String(url).includes('/api/manual-shifts/by-date') && !String(url).includes(date)) {
+          return Promise.resolve({ shift: null, lines: [] });
+        }
+        if (String(url).includes('/planning-preview')) {
+          return Promise.resolve({
+            batch: { id: 'batch-demand-1', sourceFile: 'data.xlsx', sourceSheet: 'DataSheet', status: 'ready', rowsCount: 5 },
+            summary: { rowsCount: 5, normalRowsCount: 5, specialFlowRowsCount: 0, errorRowsCount: 0, distributionAreasCount: 1, ordersCount: 2, skuCount: 3, totalQuantity: 100 },
+            distributionAreas: [], specialFlows: [], errors: []
+          });
+        }
+        if (String(url).includes('/demand-planning-drafts/')) {
+          return Promise.resolve({ draft: { id: 'draft-demand-1', tenantId: 'tenant-1', batchId: 'batch-demand-1', status: 'draft', createdBy: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, buckets: [], allocations: [] });
+        }
+        return Promise.resolve([]);
+      });
+    }
+
+    it('CTA shows "בדוק התאמה למשמרת" when target shift has lines', async () => {
+      mockShiftWithLines('shift-with-lines', '2026-07-05');
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand&targetDate=2026-07-05');
+
+      await waitFor(() => {
+        expect(screen.getByText('בדוק התאמה למשמרת')).toBeTruthy();
+      });
+    });
+
+    it('CTA shows "בדוק התאמה למשמרת" when target shift exists with no lines', async () => {
+      mockShiftExists('shift-no-lines', '2026-07-10');
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand&targetDate=2026-07-10');
+
+      await waitFor(() => {
+        expect(screen.getByText('בדוק התאמה למשמרת')).toBeTruthy();
+      });
+    });
+
+    it('demand mode with stale shiftId renders demand context and target date query independently', async () => {
+      const staleShift = { id: 'STALE_SHIFT', tenantId: 'tenant-1', date: '2026-06-01', name: 'Stale Shift', status: 'active', createdBy: null, createdAt: new Date().toISOString(), closedAt: null };
+      mockedBffRequest.mockImplementation((url: string) => {
+        if (String(url).includes('/api/manual-shifts/STALE_SHIFT')) {
+          return Promise.resolve({ shift: staleShift, lines: [] });
+        }
+        if (String(url).includes('/api/manual-shifts/by-date')) {
+          return Promise.resolve({ shift: null, lines: [] });
+        }
+        if (String(url).includes('/planning-preview')) {
+          return Promise.resolve({
+            batch: { id: 'batch-demand-1', sourceFile: 'data.xlsx', sourceSheet: 'DataSheet', status: 'ready', rowsCount: 5 },
+            summary: { rowsCount: 5, normalRowsCount: 5, specialFlowRowsCount: 0, errorRowsCount: 0, distributionAreasCount: 1, ordersCount: 2, skuCount: 3, totalQuantity: 100 },
+            distributionAreas: [], specialFlows: [], errors: []
+          });
+        }
+        if (String(url).includes('/demand-planning-drafts/')) {
+          return Promise.resolve({ draft: { id: 'draft-demand-1', tenantId: 'tenant-1', batchId: 'batch-demand-1', status: 'draft', createdBy: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, buckets: [], allocations: [] });
+        }
+        return Promise.resolve({ shift: null, lines: [] });
+      });
+
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand&targetDate=2026-07-01&shiftId=STALE_SHIFT');
+
+      await waitFor(() => {
+        expect(screen.getByText('תכנון ביקוש גולמי מ-DataSheet')).toBeTruthy();
+      });
+
+      expect(screen.getByText('אין משמרת לתאריך הזה')).toBeTruthy();
+    });
+
+    it('selecting a new targetDate preserves demand context and clears shiftId', async () => {
+      const staleShift = { id: 'STALE_SHIFT', tenantId: 'tenant-1', date: '2026-06-01', name: 'Stale Shift', status: 'active', createdBy: null, createdAt: new Date().toISOString(), closedAt: null };
+      mockedBffRequest.mockImplementation((url: string) => {
+        if (String(url).includes('/api/manual-shifts/STALE_SHIFT')) {
+          return Promise.resolve({ shift: staleShift, lines: [] });
+        }
+        if (String(url).includes('/api/manual-shifts/by-date')) {
+          return Promise.resolve({ shift: null, lines: [] });
+        }
+        if (String(url).includes('/planning-preview')) {
+          return Promise.resolve({
+            batch: { id: 'batch-demand-1', sourceFile: 'data.xlsx', sourceSheet: 'DataSheet', status: 'ready', rowsCount: 5 },
+            summary: { rowsCount: 5, normalRowsCount: 5, specialFlowRowsCount: 0, errorRowsCount: 0, distributionAreasCount: 1, ordersCount: 2, skuCount: 3, totalQuantity: 100 },
+            distributionAreas: [], specialFlows: [], errors: []
+          });
+        }
+        if (String(url).includes('/demand-planning-drafts/')) {
+          return Promise.resolve({ draft: { id: 'draft-demand-1', tenantId: 'tenant-1', batchId: 'batch-demand-1', status: 'draft', createdBy: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, buckets: [], allocations: [] });
+        }
+        return Promise.resolve({ shift: null, lines: [] });
+      });
+
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand&shiftId=STALE_SHIFT');
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'בחר תאריך עבודה' })).toBeTruthy();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'בחר תאריך עבודה' }));
+
+      const tomorrow = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit'
+      }).format(new Date(Date.now() + 86400000));
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: tomorrow })).toBeTruthy();
+      });
+
+      expect(screen.getByRole('button', { name: tomorrow })).not.toBeDisabled();
+
+      fireEvent.click(screen.getByRole('button', { name: tomorrow }));
+
+      await waitFor(() => {
+        expect(screen.getByText('אין משמרת לתאריך הזה')).toBeTruthy();
+      });
+
+      expect(screen.getByText('תכנון ביקוש גולמי מ-DataSheet')).toBeTruthy();
+    });
+
+    it('shifts to demand-planning-preview query is not filtered by targetDate', async () => {
+      mockNoShift();
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand&targetDate=2026-07-01');
+
+      await waitFor(() => {
+        expect(screen.getByText('אין משמרת לתאריך הזה')).toBeTruthy();
+      });
+
+      const planningPreviewCalls = mockedBffRequest.mock.calls.filter(
+        ([url]) => String(url).includes('/planning-preview')
+      );
+      const targetDateFilteredCalls = planningPreviewCalls.filter(
+        ([url]) => String(url).includes('targetDate')
+      );
+      expect(targetDateFilteredCalls.length).toBe(0);
+    });
+
+    it('normal date picker behavior unchanged when targetDate is not set', async () => {
+      mockedBffRequest.mockResolvedValue({ shift: null, lines: [] });
+
+      renderAt('/operator/manual/lines?date=2026-06-14');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('manual-section-switcher-trigger')).toBeTruthy();
+      });
+    });
+
+    it('"משמרת פעילה נמצאה" badge is not rendered when target shift exists', async () => {
+      mockShiftExists('shift-target-1', '2026-07-01');
+      renderAt('/operator/manual/lines?batchId=batch-demand-1&draftId=draft-demand-1&mode=demand&targetDate=2026-07-01');
+
+      await waitFor(() => {
+        expect(screen.getByText('בדוק התאמה למשמרת')).toBeTruthy();
+      });
+
+      expect(screen.queryByText('משמרת פעילה נמצאה')).toBeNull();
     });
   });
 });

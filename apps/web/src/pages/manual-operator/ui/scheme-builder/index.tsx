@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, ChevronDown, ChevronUp, Save, Search, X } from 'lucide-react';
 import { workHierarchyQueryOptions, orderItemsQueryOptions } from '@/entities/manual-shift/api/queries';
 import { demandPlanningPreviewQueryOptions, demandPlanningDraftQueryOptions } from '@/entities/demand/api/queries';
-import { usePutDemandPlanningPlan } from '@/entities/demand/api/mutations';
+import { usePutDemandPlanningPlan, usePublishDemandPlanningDraftToShift } from '@/entities/demand/api/mutations';
 import { saveDemandLastContext } from '@/entities/demand/lib/last-context';
 import { useSchemeBuilderStore } from './scheme-store';
 import { adaptWorkHierarchyToSource, adaptOrderItemsToSource } from './source-data-adapter';
@@ -31,6 +31,7 @@ interface DemandModeProps {
   batchId: string;
   draftId: string;
   targetDate?: string | null;
+  targetShiftId?: string | null;
   shiftId?: never;
 }
 
@@ -42,6 +43,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   const batchId = isDemandMode ? (props as DemandModeProps).batchId : undefined;
   const draftId = isDemandMode ? (props as DemandModeProps).draftId : undefined;
   const targetDate = isDemandMode ? (props as DemandModeProps).targetDate : undefined;
+  const targetShiftId = isDemandMode ? (props as DemandModeProps).targetShiftId : undefined;
 
   const capabilities: SchemeBuilderCapabilities = useMemo(() => ({
     canCreatePlanningLines: !isDemandMode || true,
@@ -49,10 +51,10 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     canAssignOrders: !isDemandMode || true,
     canMoveOrders: !isDemandMode || true,
     canSaveDraft: isDemandMode,
-    canPublishToShift: !isDemandMode,
+    canPublishToShift: isDemandMode ? !!targetShiftId : !isDemandMode,
     canWriteManualShift: !isDemandMode,
     canPrint: !isDemandMode,
-  }), [isDemandMode]);
+  }), [isDemandMode, targetShiftId]);
 
   const {
     data: hierarchy, isLoading: hierarchyLoading, error: hierarchyError
@@ -90,6 +92,9 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   const workGroups = useSchemeBuilderStore((s) => s.workGroups);
 
   const savePlan = usePutDemandPlanningPlan();
+  const publishPlan = usePublishDemandPlanningDraftToShift();
+  const [publishResult, setPublishResult] = useState<{ createdLines: number; createdOrders: number; createdItems: number; skippedRows: number; warnings: string[] } | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   const [drawerOrderId, setDrawerOrderId] = useState<string | null>(null);
   const [assignItemIds, setAssignItemIds] = useState<string[]>([]);
@@ -402,6 +407,65 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     savePlan.mutate({ draftId, body: { buckets, allocations } });
   }, [draftId, capabilities.canSaveDraft, planningLines, workGroups, itemAllocations, plMap, savePlan]);
 
+  const handlePublish = useCallback(() => {
+    if (!draftId || !targetShiftId || !capabilities.canPublishToShift) return;
+    setPublishResult(null);
+    setPublishError(null);
+    savePlan.mutate(
+      { draftId, body: { buckets: workGroups.map((wg) => {
+        const pl = plMap.get(wg.planningLineId);
+        return { distributionArea: wg.areaName === '__missing__' ? null : wg.areaName, planningLineName: pl?.name ?? 'default', bucketName: wg.name };
+      }), allocations: itemAllocations.map((alloc) => {
+        const wg = workGroups.find((w) => w.id === alloc.workGroupId);
+        const pl = wg ? plMap.get(wg.planningLineId) : undefined;
+        const key = `${wg?.areaName === '__missing__' ? '' : (wg?.areaName ?? '')}|${pl?.name ?? 'default'}|${wg?.name ?? ''}`;
+        return { rawDemandRowId: alloc.itemRowId, bucketKey: key, allocatedQuantity: alloc.qty };
+      }).filter((x): x is NonNullable<typeof x> => x !== null) } },
+      {
+        onSuccess: () => {
+          publishPlan.mutate(
+            { draftId, body: { targetShiftId } },
+            {
+              onSuccess: (data) => {
+                setPublishResult({
+                  createdLines: data.createdLines,
+                  createdOrders: data.createdOrders,
+                  createdItems: data.createdItems,
+                  skippedRows: data.skippedRows,
+                  warnings: data.warnings,
+                });
+              },
+              onError: (err) => {
+                setPublishError(getPublishErrorMessage(err));
+              },
+            }
+          );
+        },
+        onError: () => {
+          setPublishError('שמירת הטיוטה נכשלה. נסה שוב.');
+        },
+      }
+    );
+  }, [draftId, targetShiftId, capabilities.canPublishToShift, workGroups, planningLines, plMap, itemAllocations, savePlan, publishPlan]);
+
+  function getPublishErrorMessage(err: unknown): string {
+    const msg = err instanceof Error ? err.message : '';
+    if (msg.includes('NO_PUBLISHABLE_ROWS')) return 'אין שורות לפרסום למשמרת';
+    if (msg.includes('already applied') || msg.includes('NOT_MUTABLE')) return 'הטיוטה כבר פורסמה למשמרת';
+    if (msg.includes('DATE_MISMATCH') || msg.includes('does not match')) return 'תאריך הביקוש לא תואם לתאריך המשמרת';
+    if (msg.includes('DATE_AMBIGUOUS') || msg.includes('multiple')) return 'נמצאו כמה תאריכי אספקה שונים בביקוש';
+    if (msg.includes('not active') || msg.includes('SHIFT_NOT_ACTIVE')) return 'לא ניתן לפרסם למשמרת שאינה פעילה';
+    if (msg.includes('FORBIDDEN') || msg.includes('403')) return 'אין הרשאה לפרסם למשמרת הזו';
+    if (msg.includes('422') || msg.includes('NO_PUBLISHABLE')) return 'אין שורות לפרסום למשמרת';
+    if (msg.includes('409')) return 'הטיוטה כבר פורסמה או שהמשמרת אינה פעילה';
+    return 'הפרסום למשמרת נכשל';
+  }
+
+  const handleNavigateToWork = useCallback(() => {
+    if (!targetShiftId) return;
+    window.location.href = `/operator/manual/work?shiftId=${targetShiftId}`;
+  }, [targetShiftId]);
+
   const isLoading = isDemandMode ? (previewLoading || draftLoading) : hierarchyLoading;
   const error = isDemandMode ? (previewError || draftError) : hierarchyError;
 
@@ -480,10 +544,16 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
       <main className="flex-1 flex overflow-hidden">
         {/* Left rail (appears on the right in RTL) */}
         <aside className="w-64 shrink-0 border-e border-gray-200 bg-gray-50 p-2 flex flex-col gap-2 overflow-y-auto">
-          {!isDemandMode && (
+          {capabilities.canPublishToShift && (
             <PublishSummary
               orders={source.orders}
               orderItemMap={orderItemMap}
+              canPublish={isDemandMode && !!targetShiftId}
+              isPublishing={savePlan.isPending || publishPlan.isPending}
+              onPublish={handlePublish}
+              publishResult={publishResult}
+              publishError={publishError}
+              onNavigateToWork={handleNavigateToWork}
             />
           )}
 

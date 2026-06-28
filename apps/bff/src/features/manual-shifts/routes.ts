@@ -71,6 +71,8 @@ import {
   pickerSheetPrintDataSchema,
   demandPlanningDraftWithAssignmentsResponseSchema,
   demandPlanningPutPlanRequestBodySchema,
+  demandPlanningPublishToShiftRequestBodySchema,
+  demandPlanningPublishToShiftResponseBodySchema,
   demandImportAppendDiffResponseSchema,
   demandImportAppendDiffRequestSchema,
   demandBacklogListResponseSchema,
@@ -177,7 +179,7 @@ function mapManualShiftImportError(error: unknown) {
     return new ApiError(400, 'VALIDATION_ERROR', `Request validation failed: ${details}`);
   }
 
-  return new ApiError(500, 'INTERNAL_IMPORT_ERROR', error instanceof Error ? error.message : 'Unexpected import error');
+  return new ApiError(500, 'INTERNAL_IMPORT_ERROR', 'An unexpected import error occurred.');
 }
 
 function logImportStage(
@@ -913,6 +915,27 @@ export function registerManualShiftsRoutes(
       });
 
       return parseOrThrow(demandImportAppendDiffResponseSchema, result);
+    });
+  });
+
+  app.post('/api/demand-planning-drafts/:draftId/publish-to-shift', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-planning-drafts/:draftId/publish-to-shift', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      const tenantId = requireTenant(auth);
+      const { id: draftId } = parseOrThrow(idResponseSchema, {
+        id: request.params && typeof request.params === 'object' ? (request.params as Record<string, unknown>).draftId : null
+      });
+      const body = parseOrThrow(demandPlanningPublishToShiftRequestBodySchema, request.body);
+
+      const result = await getManualShiftsService(auth).publishDemandPlanningDraftToShift({
+        tenantId,
+        draftId,
+        targetShiftId: body.targetShiftId
+      });
+
+      return parseOrThrow(demandPlanningPublishToShiftResponseBodySchema, result);
     });
   });
 

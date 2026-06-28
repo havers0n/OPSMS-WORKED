@@ -6,13 +6,15 @@ function formatDisplayDate(dateStr: string): string {
   return new Intl.DateTimeFormat('he-IL', {
     weekday: 'long',
     day: 'numeric',
-    month: 'long'
+    month: 'long',
+    year: 'numeric'
   }).format(new Date(year, month - 1, day));
 }
 
 interface DemandTargetDateSelectorProps {
   targetDate: string | null;
   targetShift: ManualShiftSession | null;
+  lineCount: number;
   isTargetShiftLoading: boolean;
   onSelectTargetDate: () => void;
   onCreateTargetShift: () => void;
@@ -23,6 +25,7 @@ interface DemandTargetDateSelectorProps {
 export function DemandTargetDateSelector({
   targetDate,
   targetShift,
+  lineCount,
   isTargetShiftLoading,
   onSelectTargetDate,
   onCreateTargetShift,
@@ -74,25 +77,22 @@ export function DemandTargetDateSelector({
     );
   }
 
+  const hasExistingLines = lineCount > 0;
+
   return (
     <div className="flex items-center gap-2" dir="rtl">
       <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
         תאריך עבודה: {formatDisplayDate(targetDate)}
       </span>
-      <span className="rounded border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
-        משמרת פעילה נמצאה
+      <span className="text-xs text-gray-500">
+        {hasExistingLines ? `${lineCount} קווים קיימים` : 'משמרת קיימת'}
       </span>
-      {targetShift.name && (
-        <span className="text-xs text-gray-500 truncate max-w-[120px]">
-          {targetShift.name}
-        </span>
-      )}
       <button
         type="button"
         onClick={() => onNavigateToAppend(targetShift.id)}
-        className="rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
+        className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
       >
-        הוסף לקווים קיימים
+        בדוק התאמה למשמרת
       </button>
     </div>
   );

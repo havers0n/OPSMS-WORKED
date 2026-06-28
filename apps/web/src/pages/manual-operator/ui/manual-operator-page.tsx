@@ -85,6 +85,7 @@ function ManualOperatorSectionContent({
   mode,
   shiftIdFromParams,
   targetDate,
+  targetShift,
   isLoading,
   canImportExcelByRole
 }: {
@@ -100,6 +101,7 @@ function ManualOperatorSectionContent({
   mode: string | null;
   shiftIdFromParams: string | null;
   targetDate: string | null;
+  targetShift: ManualShiftSession | null;
   isLoading: boolean;
   canImportExcelByRole: boolean;
 }) {
@@ -127,7 +129,7 @@ function ManualOperatorSectionContent({
       return <AppendModePanel shiftId={shiftIdFromParams} batchId={batchId} />;
     }
     if (isDemandMode) {
-      return <SchemeBuilder mode="demand" batchId={batchId} draftId={draftId} targetDate={targetDate} />;
+      return <SchemeBuilder mode="demand" batchId={batchId} draftId={draftId} targetDate={targetDate} targetShiftId={targetShift?.id ?? undefined} />;
     }
     if (batchId && !draftId) {
       return (
@@ -208,6 +210,7 @@ export function ManualOperatorPage() {
     enabled: mode === 'demand' && !!targetDate,
   });
   const targetShift = targetShiftData?.shift ?? null;
+  const targetShiftLines = targetShiftData?.lines ?? [];
 
   const createShift = useCreateShift();
   const currentMembership = currentTenantId
@@ -259,6 +262,7 @@ export function ManualOperatorPage() {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set('targetDate', date);
+      next.delete('shiftId');
       return next;
     });
   }
@@ -329,6 +333,7 @@ export function ManualOperatorPage() {
       mode={mode}
       shiftIdFromParams={shiftIdFromParams}
       targetDate={targetDate}
+      targetShift={targetShift}
       isLoading={isLoading}
       canImportExcelByRole={canImportExcelByRole}
     />
@@ -388,6 +393,7 @@ export function ManualOperatorPage() {
             <DemandTargetDateSelector
               targetDate={targetDate}
               targetShift={targetShift}
+              lineCount={targetShiftLines.length}
               isTargetShiftLoading={isTargetShiftLoading}
               onSelectTargetDate={() => setShowTargetDatePicker(true)}
               onCreateTargetShift={handleCreateTargetShift}
