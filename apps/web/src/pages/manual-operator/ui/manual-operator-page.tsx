@@ -187,6 +187,9 @@ export function ManualOperatorPage() {
   const shift = shiftData?.shift ?? null;
   const lines = shiftData?.lines ?? [];
   const isReadOnly = !isToday || shift?.status === 'closed';
+  const isDemandPlanningRoute = section === 'lines' && mode === 'demand' && !!batchId && !!draftId;
+  const isAppendRoute = section === 'lines' && mode === 'append' && !!shiftIdFromParams && !!batchId;
+  const hasExistingWork = lines.length > 0;
 
   const { data: targetShiftData, isLoading: isTargetShiftLoading } = useQuery({
     ...shiftByDateQueryOptions(targetDate ?? ''),
@@ -201,7 +204,6 @@ export function ManualOperatorPage() {
   const canImportExcelByRole =
     currentMembership?.role === 'tenant_admin' || currentMembership?.role === 'platform_admin';
   const canMonthlyImport = !!shift && shift.status === 'active' && canImportExcelByRole;
-  const hasExistingWork = lines.length > 0;
 
   useEffect(() => {
     if (!section || typeof window === 'undefined') return;
@@ -293,7 +295,7 @@ export function ManualOperatorPage() {
       targetDate={targetDate}
     />
   );
-  const renderSectionWithoutShift = section === 'import' || section === 'printing' || (section === 'lines' && mode === 'demand' && !!batchId && !!draftId) || (section === 'lines' && mode === 'append' && !!shiftIdFromParams);
+  const renderSectionWithoutShift = section === 'import' || section === 'printing' || isDemandPlanningRoute || isAppendRoute;
 
   if (section === 'work') {
     return (

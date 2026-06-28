@@ -1,10 +1,17 @@
 import { Send, ArrowRight, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
-import type { SourceOrder, SourceOrderItem } from './scheme-types';
+import type {
+  SourceOrder,
+  SourceOrderItem,
+  DemandPlanningDraftUiMode,
+  DemandPlanningPublishUiMode,
+} from './scheme-types';
 import { useSchemeBuilderStore } from './scheme-store';
 
 interface PublishSummaryProps {
   orders: SourceOrder[];
   orderItemMap: Record<string, SourceOrderItem[]>;
+  draftUiMode?: DemandPlanningDraftUiMode;
+  publishUiMode?: DemandPlanningPublishUiMode;
   canPublish?: boolean;
   isPublishing?: boolean;
   onPublish?: () => void;
@@ -16,6 +23,8 @@ interface PublishSummaryProps {
 export function PublishSummary({
   orders,
   orderItemMap,
+  draftUiMode = 'planningDraft',
+  publishUiMode = 'noTargetShift',
   canPublish = false,
   isPublishing = false,
   onPublish,
@@ -34,8 +43,9 @@ export function PublishSummary({
   const totalEstimatedRows = orders.reduce((acc, o) => acc + o.itemLinesCount, 0);
   const groupCount = workGroups.length;
   const planningLineCount = planningLines.length;
+  const isPublishedDraft = draftUiMode === 'publishedDraft';
 
-  if (publishResult) {
+  if (publishResult || isPublishedDraft) {
     return (
       <div className="bg-white border border-green-200 rounded-lg p-4 space-y-3" dir="rtl">
         <div className="flex items-center gap-2">
@@ -43,26 +53,32 @@ export function PublishSummary({
           <h3 className="text-sm font-bold text-green-800">פורסם למשמרת</h3>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <div className="bg-green-50 rounded p-2 text-center">
-            <div className="font-bold text-green-900 text-lg">{publishResult.createdLines}</div>
-            <div className="text-xs text-green-700">קווים חדשים</div>
+        {publishResult ? (
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="bg-green-50 rounded p-2 text-center">
+              <div className="font-bold text-green-900 text-lg">{publishResult.createdLines}</div>
+              <div className="text-xs text-green-700">קווים חדשים</div>
+            </div>
+            <div className="bg-green-50 rounded p-2 text-center">
+              <div className="font-bold text-green-900 text-lg">{publishResult.createdOrders}</div>
+              <div className="text-xs text-green-700">הזמנות חדשות</div>
+            </div>
+            <div className="bg-green-50 rounded p-2 text-center">
+              <div className="font-bold text-green-900 text-lg">{publishResult.createdItems}</div>
+              <div className="text-xs text-green-700">שורות פריטים</div>
+            </div>
+            <div className="bg-green-50 rounded p-2 text-center">
+              <div className="font-bold text-green-900 text-lg">{publishResult.skippedRows}</div>
+              <div className="text-xs text-green-700">שורות שדולגו</div>
+            </div>
           </div>
-          <div className="bg-green-50 rounded p-2 text-center">
-            <div className="font-bold text-green-900 text-lg">{publishResult.createdOrders}</div>
-            <div className="text-xs text-green-700">הזמנות חדשות</div>
+        ) : (
+          <div className="rounded-lg bg-green-50 px-3 py-2 text-xs text-green-800">
+            טיוטה זו כבר פורסמה למשמרת ונעולה לעריכה.
           </div>
-          <div className="bg-green-50 rounded p-2 text-center">
-            <div className="font-bold text-green-900 text-lg">{publishResult.createdItems}</div>
-            <div className="text-xs text-green-700">שורות פריטים</div>
-          </div>
-          <div className="bg-green-50 rounded p-2 text-center">
-            <div className="font-bold text-green-900 text-lg">{publishResult.skippedRows}</div>
-            <div className="text-xs text-green-700">שורות שדולגו</div>
-          </div>
-        </div>
+        )}
 
-        {publishResult.warnings.length > 0 && (
+        {publishResult && publishResult.warnings.length > 0 && (
           <div className="space-y-1">
             {publishResult.warnings.map((w, i) => (
               <div key={i} className="flex items-start gap-1 text-xs text-amber-700 bg-amber-50 rounded p-1.5">
@@ -89,7 +105,7 @@ export function PublishSummary({
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3" dir="rtl">
-      <h3 className="text-sm font-bold text-gray-700">סיכום נכונות</h3>
+      <h3 className="text-sm font-bold text-gray-700">סיכום תכנון</h3>
 
       <div className="grid grid-cols-2 gap-3 text-sm">
         <div className="bg-gray-50 rounded p-2.5 text-center">
@@ -117,6 +133,12 @@ export function PublishSummary({
           <div className="text-xs text-gray-500">סה"כ שורות משוער</div>
         </div>
       </div>
+
+      {publishUiMode === 'noTargetShift' && (
+        <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          בחר משמרת יעד כדי לאפשר פרסום. append/diff נשאר במסלול נפרד.
+        </div>
+      )}
 
       {canPublish && onPublish && (
         <button
