@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Plus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import type { ManualShiftLineSummary, ManualShiftSession, ManualShiftWorkHierarchyResponse } from '@wos/domain';
 import {
   bucketProductRollupQueryOptions,
@@ -95,6 +96,7 @@ export function ManualOperatorWorkSection({
   isCreatingShift,
   onChangeSection
 }: ManualOperatorWorkSectionProps) {
+  const navigate = useNavigate();
   const [selectedLine, setSelectedLine] = useState<ManualShiftLineSummary | null>(null);
   const [showAddLine, setShowAddLine] = useState(false);
   const [showImportExcel, setShowImportExcel] = useState(false);
@@ -371,15 +373,26 @@ export function ManualOperatorWorkSection({
           onChangeDate={onChangeDate}
           isDesktop
           headerActions={
-            shift ? (
-              <button
-                type="button"
-                onClick={() => setShowBondedImport(true)}
-                className="rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
-                aria-label="טעינת קובץ בונדד"
-              >
-                בונדד
-              </button>
+            shift && shift.status === 'active' ? (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowBondedImport(true)}
+                  className="rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                  aria-label="טעינת קובץ בונדד"
+                >
+                  בונדד
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/operator/manual/lines?mode=demand&intent=append-current-shift&targetShiftId=${shift.id}`)}
+                  className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100"
+                  aria-label="הוסף הזמנות למשמרת"
+                >
+                  <Plus size={14} className="inline -ms-0.5 me-0.5" />
+                  הוסף הזמנות למשמרת
+                </button>
+              </div>
             ) : undefined
           }
           contextualRow={
@@ -499,8 +512,20 @@ export function ManualOperatorWorkSection({
       {showAddLine && shift && !isReadOnly && (
         <AddLineSheet shiftId={shift.id} onClose={() => setShowAddLine(false)} />
       )}
+          {shift && shift.status === 'active' && (
+            <div className="mx-4 space-y-3">
+              <button
+                type="button"
+                onClick={() => navigate(`/operator/manual/lines?mode=demand&intent=append-current-shift&targetShiftId=${shift.id}`)}
+                className="w-full border border-blue-200 bg-blue-50 text-blue-700 font-medium py-3 rounded-xl text-sm"
+              >
+                <Plus size={16} className="inline -ms-0.5 me-0.5" />
+                הוסף הזמנות למשמרת
+              </button>
+            </div>
+          )}
           {shift && (
-            <div className="mx-4">
+            <div className="mx-4 mt-3">
               <button
                 type="button"
                 onClick={() => setShowBondedImport(true)}

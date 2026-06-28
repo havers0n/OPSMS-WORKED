@@ -13,7 +13,7 @@ import { translateBffError } from '@/shared/i18n';
 import { useNavigate } from 'react-router-dom';
 import { saveDemandLastContext } from '@/entities/demand/lib/last-context';
 
-export function DatasheetImportPanel({ shiftId }: { shiftId?: string | null }) {
+export function DatasheetImportPanel({ shiftId, appendTargetDate }: { shiftId?: string | null; appendTargetDate?: string | null }) {
   const navigate = useNavigate();
   const previewMutation = usePreviewDataSheetDemandImport();
   const createMutation = useCreateDataSheetDemandImport();
@@ -326,7 +326,8 @@ export function DatasheetImportPanel({ shiftId }: { shiftId?: string | null }) {
           onClick={() => {
             createDraftMutation.mutate(batchId, {
               onSuccess: (result) => {
-                const url = `/operator/manual/lines?batchId=${batchId}&draftId=${result.draft.id}&mode=demand`;
+                const targetDateParam = appendTargetDate ? `&targetDate=${appendTargetDate}` : '';
+                const url = `/operator/manual/lines?batchId=${batchId}&draftId=${result.draft.id}&mode=demand${targetDateParam}`;
                 saveDemandLastContext({
                   mode: 'demand',
                   batchId,
@@ -348,7 +349,7 @@ export function DatasheetImportPanel({ shiftId }: { shiftId?: string | null }) {
           ) : (
             <ExternalLink size={16} />
           )}
-          {createDraftMutation.isPending ? 'יוצר תכנון...' : 'פתח תכנון ב-Lines'}
+          {createDraftMutation.isPending ? 'יוצר תכנון...' : appendTargetDate ? 'פתח תכנון והוספה למשמרת' : 'פתח תכנון ב-Lines'}
         </button>
       )}
 

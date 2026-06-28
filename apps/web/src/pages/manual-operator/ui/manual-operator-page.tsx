@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import type { ManualShiftLineSummary, ManualShiftSession } from '@wos/domain';
-import { shiftByDateQueryOptions } from '@/entities/manual-shift/api/queries';
+import { shiftByDateQueryOptions, shiftByIdQueryOptions } from '@/entities/manual-shift/api/queries';
 import { useCreateShift } from '@/entities/manual-shift/api/mutations';
 import { useMediaQuery } from '@/shared/hooks/use-media-query';
 import { useAuth } from '@/app/providers/auth-provider';
@@ -24,6 +24,7 @@ import { ManualOperatorShell } from './manual-operator-shell';
 import { ManualOperatorWorkSection } from './manual-operator-work-section';
 import { SchemeBuilder } from './scheme-builder';
 import { AppendModePanel } from './scheme-builder/append-mode-panel';
+import { AppendCurrentShiftFlow } from './append-current-shift-flow';
 import { DemandTargetDateSelector } from './demand-target-date-selector';
 import { PrintingHomePage } from '../printing/routes/PrintingHomePage';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -84,8 +85,13 @@ function ManualOperatorSectionContent({
   batchId,
   draftId,
   mode,
+  intent,
   shiftIdFromParams,
-  targetDate
+  targetShiftIdParam,
+  targetDate,
+  targetShift,
+  isLoading,
+  canImportExcelByRole
 }: {
   section: ManualOperatorSection;
   shift: ManualShiftSession | null;
@@ -97,8 +103,13 @@ function ManualOperatorSectionContent({
   batchId: string | null;
   draftId: string | null;
   mode: string | null;
+  intent: string | null;
   shiftIdFromParams: string | null;
+  targetShiftIdParam: string | null;
   targetDate: string | null;
+  targetShift: ManualShiftSession | null;
+  isLoading: boolean;
+  canImportExcelByRole: boolean;
 }) {
   if (section === 'summary') {
     return shift ? (
@@ -119,6 +130,17 @@ function ManualOperatorSectionContent({
   }
 
   if (section === 'lines') {
+    const isAppendCurrentShift = mode === 'demand' && intent === 'append-current-shift';
+    if (isAppendCurrentShift) {
+      const resolvedTargetShiftId = targetShiftIdParam ?? shiftIdFromParams ?? '';
+      return (
+        <AppendCurrentShiftFlow
+          targetShiftId={resolvedTargetShiftId}
+          batchId={batchId}
+          draftId={draftId}
+        />
+      );
+    }
     const isDemandMode = mode === 'demand' && !!batchId && !!draftId;
     if (mode === 'append' && shiftIdFromParams && batchId) {
       return <AppendModePanel shiftId={shiftIdFromParams} batchId={batchId} />;
@@ -146,6 +168,11 @@ function ManualOperatorSectionContent({
         selectedDate={selectedDate}
         canMonthlyImport={canMonthlyImport}
         hasExistingWork={hasExistingWork}
+        isLoading={isLoading}
+        canImportExcelByRole={canImportExcelByRole}
+        mode={mode}
+        targetShiftId={shiftIdFromParams}
+        targetDate={targetDate}
       />
     );
   }
@@ -177,8 +204,10 @@ export function ManualOperatorPage() {
   const batchId = searchParams.get('batchId');
   const draftId = searchParams.get('draftId');
   const mode = searchParams.get('mode');
+  const intent = searchParams.get('intent');
   const shiftIdFromParams = searchParams.get('shiftId');
   const targetDate = searchParams.get('targetDate');
+  const targetShiftIdParam = searchParams.get('targetShiftId');
   const [showTargetDatePicker, setShowTargetDatePicker] = useState(false);
   const targetMaxDate = addDays(todayDate, 90);
 
@@ -189,7 +218,29 @@ export function ManualOperatorPage() {
   const isReadOnly = !isToday || shift?.status === 'closed';
   const isDemandPlanningRoute = section === 'lines' && mode === 'demand' && !!batchId && !!draftId;
   const isAppendRoute = section === 'lines' && mode === 'append' && !!shiftIdFromParams && !!batchId;
-  const hasExistingWork = lines.length > 0;
+  const isAppendCurrentShiftRoute = section === 'lines' && mode === 'demand' && intent === 'append-current-shift';
+  const hasShiftIdParam = (!!shiftIdFromParams && !isDemandPlanningRoute) || (isAppendCurrentShiftRoute && !!targetShiftIdParam);
+
+  const effectiveShiftIdParam = isAppendCurrentShiftRoute ? targetShiftIdParam : shiftIdFromParams;
+  const byDateQuery = useQuery(
+    shiftByDateQueryOptions(hasShiftIdParam ? '' : selectedDate)
+  );
+  const byIdQuery = useQuery(
+    shiftByIdQueryOptions(effectiveShiftIdParam ?? '')
+  );
+  const { data: shiftData, isLoading } = hasShiftIdParam ? byIdQuery : byDateQuery;
+  const resolvedShift = shiftData?.shift ?? null;
+  const resolvedLines = shiftData?.lines ?? [];
+  const effectiveDate = resolvedShift?.date ?? selectedDate;
+  const effectiveToday = effectiveDate === todayDate;
+  const isReadOnly = !effectiveToday || resolvedShift?.status === 'closed';
+  const hasExistingWork = resolvedLines.length > 0;
+
+  const { data: demandDraftData } = useQuery({
+    ...demandPlanningDraftQueryOptions(draftId ?? ''),
+    enabled: isDemandPlanningRoute,
+  });
+  const isAppliedDemandDraft = demandDraftData?.draft.status === 'applied';
 
   const { data: targetShiftData, isLoading: isTargetShiftLoading } = useQuery({
     ...shiftByDateQueryOptions(targetDate ?? ''),
@@ -203,7 +254,7 @@ export function ManualOperatorPage() {
     : memberships[0] ?? null;
   const canImportExcelByRole =
     currentMembership?.role === 'tenant_admin' || currentMembership?.role === 'platform_admin';
-  const canMonthlyImport = !!shift && shift.status === 'active' && canImportExcelByRole;
+  const canMonthlyImport = !!resolvedShift && resolvedShift.status === 'active' && canImportExcelByRole;
 
   useEffect(() => {
     if (!section || typeof window === 'undefined') return;
@@ -291,22 +342,24 @@ export function ManualOperatorPage() {
       batchId={batchId}
       draftId={draftId}
       mode={mode}
+      intent={intent}
       shiftIdFromParams={shiftIdFromParams}
+      targetShiftIdParam={targetShiftIdParam}
       targetDate={targetDate}
     />
   );
-  const renderSectionWithoutShift = section === 'import' || section === 'printing' || isDemandPlanningRoute || isAppendRoute;
+  const renderSectionWithoutShift = section === 'import' || section === 'printing' || isDemandPlanningRoute || isAppendRoute || isAppendCurrentShiftRoute;
 
   if (section === 'work') {
     return (
       <>
         <ManualOperatorWorkSection
           key={selectedDate}
-          shift={shift}
-          lines={lines}
+          shift={resolvedShift}
+          lines={resolvedLines}
           isLoading={isLoading}
           isReadOnly={isReadOnly}
-          isToday={isToday}
+          isToday={effectiveToday}
           canMonthlyImport={canMonthlyImport}
           hasExistingWork={hasExistingWork}
           isDesktop={isDesktop}
@@ -335,7 +388,7 @@ export function ManualOperatorPage() {
       <ManualOperatorShell
         activeSection={section}
         onChangeSection={handleChangeSection}
-        shift={shift}
+        shift={resolvedShift}
         selectedDate={selectedDate}
         todayDate={todayDate}
         onOpenDatePicker={() => setShowDatePicker(true)}
@@ -346,7 +399,11 @@ export function ManualOperatorPage() {
             <span className="rounded border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
               הוספת ביקוש גולמי לקווים קיימים
             </span>
-          ) : isDesktop && section === 'lines' && mode === 'demand' && batchId && draftId ? (
+          ) : isDesktop && section === 'lines' && isAppendCurrentShiftRoute ? (
+            <span className="rounded border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+              הוספת הזמנות למשמרת קיימת
+            </span>
+          ) : isDesktop && section === 'lines' && mode === 'demand' && batchId && draftId && !isAppliedDemandDraft && !isAppendCurrentShiftRoute ? (
             <DemandTargetDateSelector
               targetDate={targetDate}
               targetShift={targetShift}
@@ -397,8 +454,8 @@ export function ManualOperatorPage() {
           <div className="flex items-center justify-center py-20" dir="rtl">
             <Loader2 size={32} className="animate-spin text-gray-400" />
           </div>
-        ) : !shift && !renderSectionWithoutShift ? (
-          <ShiftEmptyState onCreateShift={handleCreateShift} isCreating={createShift.isPending} isToday={isToday} />
+        ) : !resolvedShift && !renderSectionWithoutShift ? (
+          <ShiftEmptyState onCreateShift={handleCreateShift} isCreating={createShift.isPending} isToday={effectiveToday} />
         ) : isDesktop && section !== 'lines' && section !== 'products' ? (
           <div className="mx-auto max-w-4xl px-4 py-6">
             {sectionContent}
