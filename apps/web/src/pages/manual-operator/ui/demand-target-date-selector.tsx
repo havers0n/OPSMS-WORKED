@@ -90,7 +90,7 @@ export function DemandTargetDateSelector({
       <button
         type="button"
         onClick={() => onNavigateToAppend(targetShift.id)}
-        className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+        className="px-1 py-0.5 text-[11px] font-normal text-gray-400 underline underline-offset-2 hover:text-gray-600 transition-colors"
       >
         בדוק התאמה למשמרת
       </button>

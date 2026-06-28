@@ -319,6 +319,7 @@ export type ManualShiftsService = {
   getDemandPlanningPreview(input: {
     tenantId: string;
     batchId: string;
+    scope?: 'all' | 'remaining';
   }): Promise<RawDemandPlanningPreview>;
   applyMonthlyImport(input: {
     tenantId: string;
@@ -371,6 +372,7 @@ export type ManualShiftsService = {
     tenantId: string;
     batchId: string;
     createdBy: string | null;
+    sourceScope?: 'all' | 'remaining';
   }): Promise<DemandPlanningDraftWithAssignments>;
   getDemandPlanningDraft(input: {
     tenantId: string;
@@ -582,6 +584,39 @@ export function createManualShiftsServiceFromRepo(
     }
 
     return shift;
+  }
+
+  async function listScopedRawDemandRows(input: {
+    tenantId: string;
+    batchId: string;
+    scope?: 'all' | 'remaining';
+  }) {
+    const rows = await repo.listRawDemandRowsByBatch({
+      tenantId: input.tenantId,
+      batchId: input.batchId
+    });
+
+    if (input.scope !== 'remaining') return rows;
+
+    const published = repo.listPublishedDemandQuantities
+      ? await repo.listPublishedDemandQuantities({
+          tenantId: input.tenantId,
+          batchId: input.batchId
+        })
+      : [];
+    const publishedByRowId = new Map<string, number>();
+    for (const entry of published) {
+      publishedByRowId.set(
+        entry.rawDemandRowId,
+        (publishedByRowId.get(entry.rawDemandRowId) ?? 0) + entry.publishedQuantity
+      );
+    }
+
+    return rows.flatMap((row) => {
+      if (row.planningStatus !== 'unplanned') return [row];
+      const remainingQuantity = Math.max(0, (row.quantity ?? 0) - (publishedByRowId.get(row.id) ?? 0));
+      return remainingQuantity > 0 ? [{ ...row, quantity: remainingQuantity }] : [];
+    });
   }
 
   async function requireLine(lineId: string) {
@@ -1538,10 +1573,7 @@ export function createManualShiftsServiceFromRepo(
           tenantId: input.tenantId,
           batchId: input.batchId
         }),
-        repo.listRawDemandRowsByBatch({
-          tenantId: input.tenantId,
-          batchId: input.batchId
-        })
+        listScopedRawDemandRows(input)
       ]);
 
       return buildRawDemandPlanningPreview({
@@ -2625,9 +2657,10 @@ export function createManualShiftsServiceFromRepo(
           tenantId: input.tenantId,
           batchId: input.batchId
         }),
-        repo.listRawDemandRowsByBatch({
+        listScopedRawDemandRows({
           tenantId: input.tenantId,
-          batchId: input.batchId
+          batchId: input.batchId,
+          scope: input.sourceScope
         })
       ]);
 
@@ -2636,7 +2669,8 @@ export function createManualShiftsServiceFromRepo(
       const draft = await repo.createDemandPlanningDraft({
         tenantId: input.tenantId,
         batchId: input.batchId,
-        createdBy: input.createdBy
+        createdBy: input.createdBy,
+        sourceScope: input.sourceScope
       });
 
       // Create initial bucket per area (one default "unassigned" bucket per area)
@@ -2718,7 +2752,8 @@ export function createManualShiftsServiceFromRepo(
       const rowsById = new Map(rows.map((r) => [r.id, r]));
 
       for (const alloc of input.allocations) {
-        if (!rowsById.has(alloc.rawDemandRowId)) {
+        const row = rowsById.get(alloc.rawDemandRowId);
+        if (!row || row.batchId !== draft.batchId) {
           throw demandPlanningRawDemandRowNotFound(alloc.rawDemandRowId);
         }
       }
@@ -2865,6 +2900,10 @@ export function createManualShiftsServiceFromRepo(
               throw demandPlanningTargetDateAmbiguous(input.draftId, []);
             case 'NO_PUBLISHABLE_ROWS':
               throw demandPlanningNoPublishableRows(input.draftId);
+            case 'DEMAND_PLANNING_DEMAND_ALREADY_CONSUMED':
+              throw new ApiError(409, 'DEMAND_PLANNING_DEMAND_ALREADY_CONSUMED', 'Raw demand quantity was already published by another draft.');
+            case 'DEMAND_PLANNING_DRAFT_SOURCE_MISMATCH':
+              throw new ApiError(422, 'DEMAND_PLANNING_DRAFT_SOURCE_MISMATCH', 'Draft allocations must belong to the draft source batch.');
             case 'FORBIDDEN':
               throw new ApiError(403, 'FORBIDDEN', 'You are not authorized to perform this action.');
             default:

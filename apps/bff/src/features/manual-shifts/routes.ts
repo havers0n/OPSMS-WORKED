@@ -70,6 +70,8 @@ import {
   productControlResponseSchema as manualShiftProductControlResponseSchema,
   pickerSheetPrintDataSchema,
   demandPlanningDraftWithAssignmentsResponseSchema,
+  demandPlanningPreviewQueryParamsSchema,
+  demandPlanningCreateDraftRequestBodySchema,
   demandPlanningPutPlanRequestBodySchema,
   demandPlanningPublishToShiftRequestBodySchema,
   demandPlanningPublishToShiftResponseBodySchema,
@@ -817,6 +819,7 @@ export function registerManualShiftsRoutes(
       const { id: batchId } = parseOrThrow(idResponseSchema, {
         id: request.params && typeof request.params === 'object' ? (request.params as Record<string, unknown>).batchId : null
       });
+      const query = parseOrThrow(demandPlanningPreviewQueryParamsSchema, request.query ?? {});
 
       logImportStage(request, '/api/demand-imports/:batchId/planning-preview', 'tenant_resolved', {
         tenantId,
@@ -825,7 +828,8 @@ export function registerManualShiftsRoutes(
 
       const result = await getManualShiftsService(auth).getDemandPlanningPreview({
         tenantId,
-        batchId
+        batchId,
+        scope: query.scope
       });
 
       return parseOrThrow(rawDemandPlanningPreviewResponseSchema, result);
@@ -843,11 +847,13 @@ export function registerManualShiftsRoutes(
       const { id: batchId } = parseOrThrow(idResponseSchema, {
         id: request.params && typeof request.params === 'object' ? (request.params as Record<string, unknown>).batchId : null
       });
+      const body = parseOrThrow(demandPlanningCreateDraftRequestBodySchema, request.body ?? {});
 
       const result = await getManualShiftsService(auth).createDemandPlanningDraft({
         tenantId,
         batchId,
-        createdBy: auth.user.id ?? null
+        createdBy: auth.user.id ?? null,
+        sourceScope: body.scope
       });
 
       void reply.code(201);

@@ -180,6 +180,13 @@ function installDemandMocks({
       return Promise.resolve(makePreview());
     }
 
+    if (path.includes(`/api/demand-imports/${BATCH_ID}/planning-drafts`) && init?.method === 'POST') {
+      return Promise.resolve({
+        ...makeDraft('draft'),
+        draft: { ...makeDraft('draft').draft, id: 'd0000000-0000-4000-8000-000000000002', sourceScope: 'remaining' },
+      });
+    }
+
     if (path.endsWith(`/api/demand-planning-drafts/${DRAFT_ID}`) || path.includes(`/demand-planning-drafts/${DRAFT_ID}`) && !path.includes('/plan') && !path.includes('/publish-to-shift')) {
       return Promise.resolve(makeDraft(draftStatus));
     }
@@ -256,6 +263,26 @@ describe('SchemeBuilder demand lifecycle hardening', () => {
     const planCalls = mockBffRequest.mock.calls.filter(([url, init]) =>
       String(url).includes(`/demand-planning-drafts/${DRAFT_ID}/plan`) && (init as RequestInit | undefined)?.method === 'PUT',
     );
+    expect(planCalls).toHaveLength(0);
+  });
+
+  it('creates a new remaining-scoped draft without mutating the applied draft', async () => {
+    installDemandMocks({ draftStatus: 'applied', targetShiftId: TARGET_SHIFT_ID });
+    renderBuilder(TARGET_SHIFT_ID);
+
+    const button = await screen.findByRole('button', { name: 'שבץ יתרה לתאריך אחר' });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      const createCall = mockBffRequest.mock.calls.find(([url, init]) =>
+        String(url).includes(`/api/demand-imports/${BATCH_ID}/planning-drafts`) && (init as RequestInit | undefined)?.method === 'POST'
+      );
+      expect(createCall).toBeTruthy();
+      expect(JSON.parse(String((createCall?.[1] as RequestInit).body))).toEqual({ scope: 'remaining' });
+      expect(screen.getByTestId('location')).toHaveTextContent('draftId=d0000000-0000-4000-8000-000000000002');
+    });
+
+    const planCalls = mockBffRequest.mock.calls.filter(([url]) => String(url).includes(`/${DRAFT_ID}/plan`));
     expect(planCalls).toHaveLength(0);
   });
 

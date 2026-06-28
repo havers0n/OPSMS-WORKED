@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { buildRawDemandPlanningPreview, parseDemandImportDataSheetPreview } from './demand-import-datasheet';
+import {
+  buildRawDemandPlanningPreview,
+  demandPlanningCreateDraftRequestSchema,
+  demandPlanningPreviewQuerySchema,
+  demandPlanningPublishToShiftRequestSchema,
+  demandPlanningPublishToShiftResponseSchema,
+  parseDemandImportDataSheetPreview
+} from './demand-import-datasheet';
 
 function buildRow(overrides: Partial<Parameters<typeof parseDemandImportDataSheetPreview>[0]['rows'][number]> = {}) {
   return {
@@ -155,6 +162,38 @@ describe('demand import DataSheet parser', () => {
       { raw: '25.06.26', normalized: '2026-06-25' }
     ]);
     expect(result.rows[0].plannedDeliveryDate).toBeNull();
+  });
+});
+
+describe('demand planning publish schemas', () => {
+  it('defaults preview and draft creation to all, and accepts remaining scope', () => {
+    expect(demandPlanningPreviewQuerySchema.parse({})).toEqual({ scope: 'all' });
+    expect(demandPlanningCreateDraftRequestSchema.parse({ scope: 'remaining' })).toEqual({ scope: 'remaining' });
+  });
+
+  it('accepts publish request body', () => {
+    expect(demandPlanningPublishToShiftRequestSchema.parse({
+      targetShiftId: '11111111-1111-4111-8111-111111111111'
+    })).toMatchObject({
+      targetShiftId: '11111111-1111-4111-8111-111111111111'
+    });
+  });
+
+  it('accepts publish summary response', () => {
+    expect(demandPlanningPublishToShiftResponseSchema.parse({
+      shiftId: '11111111-1111-4111-8111-111111111111',
+      draftId: '22222222-2222-4222-8222-222222222222',
+      createdLines: 1,
+      reusedLines: 0,
+      createdOrders: 2,
+      updatedOrders: 0,
+      createdItems: 3,
+      skippedRows: 1,
+      warnings: ['date could not be verified']
+    })).toMatchObject({
+      createdOrders: 2,
+      warnings: ['date could not be verified']
+    });
   });
 });
 

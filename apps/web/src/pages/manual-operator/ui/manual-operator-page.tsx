@@ -27,6 +27,7 @@ import { DemandTargetDateSelector } from './demand-target-date-selector';
 import { PrintingHomePage } from '../printing/routes/PrintingHomePage';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { getDemandLastContext, clearDemandLastContext, saveDemandLastContext } from '@/entities/demand/lib/last-context';
+import { demandPlanningDraftQueryOptions } from '@/entities/demand/api/queries';
 
 const LAST_SECTION_PATH_PREFIX = 'manual-operator:last-section:';
 
@@ -206,6 +207,12 @@ export function ManualOperatorPage() {
   const effectiveToday = effectiveDate === todayDate;
   const isReadOnly = !effectiveToday || resolvedShift?.status === 'closed';
   const hasExistingWork = resolvedLines.length > 0;
+
+  const { data: demandDraftData } = useQuery({
+    ...demandPlanningDraftQueryOptions(draftId ?? ''),
+    enabled: isDemandPlanningRoute,
+  });
+  const isAppliedDemandDraft = demandDraftData?.draft.status === 'applied';
 
   const { data: targetShiftData, isLoading: isTargetShiftLoading } = useQuery({
     ...shiftByDateQueryOptions(targetDate ?? ''),
@@ -391,7 +398,7 @@ export function ManualOperatorPage() {
             <span className="rounded border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
               הוספת ביקוש גולמי לקווים קיימים
             </span>
-          ) : isDesktop && section === 'lines' && mode === 'demand' && batchId && draftId ? (
+          ) : isDesktop && section === 'lines' && mode === 'demand' && batchId && draftId && !isAppliedDemandDraft ? (
             <DemandTargetDateSelector
               targetDate={targetDate}
               targetShift={targetShift}
@@ -461,7 +468,7 @@ export function ManualOperatorPage() {
           onClose={() => setShowDatePicker(false)}
         />
       )}
-      {showTargetDatePicker && (
+      {showTargetDatePicker && !isAppliedDemandDraft && (
         <ShiftDatePicker
           selectedDate={targetDate ?? todayDate}
           todayDate={todayDate}

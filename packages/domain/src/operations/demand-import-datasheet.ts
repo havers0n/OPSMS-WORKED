@@ -273,6 +273,9 @@ export type RawDemandPlanningPreview = z.infer<typeof rawDemandPlanningPreviewSc
 
 // --- Demand Planning Draft schemas ---
 
+export const demandPlanningSourceScopeSchema = z.enum(['all', 'remaining']);
+export type DemandPlanningSourceScope = z.infer<typeof demandPlanningSourceScopeSchema>;
+
 export const demandPlanningDraftStatusSchema = z.enum(['draft', 'ready', 'cancelled', 'applied']);
 export type DemandPlanningDraftStatus = z.infer<typeof demandPlanningDraftStatusSchema>;
 
@@ -281,6 +284,7 @@ export const demandPlanningDraftSchema = z.object({
   tenantId: z.string().uuid(),
   batchId: z.string().uuid(),
   status: demandPlanningDraftStatusSchema,
+  sourceScope: demandPlanningSourceScopeSchema.optional(),
   createdBy: z.string().uuid().nullable(),
   createdAt: z.string().datetime({ offset: true }),
   updatedAt: z.string().datetime({ offset: true })
@@ -321,6 +325,16 @@ export const demandPlanningDraftWithAssignmentsSchema = z.object({
 });
 export type DemandPlanningDraftWithAssignments = z.infer<typeof demandPlanningDraftWithAssignmentsSchema>;
 
+export const demandPlanningPreviewQuerySchema = z.object({
+  scope: demandPlanningSourceScopeSchema.default('all')
+});
+export type DemandPlanningPreviewQuery = z.infer<typeof demandPlanningPreviewQuerySchema>;
+
+export const demandPlanningCreateDraftRequestSchema = z.object({
+  scope: demandPlanningSourceScopeSchema.default('all')
+});
+export type DemandPlanningCreateDraftRequest = z.infer<typeof demandPlanningCreateDraftRequestSchema>;
+
 export const demandPlanningPutPlanBucketSchema = z.object({
   distributionArea: z.string().nullable(),
   planningLineName: z.string().min(1),
@@ -338,6 +352,24 @@ export const demandPlanningPutPlanRequestSchema = z.object({
   allocations: z.array(demandPlanningPutPlanAllocationSchema)
 });
 export type DemandPlanningPutPlanRequest = z.infer<typeof demandPlanningPutPlanRequestSchema>;
+
+export const demandPlanningPublishToShiftRequestSchema = z.object({
+  targetShiftId: z.string().uuid()
+});
+export type DemandPlanningPublishToShiftRequest = z.infer<typeof demandPlanningPublishToShiftRequestSchema>;
+
+export const demandPlanningPublishToShiftResponseSchema = z.object({
+  shiftId: z.string().uuid(),
+  draftId: z.string().uuid(),
+  createdLines: z.number().int().min(0),
+  reusedLines: z.number().int().min(0),
+  createdOrders: z.number().int().min(0),
+  updatedOrders: z.number().int().min(0),
+  createdItems: z.number().int().min(0),
+  skippedRows: z.number().int().min(0),
+  warnings: z.array(z.string())
+});
+export type DemandPlanningPublishToShiftResponse = z.infer<typeof demandPlanningPublishToShiftResponseSchema>;
 
 export const demandImportDataSheetParsedRowSchema = z.object({
   sourceRowNumber: z.number().int().min(1),
