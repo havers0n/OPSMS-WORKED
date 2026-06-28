@@ -679,6 +679,14 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
       oldestItemSeenAt: null,
       newestItemSeenAt: null
     })),
+    revertDemandPlanningPublication: vi.fn(async () => ({
+      publicationId: '',
+      draftId: '',
+      shiftId: '',
+      revertedOrders: 0,
+      revertedItems: 0,
+      releasedQuantity: 0
+    })),
     ...overrides
   };
 }
@@ -1779,7 +1787,27 @@ describe('manual shifts routes', () => {
     });
     expect(service.getDemandPlanningPreview).toHaveBeenCalledWith({
       tenantId: ids.tenant,
-      batchId: '77777777-7777-4777-8777-777777777777'
+      batchId: '77777777-7777-4777-8777-777777777777',
+      scope: 'all'
+    });
+
+    await app.close();
+  });
+
+  it('forwards remaining scope to the server-side planning preview', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/demand-imports/77777777-7777-4777-8777-777777777777/planning-preview?scope=remaining'
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(service.getDemandPlanningPreview).toHaveBeenCalledWith({
+      tenantId: ids.tenant,
+      batchId: '77777777-7777-4777-8777-777777777777',
+      scope: 'remaining'
     });
 
     await app.close();
@@ -3631,6 +3659,29 @@ describe('demand planning draft routes', () => {
     const body = JSON.parse(response.payload);
     expect(body.draft.status).toBe('draft');
     expect(body.buckets).toHaveLength(1);
+    expect(service.createDemandPlanningDraft).toHaveBeenCalledWith(expect.objectContaining({
+      batchId,
+      sourceScope: 'all'
+    }));
+
+    await app.close();
+  });
+
+  it('POST planning-drafts accepts remaining scope for a new immutable draft', async () => {
+    const service = createDemandMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/demand-imports/${batchId}/planning-drafts`,
+      payload: { scope: 'remaining' }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(service.createDemandPlanningDraft).toHaveBeenCalledWith(expect.objectContaining({
+      batchId,
+      sourceScope: 'remaining'
+    }));
 
     await app.close();
   });

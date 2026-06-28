@@ -4,7 +4,7 @@ import { AlertCircle, ChevronDown, ChevronUp, Save, Search, X } from 'lucide-rea
 import { useNavigate } from 'react-router-dom';
 import { workHierarchyQueryOptions, orderItemsQueryOptions } from '@/entities/manual-shift/api/queries';
 import { demandPlanningPreviewQueryOptions, demandPlanningDraftQueryOptions } from '@/entities/demand/api/queries';
-import { usePutDemandPlanningPlan, usePublishDemandPlanningDraftToShift } from '@/entities/demand/api/mutations';
+import { useCreateDemandPlanningDraft, usePutDemandPlanningPlan, usePublishDemandPlanningDraftToShift, useRevertDemandPlanningPublication } from '@/entities/demand/api/mutations';
 import { saveDemandLastContext } from '@/entities/demand/lib/last-context';
 import { BffRequestError } from '@/shared/api/bff/client';
 import { useSchemeBuilderStore } from './scheme-store';
@@ -56,13 +56,6 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   });
 
   const {
-    data: planningPreview, isLoading: previewLoading, error: previewError
-  } = useQuery({
-    ...demandPlanningPreviewQueryOptions(batchId ?? ''),
-    enabled: isDemandMode && !!batchId,
-  });
-
-  const {
     data: draftWithAssignments, isLoading: draftLoading, error: draftError, refetch: refetchDraft
   } = useQuery({
     ...demandPlanningDraftQueryOptions(draftId ?? ''),
@@ -74,6 +67,23 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     : 'planningDraft';
   const publishUiMode: DemandPlanningPublishUiMode = targetShiftId ? 'readyToPublish' : 'noTargetShift';
   const isPublishedDraft = isDemandMode && draftUiMode === 'publishedDraft';
+  const draftPublication = isPublishedDraft ? draftWithAssignments?.publication ?? null : null;
+  const canRevert = draftPublication?.status === 'applied' && (draftWithAssignments?.canRevert ?? false);
+  const revertBlockedReason = draftWithAssignments?.revertBlockedReason ?? null;
+  const sourceScope = isPublishedDraft ? 'all' : (draftWithAssignments?.draft.sourceScope ?? 'all');
+  const {
+    data: planningPreview, isLoading: previewLoading, error: previewError
+  } = useQuery({
+    ...demandPlanningPreviewQueryOptions(batchId ?? '', sourceScope),
+    enabled: isDemandMode && !!batchId && !!draftWithAssignments,
+  });
+
+  const { data: remainingPreview } = useQuery({
+    ...demandPlanningPreviewQueryOptions(batchId ?? '', 'remaining'),
+    enabled: isPublishedDraft && !!batchId,
+  });
+  const hasRemainingDemand = (remainingPreview?.summary.normalRowsCount ?? 0) > 0
+    && (remainingPreview?.summary.totalQuantity ?? 0) > 0;
 
   const capabilities: SchemeBuilderCapabilities = useMemo(() => {
     if (isDemandMode) {
@@ -119,6 +129,8 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   const savePlan = usePutDemandPlanningPlan();
   const publishPlan = usePublishDemandPlanningDraftToShift();
   const [publishResult, setPublishResult] = useState<{ createdLines: number; createdOrders: number; createdItems: number; skippedRows: number; warnings: string[] } | null>(null);
+  const createDraft = useCreateDemandPlanningDraft();
+  const revertPublication = useRevertDemandPlanningPublication();
   const [publishError, setPublishError] = useState<string | null>(null);
 
   const [drawerOrderId, setDrawerOrderId] = useState<string | null>(null);
@@ -495,6 +507,9 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
 
   function getPublishErrorMessage(err: unknown): string {
     if (isDraftNotMutableError(err)) return 'הטיוטה כבר פורסמה למשמרת';
+    if (err instanceof BffRequestError && err.code === 'DEMAND_PLANNING_DEMAND_ALREADY_CONSUMED') {
+      return 'חלק מהביקוש כבר פורסם מטיוטה אחרת. טען מחדש את היתרה.';
+    }
     const msg = err instanceof Error ? err.message : '';
     if (msg.includes('NO_PUBLISHABLE_ROWS')) return 'אין שורות לפרסום למשמרת';
     if (msg.includes('already applied') || msg.includes('NOT_MUTABLE')) return 'הטיוטה כבר פורסמה למשמרת';
@@ -511,6 +526,42 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     if (!targetShiftId) return;
     navigate(`/operator/manual/work?shiftId=${targetShiftId}`);
   }, [navigate, targetShiftId]);
+
+  const handlePlanRemaining = useCallback(() => {
+    if (!batchId || !isPublishedDraft || !hasRemainingDemand) return;
+    createDraft.mutate(
+      { batchId, scope: 'remaining' },
+      {
+        onSuccess: (result) => {
+          const url = `/operator/manual/lines?batchId=${batchId}&draftId=${result.draft.id}&mode=demand`;
+          saveDemandLastContext({
+            mode: 'demand',
+            batchId,
+            draftId: result.draft.id,
+            url,
+            savedAt: new Date().toISOString(),
+            sourceFile: remainingPreview?.batch.sourceFile,
+            sourceSheet: remainingPreview?.batch.sourceSheet,
+          });
+          navigate(url);
+        },
+      }
+    );
+  }, [batchId, isPublishedDraft, hasRemainingDemand, createDraft, navigate, remainingPreview]);
+
+  const handleRevertPublication = useCallback(() => {
+    if (!draftPublication) return;
+    revertPublication.mutate(draftPublication.id, {
+      onSuccess: (_data) => {
+        setPublishResult(null);
+        setPublishError(null);
+        void refetchDraft();
+      },
+      onError: () => {
+        void refetchDraft();
+      },
+    });
+  }, [draftPublication, revertPublication, refetchDraft]);
 
   const isLoading = isDemandMode ? (previewLoading || draftLoading) : hierarchyLoading;
   const error = isDemandMode ? (previewError || draftError) : hierarchyError;
@@ -602,6 +653,13 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
               publishResult={publishResult}
               publishError={publishError}
               onNavigateToWork={targetShiftId ? handleNavigateToWork : undefined}
+              hasRemainingDemand={hasRemainingDemand}
+              isCreatingRemainingDraft={createDraft.isPending}
+              onPlanRemaining={handlePlanRemaining}
+              canRevert={canRevert}
+              revertBlockedReason={revertBlockedReason}
+              isReverting={revertPublication.isPending}
+              onRevert={canRevert ? handleRevertPublication : undefined}
             />
           )}
 
