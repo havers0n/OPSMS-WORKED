@@ -25,6 +25,7 @@ interface PublishSummaryProps {
   revertBlockedReason?: string | null;
   isReverting?: boolean;
   onRevert?: () => void;
+  intent?: 'plan-for-date' | 'append-current-shift';
 }
 
 export function PublishSummary({
@@ -45,6 +46,7 @@ export function PublishSummary({
   revertBlockedReason = null,
   isReverting = false,
   onRevert,
+  intent,
 }: PublishSummaryProps) {
   const planningLines = useSchemeBuilderStore((s) => s.planningLines);
   const workGroups = useSchemeBuilderStore((s) => s.workGroups);
@@ -57,7 +59,13 @@ export function PublishSummary({
   const totalEstimatedRows = orders.reduce((acc, o) => acc + o.itemLinesCount, 0);
   const groupCount = workGroups.length;
   const planningLineCount = planningLines.length;
+  const isPlanForDate = intent === 'plan-for-date';
+  const isAppendCurrentShift = intent === 'append-current-shift';
   const isPublishedDraft = draftUiMode === 'publishedDraft';
+
+  const publishLabel = isAppendCurrentShift ? 'הוסף למשמרת' : 'פרסם לעבודה';
+  const publishingLabel = 'מפרסם...';
+  const successLabel = isPlanForDate ? 'עבור לעבודה' : 'חזרה לעבודה';
 
   if (publishResult || isPublishedDraft) {
     return (
@@ -109,7 +117,7 @@ export function PublishSummary({
             onClick={onNavigateToWork}
             className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors"
           >
-            <span>פתח עבודה</span>
+            <span>{successLabel}</span>
             <ArrowRight size={14} />
           </button>
         )}
@@ -203,12 +211,12 @@ export function PublishSummary({
           {isPublishing ? (
             <>
               <Loader2 size={16} className="animate-spin" />
-              מפרסם...
+              {publishingLabel}
             </>
           ) : (
             <>
               <Send size={16} />
-              פרסם למשמרת
+              {publishLabel}
             </>
           )}
         </button>

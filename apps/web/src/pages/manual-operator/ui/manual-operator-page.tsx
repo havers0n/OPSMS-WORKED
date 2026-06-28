@@ -25,9 +25,11 @@ import { SchemeBuilder } from './scheme-builder';
 import { AppendModePanel } from './scheme-builder/append-mode-panel';
 import { AppendCurrentShiftFlow } from './append-current-shift-flow';
 import { DemandTargetDateSelector } from './demand-target-date-selector';
+import { LinesLanding } from './lines-landing';
+import { PlanForDateFlow } from './plan-for-date-flow';
 import { PrintingHomePage } from '../printing/routes/PrintingHomePage';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { getDemandLastContext, clearDemandLastContext, saveDemandLastContext } from '@/entities/demand/lib/last-context';
+import { saveDemandLastContext } from '@/entities/demand/lib/last-context';
 import { demandPlanningDraftQueryOptions } from '@/entities/demand/api/queries';
 
 const LAST_SECTION_PATH_PREFIX = 'manual-operator:last-section:';
@@ -130,9 +132,31 @@ function ManualOperatorSectionContent({
   }
 
   if (section === 'lines') {
+    const isPlanForDateIntent = mode === 'demand' && intent === 'plan-for-date';
+    const isPlanForDatePreStep = intent === 'plan-for-date' && !batchId && !draftId;
     const isAppendCurrentShift = mode === 'demand' && intent === 'append-current-shift';
+    const isDemandPlanForDate = isPlanForDateIntent && !!batchId && !!draftId;
+
+    if (isPlanForDatePreStep) {
+      return <PlanForDateFlow />;
+    }
+
+    if (isDemandPlanForDate) {
+      return <SchemeBuilder mode="demand" batchId={batchId} draftId={draftId} targetDate={targetDate} targetShiftId={targetShift?.id ?? targetShiftIdParam ?? undefined} intent="plan-for-date" />;
+    }
+
     if (isAppendCurrentShift) {
       const resolvedTargetShiftId = targetShiftIdParam ?? shiftIdFromParams ?? '';
+      if (!resolvedTargetShiftId) {
+        return (
+          <div className="mx-auto max-w-lg py-20 text-center" dir="rtl">
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+              <p className="font-bold">שגיאה: חסר מזהה משמרת יעד (targetShiftId)</p>
+              <p className="mt-1">מסלול הוספה למשמרת קיימת דורש targetShiftId. יש להגיע ממסך העבודה.</p>
+            </div>
+          </div>
+        );
+      }
       return (
         <AppendCurrentShiftFlow
           targetShiftId={resolvedTargetShiftId}
@@ -141,14 +165,27 @@ function ManualOperatorSectionContent({
         />
       );
     }
-    const isDemandMode = mode === 'demand' && !!batchId && !!draftId;
+
     if (mode === 'append' && shiftIdFromParams && batchId) {
       return <AppendModePanel shiftId={shiftIdFromParams} batchId={batchId} />;
     }
-    if (isDemandMode) {
-      return <SchemeBuilder mode="demand" batchId={batchId} draftId={draftId} targetDate={targetDate} targetShiftId={targetShift?.id ?? undefined} />;
+
+    if (mode === 'demand' && !!batchId && !!draftId) {
+      return <SchemeBuilder mode="demand" batchId={batchId} draftId={draftId} targetDate={targetDate} targetShiftId={targetShift?.id ?? targetShiftIdParam ?? undefined} />;
     }
-    if (batchId && !draftId) {
+
+    if (mode === 'demand' && !batchId && !draftId && !intent) {
+      return (
+        <div className="mx-auto max-w-lg py-20 text-center" dir="rtl">
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <p className="font-bold">שגיאה: mode=demand ללא batchId/draftId</p>
+            <p className="mt-1">מצב demand דורש batchId ו-draftId או intent תקין.</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (batchId && !draftId && mode !== 'append') {
       return (
         <div className="mx-auto max-w-lg py-20 text-center" dir="rtl">
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
@@ -158,7 +195,41 @@ function ManualOperatorSectionContent({
         </div>
       );
     }
-    return shift ? <SchemeBuilder shiftId={shift.id} /> : null;
+
+    if (draftId && !batchId) {
+      return (
+        <div className="mx-auto max-w-lg py-20 text-center" dir="rtl">
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <p className="font-bold">שגיאה: draftId ללא batchId</p>
+            <p className="mt-1">draftId דורש batchId תואם.</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (intent === 'append-current-shift' && mode !== 'demand') {
+      return (
+        <div className="mx-auto max-w-lg py-20 text-center" dir="rtl">
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <p className="font-bold">שגיאה: intent=append-current-shift ללא mode=demand</p>
+            <p className="mt-1">intent=append-current-shift דורש mode=demand.</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (intent && intent !== 'plan-for-date' && intent !== 'append-current-shift') {
+      return (
+        <div className="mx-auto max-w-lg py-20 text-center" dir="rtl">
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <p className="font-bold">שגיאה: intent לא מזוהה</p>
+            <p className="mt-1">intent={intent} אינו נתמך. intent נתמכים: plan-for-date, append-current-shift.</p>
+          </div>
+        </div>
+      );
+    }
+
+    return <LinesLanding />;
   }
 
   if (section === 'import') {
@@ -235,7 +306,7 @@ export function ManualOperatorPage() {
     ...demandPlanningDraftQueryOptions(draftId ?? ''),
     enabled: isDemandPlanningRoute,
   });
-  const isAppliedDemandDraft = demandDraftData?.draft.status === 'applied';
+  const isAppliedDemandDraft = demandDraftData?.draft?.status === 'applied';
 
   const { data: targetShiftData, isLoading: isTargetShiftLoading } = useQuery({
     ...shiftByDateQueryOptions(targetDate ?? ''),
@@ -299,6 +370,15 @@ export function ManualOperatorPage() {
     });
   }
 
+  function handleSelectDate(date: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('date', date);
+      next.delete('shiftId');
+      return next;
+    });
+  }
+
   function handleCreateTargetShift() {
     if (!targetDate) return;
     createShift.mutate(
@@ -311,22 +391,10 @@ export function ManualOperatorPage() {
     );
   }
 
-  function handleSelectDate(date: string) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set('date', date);
-      next.delete('shiftId');
-      return next;
-    });
-  }
-
   function handleChangeSection(nextSection: ManualOperatorSection) {
     if (nextSection === 'lines') {
-      const savedCtx = getDemandLastContext();
-      if (savedCtx?.url) {
-        navigate(savedCtx.url);
-        return;
-      }
+      navigate('/operator/manual/lines');
+      return;
     }
     const stored = getStoredSectionPath(nextSection);
     if (stored) {
@@ -337,12 +405,10 @@ export function ManualOperatorPage() {
     const params = new URLSearchParams();
     if (selectedDate) params.set('date', effectiveDate);
     if (shiftIdFromParams && !isDemandPlanningRoute) params.set('shiftId', shiftIdFromParams);
-    if (nextSection === 'lines') {
-      if (batchId) params.set('batchId', batchId);
-      if (draftId) params.set('draftId', draftId);
-      if (mode) params.set('mode', mode);
-      if (targetDate) params.set('targetDate', targetDate);
-    }
+    if (batchId) params.set('batchId', batchId);
+    if (draftId) params.set('draftId', draftId);
+    if (mode) params.set('mode', mode);
+    if (targetDate) params.set('targetDate', targetDate);
     const qs = params.toString();
     navigate(qs ? `${base}?${qs}` : base);
   }
@@ -372,7 +438,7 @@ export function ManualOperatorPage() {
       canImportExcelByRole={canImportExcelByRole}
     />
   );
-  const renderSectionWithoutShift = section === 'import' || section === 'printing' || isDemandPlanningRoute || isAppendRoute || isAppendCurrentShiftRoute;
+  const renderSectionWithoutShift = section === 'import' || section === 'printing' || section === 'lines' || isDemandPlanningRoute || isAppendRoute || isAppendCurrentShiftRoute;
 
   if (section === 'work') {
     return (
@@ -421,13 +487,17 @@ export function ManualOperatorPage() {
         headerActions={
           isDesktop && section === 'lines' && mode === 'append' && shiftIdFromParams && batchId ? (
             <span className="rounded border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
-              הוספת ביקוש גולמי לקווים קיימים
+              הוספת ביקוש גולמי לקווים קיימים (אבחון)
             </span>
           ) : isDesktop && section === 'lines' && isAppendCurrentShiftRoute ? (
             <span className="rounded border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
               הוספת הזמנות למשמרת קיימת
             </span>
-          ) : isDesktop && section === 'lines' && mode === 'demand' && batchId && draftId && !isAppliedDemandDraft && !isAppendCurrentShiftRoute ? (
+          ) : isDesktop && section === 'lines' && (intent === 'plan-for-date' || (mode === 'demand' && intent === 'plan-for-date')) ? (
+            <span className="rounded border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+              תכנון עבודה לתאריך
+            </span>
+          ) : isDesktop && section === 'lines' && mode === 'demand' && batchId && draftId && !isAppliedDemandDraft && !isAppendCurrentShiftRoute && intent !== 'plan-for-date' ? (
             <DemandTargetDateSelector
               targetDate={targetDate}
               targetShift={targetShift}
@@ -440,40 +510,13 @@ export function ManualOperatorPage() {
                 navigate(`/operator/manual/lines?shiftId=${shiftId}&batchId=${batchId}&mode=append`)
               }
             />
-          ) : isDesktop && section === 'lines' ? (
+          ) : isDesktop && section === 'lines' && mode === 'demand' && batchId && draftId && !isAppendCurrentShiftRoute ? (
             <span className="rounded border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
-              טיוטה מקומית בלבד
+              תכנון ביקוש
             </span>
           ) : undefined
         }
-        contextualRow={
-          isDesktop && section === 'lines' && mode !== 'demand' && mode !== 'append' ? (() => {
-            const savedCtx = getDemandLastContext();
-            if (!savedCtx) return null;
-            return (
-              <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm">
-                <span className="font-medium text-amber-900">יש טיוטת DataSheet פעילה</span>
-                {savedCtx.sourceFile && (
-                  <span className="text-xs text-amber-700">({savedCtx.sourceFile})</span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => navigate(savedCtx.url)}
-                  className="ms-auto rounded-md bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700 transition-colors"
-                >
-                  פתח טיוטה
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { clearDemandLastContext(); window.location.reload(); }}
-                  className="rounded-md border border-amber-300 px-3 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100 transition-colors"
-                >
-                  בטל
-                </button>
-              </div>
-            );
-          })() : undefined
-        }
+        contextualRow={undefined}
       >
         {isLoading ? (
           <div className="flex items-center justify-center py-20" dir="rtl">

@@ -319,10 +319,10 @@ describe('SchemeBuilder demand lifecycle hardening', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'שמור טיוטה' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'פרסם למשמרת' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'פרסם לעבודה' })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'פרסם למשמרת' }));
+    fireEvent.click(screen.getByRole('button', { name: 'פרסם לעבודה' }));
 
     await waitFor(() => {
       const planCalls = mockBffRequest.mock.calls.filter(([url, init]) =>

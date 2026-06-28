@@ -34,6 +34,7 @@ interface DemandModeProps {
   draftId: string;
   targetDate?: string | null;
   targetShiftId?: string | null;
+  intent?: 'plan-for-date' | 'append-current-shift';
   shiftId?: never;
 }
 
@@ -47,6 +48,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   const draftId = isDemandMode ? (props as DemandModeProps).draftId : undefined;
   const targetDate = isDemandMode ? (props as DemandModeProps).targetDate : undefined;
   const targetShiftId = isDemandMode ? (props as DemandModeProps).targetShiftId : undefined;
+  const lineIntent = isDemandMode ? (props as DemandModeProps).intent : undefined;
 
   const {
     data: hierarchy, isLoading: hierarchyLoading, error: hierarchyError
@@ -62,7 +64,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     enabled: isDemandMode && !!draftId,
   });
 
-  const draftUiMode: DemandPlanningDraftUiMode = isDemandMode && draftWithAssignments?.draft.status === 'applied'
+  const draftUiMode: DemandPlanningDraftUiMode = isDemandMode && draftWithAssignments?.draft?.status === 'applied'
     ? 'publishedDraft'
     : 'planningDraft';
   const publishUiMode: DemandPlanningPublishUiMode = targetShiftId ? 'readyToPublish' : 'noTargetShift';
@@ -70,7 +72,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   const draftPublication = isPublishedDraft ? draftWithAssignments?.publication ?? null : null;
   const canRevert = draftPublication?.status === 'applied' && (draftWithAssignments?.canRevert ?? false);
   const revertBlockedReason = draftWithAssignments?.revertBlockedReason ?? null;
-  const sourceScope = isPublishedDraft ? 'all' : (draftWithAssignments?.draft.sourceScope ?? 'all');
+  const sourceScope = isPublishedDraft ? 'all' as const : (draftWithAssignments?.draft?.sourceScope ?? 'all') as 'all' | 'remaining';
   const {
     data: planningPreview, isLoading: previewLoading, error: previewError
   } = useQuery({
@@ -533,12 +535,26 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
       { batchId, scope: 'remaining' },
       {
         onSuccess: (result) => {
-          const url = `/operator/manual/lines?batchId=${batchId}&draftId=${result.draft.id}&mode=demand`;
+          const params = new URLSearchParams();
+          params.set('batchId', batchId);
+          params.set('draftId', result.draft.id);
+          params.set('mode', 'demand');
+          if (lineIntent) {
+            params.set('intent', lineIntent);
+          }
+          if (targetShiftId) {
+            params.set('targetShiftId', targetShiftId);
+          }
+          if (targetDate) {
+            params.set('targetDate', targetDate);
+          }
+          const url = `/operator/manual/lines?${params.toString()}`;
           saveDemandLastContext({
             mode: 'demand',
             batchId,
             draftId: result.draft.id,
             url,
+            targetDate: targetDate ?? undefined,
             savedAt: new Date().toISOString(),
             sourceFile: remainingPreview?.batch.sourceFile,
             sourceSheet: remainingPreview?.batch.sourceSheet,
@@ -547,7 +563,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
         },
       }
     );
-  }, [batchId, isPublishedDraft, hasRemainingDemand, createDraft, navigate, remainingPreview]);
+  }, [batchId, isPublishedDraft, hasRemainingDemand, createDraft, navigate, remainingPreview, lineIntent, targetShiftId, targetDate]);
 
   const handleRevertPublication = useCallback(() => {
     if (!draftPublication) return;
@@ -629,18 +645,29 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
       )}
 
       {/* Compact toolbar — area selector pills */}
-      <div className="shrink-0 border-b border-gray-200 bg-white px-3 py-1.5">
+      <div className="shrink-0 border-b border-gray-200 bg-white px-3 py-1.5 flex items-center gap-2">
         <AreaOverview
           areas={source.areas}
           selectedAreaName={selectedAreaName}
           onSelectArea={setSelectedArea}
         />
+        {isDemandMode && (
+          <div className="md:hidden ms-auto">
+            <button
+              type="button"
+              onClick={() => setShowOrders((v) => !v)}
+              className="text-xs px-2 py-1 rounded-md bg-gray-100 text-gray-600"
+            >
+              סיכום ({workGroups.length} קבו׳)
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main board area */}
       <main className="flex-1 flex overflow-hidden">
-        {/* Left rail (appears on the right in RTL) */}
-        <aside className="w-64 shrink-0 border-e border-gray-200 bg-gray-50 p-2 flex flex-col gap-2 overflow-y-auto">
+        {/* Left rail (appears on the right in RTL) - responsive */}
+        <aside className="hidden md:flex w-72 xl:w-80 shrink-0 border-e border-gray-200 bg-gray-50 p-2 flex-col gap-2 overflow-y-auto">
           {isDemandMode && (
             <PublishSummary
               orders={source.orders}
@@ -660,6 +687,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
               revertBlockedReason={revertBlockedReason}
               isReverting={revertPublication.isPending}
               onRevert={canRevert ? handleRevertPublication : undefined}
+              intent={lineIntent}
             />
           )}
 
