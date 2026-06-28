@@ -89,16 +89,22 @@ begin
     tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, sort_order
   )
   values
-    (tenant_a, draft_a, batch_a, 'דרום',  'קו א',  'דלי',        1),
-    (tenant_a, draft_a, batch_a, 'דרום',  'קו א',  'סיגריות',   2),
-    (tenant_a, draft_a, batch_a, 'צפון',  'קו ב',  'כללי',       3)
+    (tenant_a, draft_a, batch_a, 'דרום',  'קו א',  'דלי',        1)
   returning id into bucket_a;
 
-  select id into bucket_b from public.demand_planning_buckets
-  where draft_id = draft_a and bucket_name = 'סיגריות';
+  insert into public.demand_planning_buckets (
+    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, sort_order
+  )
+  values
+    (tenant_a, draft_a, batch_a, 'דרום',  'קו א',  'סיגריות',   2)
+  returning id into bucket_b;
 
-  select id into bucket_c from public.demand_planning_buckets
-  where draft_id = draft_a and bucket_name = 'כללי';
+  insert into public.demand_planning_buckets (
+    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, sort_order
+  )
+  values
+    (tenant_a, draft_a, batch_a, 'צפון',  'קו ב',  'כללי',       3)
+  returning id into bucket_c;
 
   -- Rows for testing
   insert into public.raw_demand_rows (
@@ -268,13 +274,15 @@ begin
   end if;
 
   -- Clean up for next tests
+  execute 'reset role';
   delete from public.manual_shift_order_items where shift_id = shift_a;
   delete from public.manual_shift_order_events where shift_id = shift_a;
   delete from public.manual_shift_orders where shift_id = shift_a;
   delete from public.manual_shift_lines where shift_id = shift_a;
   update public.demand_planning_drafts set status = 'draft' where id = draft_a;
-  execute 'reset role';
   delete from public.demand_planning_published_allocations where draft_id = draft_a;
+  delete from public.demand_planning_allocations where draft_id = draft_a;
+  delete from public.demand_planning_publications where draft_id = draft_a;
   execute 'set local role authenticated';
 
   -- ============================================================
@@ -305,7 +313,9 @@ begin
   -- ============================================================
   -- Test 3: Error rows are skipped
   -- ============================================================
+  execute 'reset role';
   delete from public.demand_planning_allocations where draft_id = draft_a;
+  execute 'set local role authenticated';
 
   insert into public.demand_planning_allocations (
     tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity
@@ -337,19 +347,23 @@ begin
   end if;
 
   -- Clean up
+  execute 'reset role';
   delete from public.manual_shift_order_items where shift_id = shift_a;
   delete from public.manual_shift_order_events where shift_id = shift_a;
   delete from public.manual_shift_orders where shift_id = shift_a;
   delete from public.manual_shift_lines where shift_id = shift_a;
   update public.demand_planning_drafts set status = 'draft' where id = draft_a;
-  execute 'reset role';
   delete from public.demand_planning_published_allocations where draft_id = draft_a;
+  delete from public.demand_planning_allocations where draft_id = draft_a;
+  delete from public.demand_planning_publications where draft_id = draft_a;
   execute 'set local role authenticated';
 
   -- ============================================================
   -- Test 4: Special flow rows skipped with warning
   -- ============================================================
+  execute 'reset role';
   delete from public.demand_planning_allocations where draft_id = draft_a;
+  execute 'set local role authenticated';
 
   insert into public.demand_planning_allocations (
     tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity
@@ -380,19 +394,21 @@ begin
   end if;
 
   -- Clean up
+  execute 'reset role';
   delete from public.manual_shift_order_items where shift_id = shift_a;
   delete from public.manual_shift_order_events where shift_id = shift_a;
   delete from public.manual_shift_orders where shift_id = shift_a;
   delete from public.manual_shift_lines where shift_id = shift_a;
   update public.demand_planning_drafts set status = 'draft' where id = draft_a;
-  execute 'reset role';
   delete from public.demand_planning_published_allocations where draft_id = draft_a;
   execute 'set local role authenticated';
 
   -- ============================================================
   -- Test 5: Date mismatch blocked
   -- ============================================================
+  execute 'reset role';
   delete from public.demand_planning_allocations where draft_id = draft_a;
+  execute 'set local role authenticated';
 
   insert into public.demand_planning_allocations (
     tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity
@@ -429,7 +445,9 @@ begin
   -- ============================================================
   -- Test 6: Multiple dates blocked (DATE_AMBIGUOUS)
   -- ============================================================
+  execute 'reset role';
   delete from public.demand_planning_allocations where draft_id = draft_a;
+  execute 'set local role authenticated';
 
   insert into public.demand_planning_allocations (
     tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity
@@ -461,7 +479,9 @@ begin
   -- ============================================================
   -- Test 7: Mixed null/non-null dates — success with warning
   -- ============================================================
+  execute 'reset role';
   delete from public.demand_planning_allocations where draft_id = draft_a;
+  execute 'set local role authenticated';
 
   insert into public.demand_planning_allocations (
     tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity
@@ -490,19 +510,21 @@ begin
   end if;
 
   -- Clean up
+  execute 'reset role';
   delete from public.manual_shift_order_items where shift_id = shift_a;
   delete from public.manual_shift_order_events where shift_id = shift_a;
   delete from public.manual_shift_orders where shift_id = shift_a;
   delete from public.manual_shift_lines where shift_id = shift_a;
   update public.demand_planning_drafts set status = 'draft' where id = draft_a;
-  execute 'reset role';
   delete from public.demand_planning_published_allocations where draft_id = draft_a;
   execute 'set local role authenticated';
 
   -- ============================================================
   -- Test 8: Missing customerName/orderNumber — rows do not merge incorrectly
   -- ============================================================
+  execute 'reset role';
   delete from public.demand_planning_allocations where draft_id = draft_a;
+  execute 'set local role authenticated';
 
   insert into public.demand_planning_allocations (
     tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity
@@ -526,19 +548,21 @@ begin
   end if;
 
   -- Clean up
+  execute 'reset role';
   delete from public.manual_shift_order_items where shift_id = shift_a;
   delete from public.manual_shift_order_events where shift_id = shift_a;
   delete from public.manual_shift_orders where shift_id = shift_a;
   delete from public.manual_shift_lines where shift_id = shift_a;
   update public.demand_planning_drafts set status = 'draft' where id = draft_a;
-  execute 'reset role';
   delete from public.demand_planning_published_allocations where draft_id = draft_a;
   execute 'set local role authenticated';
 
   -- ============================================================
   -- Test 9: Raw rows remain immutable after publish
   -- ============================================================
+  execute 'reset role';
   delete from public.demand_planning_allocations where draft_id = draft_a;
+  execute 'set local role authenticated';
 
   insert into public.demand_planning_allocations (
     tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity
@@ -564,19 +588,21 @@ begin
   end if;
 
   -- Clean up
+  execute 'reset role';
   delete from public.manual_shift_order_items where shift_id = shift_a;
   delete from public.manual_shift_order_events where shift_id = shift_a;
   delete from public.manual_shift_orders where shift_id = shift_a;
   delete from public.manual_shift_lines where shift_id = shift_a;
   update public.demand_planning_drafts set status = 'draft' where id = draft_a;
-  execute 'reset role';
   delete from public.demand_planning_published_allocations where draft_id = draft_a;
   execute 'set local role authenticated';
 
   -- ============================================================
   -- Test 10: NO_PUBLISHABLE_ROWS when all rows are filtered out
   -- ============================================================
+  execute 'reset role';
   delete from public.demand_planning_allocations where draft_id = draft_a;
+  execute 'set local role authenticated';
 
   -- Only allocate the error row (row_c) — nothing publishable
   insert into public.demand_planning_allocations (
@@ -608,7 +634,9 @@ begin
   -- ============================================================
   -- Test 11: Direct RPC cannot inject arbitrary data (no allocations scenario)
   -- ============================================================
+  execute 'reset role';
   delete from public.demand_planning_allocations where draft_id = draft_a;
+  execute 'set local role authenticated';
 
   -- Call RPC with a draft that has NO allocations at all
   begin
@@ -640,7 +668,9 @@ begin
   -- ============================================================
   -- Test 12: Null SKU rows skipped
   -- ============================================================
+  execute 'reset role';
   delete from public.demand_planning_allocations where draft_id = draft_a;
+  execute 'set local role authenticated';
 
   insert into public.demand_planning_allocations (
     tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity
