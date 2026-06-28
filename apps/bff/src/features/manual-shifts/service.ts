@@ -39,17 +39,22 @@ import type {
   RawDemandPlanningPreview,
   DemandPlanningDraftWithAssignments,
   DemandPlanningPublishToShiftResponse,
+  DemandPlanningRevertPublicationResponse,
   DemandImportAppendDiffResponse,
   DemandImportAppendExistingLine,
+  DemandImportAvailableBatchCard,
   DemandImportAppendExistingItem,
   DemandBacklogItem,
   DemandBacklogItemResponse,
+  DemandAvailableDemandResponse,
   DemandBacklogItemStatus,
   DemandBacklogListResponse,
   DemandBacklogSummaryResponse,
   BacklogMergeRowInput,
-  DemandBacklogMergeAction
+  DemandBacklogMergeAction,
+  DemandAvailableDemandSnapshot
 } from '@wos/domain';
+import { buildAvailableDemandResponse } from '@wos/domain';
 import {
   buildProductControlRow,
   buildRawDemandPlanningPreview,
@@ -116,7 +121,12 @@ import {
   demandPlanningBucketNotFound,
   demandPlanningTargetDateAmbiguous,
   demandPlanningExistingLineConflict,
-  demandPlanningNoPublishableRows
+  demandPlanningNoPublishableRows,
+  demandPlanningPublicationNotFound,
+  demandPlanningPublicationAlreadyReverted,
+  demandPlanningDraftNotApplied,
+  demandPlanningPublishedShiftHasActivity,
+  demandPlanningPublicationOldNoLineage
 } from './errors.js';
 import { ApiError } from '../../errors.js';
 import type { ManualShiftsRepo, MonthlyImportShiftCounts } from './repo.js';
@@ -315,6 +325,9 @@ export type ManualShiftsService = {
     batchId: string;
     scope?: 'all' | 'remaining';
   }): Promise<RawDemandPlanningPreview>;
+  listAvailableDemandImportBatches(input: {
+    tenantId: string;
+  }): Promise<DemandImportAvailableBatchCard[]>;
   applyMonthlyImport(input: {
     tenantId: string;
     shiftId: string;
@@ -391,6 +404,10 @@ export type ManualShiftsService = {
     draftId: string;
     targetShiftId: string;
   }): Promise<DemandPlanningPublishToShiftResponse>;
+  revertDemandPlanningPublication(input: {
+    tenantId: string;
+    publicationId: string;
+  }): Promise<DemandPlanningRevertPublicationResponse>;
 
   // Demand Backlog
   mergeRowsIntoBacklog(input: {
@@ -416,6 +433,10 @@ export type ManualShiftsService = {
     search?: string;
     sourceBatchId?: string;
   }): Promise<DemandBacklogSummaryResponse>;
+
+  getAvailableDemand(input: {
+    tenantId: string;
+  }): Promise<DemandAvailableDemandResponse>;
 };
 
 function formatLocalDate(date: Date, timeZone: string) {
@@ -1572,6 +1593,10 @@ export function createManualShiftsServiceFromRepo(
       });
     },
 
+    async listAvailableDemandImportBatches(input) {
+      return repo.listAvailableDemandImportBatches({ tenantId: input.tenantId });
+    },
+
     async computeDemandImportAppendDiff(input) {
       const shift = await requireShift(input.shiftId);
       if (shift.tenantId !== input.tenantId) {
@@ -2598,7 +2623,28 @@ export function createManualShiftsServiceFromRepo(
         })
       ]);
 
-      return { draft, buckets, allocations };
+      const result: DemandPlanningDraftWithAssignments = { draft, buckets, allocations };
+
+      // Attach publication info for applied drafts
+      if (draft.status === 'applied') {
+        const publication = await repo.getDemandPlanningDraftPublication({
+          tenantId: input.tenantId,
+          draftId: input.draftId
+        });
+
+        if (publication) {
+          result.publication = publication;
+          result.canRevert = true;
+          result.revertBlockedReason = null;
+        } else {
+          // Old publication without lineage data
+          result.publication = null;
+          result.canRevert = false;
+          result.revertBlockedReason = 'old_no_lineage';
+        }
+      }
+
+      return result;
     },
 
     async putDemandPlanningPlan(input) {
@@ -2758,7 +2804,7 @@ export function createManualShiftsServiceFromRepo(
           targetShiftId: input.targetShiftId
         });
       } catch (error) {
-        const pgError = error as { code?: string; message?: string } | null;
+        const pgError = error as { code?: string; message?: string; detail?: string } | null;
         if (pgError?.code === 'P0001') {
           switch (pgError.message) {
             case 'DEMAND_PLANNING_DRAFT_NOT_FOUND':
@@ -2786,6 +2832,60 @@ export function createManualShiftsServiceFromRepo(
           }
         }
         throw new ApiError(500, 'INTERNAL_PUBLISH_ERROR', 'An unexpected error occurred during publish.');
+      }
+    },
+
+    async revertDemandPlanningPublication(input) {
+      const publication = await repo.getDemandPlanningPublication({
+        tenantId: input.tenantId,
+        publicationId: input.publicationId
+      });
+
+      if (!publication) {
+        throw demandPlanningPublicationNotFound(input.publicationId);
+      }
+
+      if (publication.status === 'reverted') {
+        throw demandPlanningPublicationAlreadyReverted(input.publicationId);
+      }
+
+      if (publication.tenantId !== input.tenantId) {
+        throw demandPlanningPublicationNotFound(input.publicationId);
+      }
+
+      try {
+        return await repo.revertDemandPlanningPublication({
+          tenantId: input.tenantId,
+          publicationId: input.publicationId
+        });
+      } catch (error) {
+        const pgError = error as { code?: string; message?: string; detail?: string } | null;
+        if (pgError?.code === 'P0001') {
+          switch (pgError.message) {
+            case 'DEMAND_PLANNING_PUBLICATION_NOT_FOUND':
+              throw demandPlanningPublicationNotFound(input.publicationId);
+            case 'DEMAND_PLANNING_PUBLICATION_ALREADY_REVERTED':
+              throw demandPlanningPublicationAlreadyReverted(input.publicationId);
+            case 'DEMAND_PLANNING_DRAFT_NOT_FOUND':
+              throw demandPlanningDraftNotFound(publication.draftId);
+            case 'DEMAND_PLANNING_DRAFT_NOT_APPLIED':
+              throw demandPlanningDraftNotApplied(publication.draftId);
+            case 'DEMAND_PLANNING_PUBLISHED_SHIFT_HAS_ACTIVITY': {
+              let reasons: string[] = [];
+              try {
+                reasons = JSON.parse(pgError.detail ?? '[]');
+              } catch { /* ignore parse error */ }
+              throw demandPlanningPublishedShiftHasActivity(publication.targetShiftId, reasons);
+            }
+            case 'DEMAND_PLANNING_PUBLICATION_OLD_NO_LINEAGE':
+              throw demandPlanningPublicationOldNoLineage(publication.draftId);
+            case 'FORBIDDEN':
+              throw new ApiError(403, 'FORBIDDEN', 'You are not authorized to perform this action.');
+            default:
+              throw new ApiError(500, 'INTERNAL_REVERT_ERROR', 'An unexpected error occurred during revert.');
+          }
+        }
+        throw new ApiError(500, 'INTERNAL_REVERT_ERROR', 'An unexpected error occurred during revert.');
       }
     },
 
@@ -2993,6 +3093,19 @@ export function createManualShiftsServiceFromRepo(
         ...summaryData,
         totalSourceBatches
       };
+    },
+
+    async getAvailableDemand(input) {
+      const getAvailableDemandSnapshot = repo.getAvailableDemandSnapshot;
+      if (!getAvailableDemandSnapshot) {
+        throw new Error('Available demand snapshot is not implemented by this repository.');
+      }
+
+      const snapshot = await getAvailableDemandSnapshot({
+        tenantId: input.tenantId
+      });
+
+      return buildAvailableDemandResponse(snapshot);
     },
   };
 }

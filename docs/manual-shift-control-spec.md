@@ -110,3 +110,9 @@ Each future persisted transition is expected to:
 ## Duplicate Order Numbers
 - Duplicate manual order numbers are allowed in MVP.
 - Future UI/backend may warn about duplicates within the same shift or line, but PR1 does not define hard rejection.
+
+## Demand Backlog Planning Guardrail
+- Current demand backlog identity key is `orderNumber + customerName + sku + distributionArea`.
+- That key is not safe enough for backlog-based planning because it does not encode planned delivery date, delivery date, delivery point / customer delivery point, source row identity, order line identity, or quantity changes.
+- Backlog-based planning and publish must stay blocked until identity_key v2 or a stronger canonical identity design is introduced.
+- The new read-only available-demand endpoint is an inspection surface only; it must not become the publish source of truth yet.

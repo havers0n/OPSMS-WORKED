@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   ApplyDailyManualShiftImportResponse,
+  DemandImportAvailableBatchCard,
   DemandImportBatch,
   DemandImportBatchStatus,
   DemandImportDistributionAreaSummary,
@@ -39,8 +40,11 @@ import type {
   DemandBacklogItem,
   DemandBacklogItemStatus,
   DemandBacklogSourceRow,
+  DemandAvailableDemandSnapshot,
   DemandBacklogMergeAction,
-  DemandPlanningPublishToShiftResponse
+  DemandPlanningPublishToShiftResponse,
+  DemandPlanningPublication,
+  DemandPlanningRevertPublicationResponse
 } from '@wos/domain';
 
 export type ProductControlDemandRow = {
@@ -536,6 +540,34 @@ function mapDemandPlanningAllocationRow(row: DemandPlanningAllocationRow): Deman
   };
 }
 
+// --- Demand Planning Publication Row types and mappers ---
+
+type DemandPlanningPublicationRow = {
+  id: string;
+  tenant_id: string;
+  batch_id: string;
+  draft_id: string;
+  target_shift_id: string;
+  status: string;
+  created_at: string;
+  reverted_at: string | null;
+  reverted_by: string | null;
+};
+
+function mapDemandPlanningPublicationRow(row: DemandPlanningPublicationRow): DemandPlanningPublication {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    batchId: row.batch_id,
+    draftId: row.draft_id,
+    targetShiftId: row.target_shift_id,
+    status: row.status as DemandPlanningPublication['status'],
+    createdAt: row.created_at,
+    revertedAt: row.reverted_at,
+    revertedBy: row.reverted_by
+  };
+}
+
 // --- Demand Backlog Row types and mappers ---
 
 type DemandBacklogItemRow = {
@@ -570,6 +602,17 @@ type DemandBacklogSourceRowRaw = {
   new_quantity: number | null;
   quantity_delta: number | null;
   created_at: string;
+};
+
+type DemandAvailableDemandPublishedAllocationRow = {
+  raw_demand_row_id: string;
+  published_quantity: number;
+  publication_id: string | null;
+};
+
+type DemandAvailableDemandPublicationRow = {
+  id: string;
+  status: 'applied' | 'reverted';
 };
 
 function mapDemandBacklogItemRow(row: DemandBacklogItemRow): DemandBacklogItem {
@@ -994,6 +1037,12 @@ export type ManualShiftsRepo = {
     batchId: string;
     limit?: number;
   }): Promise<RawDemandRow[]>;
+  listDemandImportBatches(input: {
+    tenantId: string;
+  }): Promise<DemandImportBatch[]>;
+  listAvailableDemandImportBatches(input: {
+    tenantId: string;
+  }): Promise<DemandImportAvailableBatchCard[]>;
   listDemandBatchDistributionAreaSummary(input: {
     tenantId: string;
     batchId: string;
@@ -1144,6 +1193,22 @@ export type ManualShiftsRepo = {
     targetShiftId: string;
   }): Promise<DemandPlanningPublishToShiftResponse>;
 
+  // Demand Planning Publication
+  getDemandPlanningPublication(input: {
+    tenantId: string;
+    publicationId: string;
+  }): Promise<DemandPlanningPublication | null>;
+
+  revertDemandPlanningPublication(input: {
+    tenantId: string;
+    publicationId: string;
+  }): Promise<DemandPlanningRevertPublicationResponse>;
+
+  getDemandPlanningDraftPublication(input: {
+    tenantId: string;
+    draftId: string;
+  }): Promise<DemandPlanningPublication | null>;
+
   // --- Demand Backlog ---
 
   findBacklogItemByIdentityKey(input: {
@@ -1240,6 +1305,10 @@ export type ManualShiftsRepo = {
     totalOpenQuantity: number;
     totalAllocatedQuantity: number;
   }>;
+
+  getAvailableDemandSnapshot?(input: {
+    tenantId: string;
+  }): Promise<DemandAvailableDemandSnapshot>;
 
   countBacklogDistinctBatches(input: {
     tenantId: string;
@@ -2191,6 +2260,77 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       return mapDemandImportBatchRow(data as DemandImportBatchRow);
     },
 
+    async listDemandImportBatches(input) {
+      const { data, error } = await supabase
+        .from('demand_import_batches')
+        .select(demandImportBatchColumns)
+        .eq('tenant_id', input.tenantId)
+        .in('status', ['draft', 'ready'])
+        .order('uploaded_at', { ascending: false });
+
+      if (error) throw error;
+
+      return ((data ?? []) as DemandImportBatchRow[]).map(mapDemandImportBatchRow);
+    },
+
+    async listAvailableDemandImportBatches(input) {
+      const batches = await this.listDemandImportBatches(input);
+      if (batches.length === 0) return [];
+
+      const batchIds = batches.map((b) => b.id);
+
+      const { data: rows, error: rowsError } = await supabase
+        .from('raw_demand_rows')
+        .select('id, batch_id, planning_status, quantity')
+        .in('batch_id', batchIds)
+        .eq('planning_status', 'unplanned');
+
+      if (rowsError) throw rowsError;
+
+      const { data: allocations, error: allocError } = await supabase
+        .from('demand_planning_published_allocations')
+        .select('raw_demand_row_id, published_quantity')
+        .in('batch_id', batchIds);
+
+      if (allocError) throw allocError;
+
+      const publishedQtyByRowId = new Map<string, number>();
+      for (const alloc of (allocations ?? []) as Array<{ raw_demand_row_id: string; published_quantity: number }>) {
+        publishedQtyByRowId.set(
+          alloc.raw_demand_row_id,
+          (publishedQtyByRowId.get(alloc.raw_demand_row_id) ?? 0) + Number(alloc.published_quantity)
+        );
+      }
+
+      const remainingByBatch = new Map<string, { remainingRows: number; remainingQuantity: number }>();
+      for (const row of (rows ?? []) as Array<{ id: string; batch_id: string; planning_status: string; quantity: number | null }>) {
+        const publishedQty = publishedQtyByRowId.get(row.id) ?? 0;
+        const remainingQty = Math.max(0, (row.quantity ?? 0) - publishedQty);
+        if (remainingQty <= 0) continue;
+
+        const entry = remainingByBatch.get(row.batch_id) ?? { remainingRows: 0, remainingQuantity: 0 };
+        entry.remainingRows += 1;
+        entry.remainingQuantity += remainingQty;
+        remainingByBatch.set(row.batch_id, entry);
+      }
+
+      return batches.map((batch) => {
+        const remaining = remainingByBatch.get(batch.id) ?? { remainingRows: 0, remainingQuantity: 0 };
+        return {
+          id: batch.id,
+          sourceFile: batch.sourceFile,
+          sourceSheet: batch.sourceSheet,
+          uploadedAt: batch.uploadedAt,
+          status: batch.status,
+          totalRows: batch.rowsCount,
+          totalOrders: batch.distinctOrdersCount,
+          remainingRows: remaining.remainingRows,
+          remainingQuantity: remaining.remainingQuantity,
+          canPlan: remaining.remainingRows > 0
+        };
+      });
+    },
+
     async listRawDemandRowsByBatch(input) {
       let query = supabase
         .from('raw_demand_rows')
@@ -2980,17 +3120,27 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
     async listPublishedDemandQuantities(input) {
       const { data, error } = await supabase
         .from('demand_planning_published_allocations')
-        .select('raw_demand_row_id, published_quantity')
+        .select(`
+          raw_demand_row_id,
+          published_quantity,
+          publication:demand_planning_publications!left(status)
+        `)
         .eq('tenant_id', input.tenantId)
         .eq('batch_id', input.batchId);
 
       if (error) throw error;
 
-      return (data ?? []).map((row) => ({
-        rawDemandRowId: String(row.raw_demand_row_id),
-        publishedQuantity: Number(row.published_quantity)
-      }));
+      return (data ?? [])
+        .filter((row: any) => {
+          if (!row.publication) return true;
+          return row.publication.status === 'applied';
+        })
+        .map((row: any) => ({
+          rawDemandRowId: String(row.raw_demand_row_id),
+          publishedQuantity: Number(row.published_quantity)
+        }));
     },
+
     async publishDemandPlanningDraftToShift(input) {
       const { data, error } = await supabase.rpc('manual_shift_publish_demand_planning_draft', {
         p_tenant_id: input.tenantId,
@@ -3000,6 +3150,45 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
 
       if (error) throw error;
       return data as DemandPlanningPublishToShiftResponse;
+    },
+
+    async getDemandPlanningPublication(input) {
+      const { data, error } = await supabase
+        .from('demand_planning_publications')
+        .select('*')
+        .eq('id', input.publicationId)
+        .eq('tenant_id', input.tenantId)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data) return null;
+      return mapDemandPlanningPublicationRow(data as DemandPlanningPublicationRow);
+    },
+
+    async revertDemandPlanningPublication(input) {
+      const { data, error } = await supabase.rpc('demand_planning_revert_publication', {
+        p_tenant_id: input.tenantId,
+        p_publication_id: input.publicationId
+      });
+
+      if (error) throw error;
+      return data as DemandPlanningRevertPublicationResponse;
+    },
+
+    async getDemandPlanningDraftPublication(input) {
+      const { data, error } = await supabase
+        .from('demand_planning_publications')
+        .select('*')
+        .eq('draft_id', input.draftId)
+        .eq('tenant_id', input.tenantId)
+        .eq('status', 'applied')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data) return null;
+      return mapDemandPlanningPublicationRow(data as DemandPlanningPublicationRow);
     },
 
     // --- Demand Backlog implementations ---
@@ -3390,6 +3579,77 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         newestItemSeenAt: (newestRaw?.[0] as { first_seen_at?: string } | undefined)?.first_seen_at ?? null,
         totalOpenQuantity,
         totalAllocatedQuantity
+      };
+    },
+
+    async getAvailableDemandSnapshot(input) {
+      const { data: backlogItemsData, error: backlogItemsError } = await supabase
+        .from('demand_backlog_items')
+        .select(demandBacklogItemColumns)
+        .eq('tenant_id', input.tenantId)
+        .order('first_seen_at', { ascending: false })
+        .order('id', { ascending: false });
+
+      if (backlogItemsError) throw backlogItemsError;
+
+      const { data: sourceLinksData, error: sourceLinksError } = await supabase
+        .from('demand_backlog_item_sources')
+        .select('backlog_item_id,raw_demand_row_id,batch_id')
+        .eq('tenant_id', input.tenantId);
+
+      if (sourceLinksError) throw sourceLinksError;
+
+      const batchIds = [...new Set((sourceLinksData ?? []).map((row) => (row as { batch_id: string }).batch_id))];
+      const { data: batchData, error: batchError } = batchIds.length === 0
+        ? { data: [], error: null }
+        : await supabase
+          .from('demand_import_batches')
+          .select('id,source_file,uploaded_at')
+          .eq('tenant_id', input.tenantId)
+          .in('id', batchIds);
+
+      if (batchError) throw batchError;
+
+      const { data: allocationData, error: allocationError } = await supabase
+        .from('demand_planning_published_allocations')
+        .select('raw_demand_row_id,published_quantity,publication_id')
+        .eq('tenant_id', input.tenantId);
+
+      if (allocationError) throw allocationError;
+
+      const { data: publicationData, error: publicationError } = await supabase
+        .from('demand_planning_publications')
+        .select('id,status')
+        .eq('tenant_id', input.tenantId);
+
+      if (publicationError) throw publicationError;
+
+      const publicationStatusById = new Map(
+        ((publicationData ?? []) as DemandAvailableDemandPublicationRow[]).map((publication) => [
+          publication.id,
+          publication.status
+        ] as const)
+      );
+
+      return {
+        backlogItems: ((backlogItemsData ?? []) as DemandBacklogItemRow[]).map(mapDemandBacklogItemRow),
+        sourceLinks: (sourceLinksData ?? []).map((row) => ({
+          backlogItemId: String((row as { backlog_item_id: string }).backlog_item_id),
+          rawDemandRowId: String((row as { raw_demand_row_id: string }).raw_demand_row_id),
+          batchId: String((row as { batch_id: string }).batch_id)
+        })),
+        sourceBatches: ((batchData ?? []) as Array<{ id: string; source_file: string; uploaded_at: string }>).map((batch) => ({
+          batchId: batch.id,
+          sourceFile: batch.source_file,
+          uploadedAt: batch.uploaded_at
+        })),
+        publishedAllocations: ((allocationData ?? []) as DemandAvailableDemandPublishedAllocationRow[]).map((allocation) => ({
+          rawDemandRowId: allocation.raw_demand_row_id,
+          publishedQuantity: Number(allocation.published_quantity ?? 0),
+          publicationStatus: allocation.publication_id
+            ? publicationStatusById.get(allocation.publication_id) ?? null
+            : null
+        }))
       };
     },
 

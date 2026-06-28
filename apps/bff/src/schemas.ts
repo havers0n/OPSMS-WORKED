@@ -101,6 +101,7 @@ import {
   demandPlanningPutPlanRequestSchema,
   demandPlanningPublishToShiftRequestSchema,
   demandPlanningPublishToShiftResponseSchema,
+  demandAvailableDemandResponseSchema as demandAvailableDemandResponseDtoSchema,
   manualShiftMonthlyPreviewSchema,
   manualShiftMonthlyApplyResponseSchema as manualShiftMonthlyApplyResponseDtoSchema,
   manualShiftMonthlyReplaceSafetySchema as manualShiftMonthlyReplaceSafetyDtoSchema,
@@ -595,6 +596,7 @@ export const manualShiftImportPreviewResponseSchema = z.object({
 export const demandImportDataSheetPreviewResponseSchema = z.object({
   preview: demandImportDataSheetPreviewSchema
 });
+export const demandImportAvailableBatchesResponseSchema = demandImportAvailableBatchesDtoSchema;
 export const demandImportDataSheetCreateResponseSchema = demandImportDataSheetCreateDtoSchema;
 export const rawDemandPlanningPreviewResponseSchema = rawDemandPlanningPreviewDtoSchema;
 export const demandImportBatchResponseSchema = demandImportBatchSchema;
@@ -604,6 +606,9 @@ export const demandPlanningCreateDraftRequestBodySchema = demandPlanningCreateDr
 export const demandPlanningPutPlanRequestBodySchema = demandPlanningPutPlanRequestSchema;
 export const demandPlanningPublishToShiftRequestBodySchema = demandPlanningPublishToShiftRequestSchema;
 export const demandPlanningPublishToShiftResponseBodySchema = demandPlanningPublishToShiftResponseSchema;
+export const demandPlanningPublicationResponseSchema = demandPlanningPublicationSchema;
+export const demandPlanningRevertPublicationResponseBodySchema = demandPlanningRevertPublicationResponseSchema;
+export const demandAvailableDemandResponseSchema = demandAvailableDemandResponseDtoSchema;
 export const manualShiftMonthlyImportPreviewResponseSchema = z.object({
   preview: manualShiftMonthlyPreviewSchema
 });
@@ -622,9 +627,6 @@ export const demandImportAppendDiffRequestSchema = z.object({
 
 export { demandBacklogListResponseSchema, demandBacklogSummaryResponseSchema, demandBacklogQuerySchema };
 export { demandBacklogItemResponseSchema, demandBacklogSourceBatchSchema };
-
-// ── Manual shift print ──────────────────────────────────────────────────────────
-
 export { pickerSheetPrintDataSchema } from '@wos/domain';
 
 // ── Orders ────────────────────────────────────────────────────────────────────
