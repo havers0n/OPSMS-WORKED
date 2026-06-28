@@ -189,7 +189,9 @@ export function ManualOperatorPage() {
   const [showTargetDatePicker, setShowTargetDatePicker] = useState(false);
   const targetMaxDate = addDays(todayDate, 90);
 
-  const hasShiftIdParam = !!shiftIdFromParams;
+  const isDemandPlanningRoute = section === 'lines' && mode === 'demand' && !!batchId && !!draftId;
+  const isAppendRoute = section === 'lines' && mode === 'append' && !!shiftIdFromParams && !!batchId;
+  const hasShiftIdParam = !!shiftIdFromParams && !isDemandPlanningRoute;
 
   const byDateQuery = useQuery(
     shiftByDateQueryOptions(hasShiftIdParam ? '' : selectedDate)
@@ -304,7 +306,7 @@ export function ManualOperatorPage() {
     const base = `/operator/manual/${nextSection}`;
     const params = new URLSearchParams();
     if (selectedDate) params.set('date', effectiveDate);
-    if (shiftIdFromParams) params.set('shiftId', shiftIdFromParams);
+    if (shiftIdFromParams && !isDemandPlanningRoute) params.set('shiftId', shiftIdFromParams);
     if (nextSection === 'lines') {
       if (batchId) params.set('batchId', batchId);
       if (draftId) params.set('draftId', draftId);
@@ -338,7 +340,7 @@ export function ManualOperatorPage() {
       canImportExcelByRole={canImportExcelByRole}
     />
   );
-  const renderSectionWithoutShift = section === 'import' || section === 'printing' || (section === 'lines' && mode === 'demand' && !!batchId && !!draftId) || (section === 'lines' && mode === 'append' && !!shiftIdFromParams);
+  const renderSectionWithoutShift = section === 'import' || section === 'printing' || isDemandPlanningRoute || isAppendRoute;
 
   if (section === 'work') {
     return (
