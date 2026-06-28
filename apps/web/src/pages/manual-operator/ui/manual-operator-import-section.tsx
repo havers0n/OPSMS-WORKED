@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ManualShiftSession } from '@wos/domain';
+import { ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { monthlyReplaceSafetyQueryOptions } from '@/entities/manual-shift/api/queries';
 import { BondedImportPanel } from './bonded-import-panel';
 import { BondedImportSheet } from './bonded-import-sheet';
@@ -17,6 +19,9 @@ interface ManualOperatorImportSectionProps {
   hasExistingWork: boolean;
   isLoading: boolean;
   canImportExcelByRole: boolean;
+  mode: string | null;
+  targetShiftId: string | null;
+  targetDate: string | null;
 }
 
 function ImportEntryCard({
@@ -59,8 +64,13 @@ export function ManualOperatorImportSection({
   canMonthlyImport,
   hasExistingWork,
   isLoading,
-  canImportExcelByRole
+  canImportExcelByRole,
+  mode,
+  targetShiftId,
+  targetDate,
 }: ManualOperatorImportSectionProps) {
+  const navigate = useNavigate();
+  const isAppendDemandMode = mode === 'append-demand';
   const [showBondedSheet, setShowBondedSheet] = useState(false);
   const [showWarehouseStockSheet, setShowWarehouseStockSheet] = useState(false);
   const [showImportExcel, setShowImportExcel] = useState(false);
@@ -102,6 +112,36 @@ export function ManualOperatorImportSection({
             </button>
           </div>
         </section>
+
+        {isAppendDemandMode && shift?.status === 'active' && (
+          <section className="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold text-blue-900">הוספת הזמנות למשמרת נוכחית</h2>
+                <p className="text-sm text-blue-700">
+                  בחר קובץ DataSheet ליצירת תכנון ביקוש חדש. לאחר הפרסום, ההזמנות החדשות ייכנסו למשמרת הנוכחית
+                  מבלי לפגוע בהזמנות קיימות.
+                </p>
+              </div>
+              {targetShiftId && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/operator/manual/work?shiftId=${targetShiftId}`)}
+                  className="flex items-center gap-1 rounded-md border border-blue-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 transition-colors"
+                >
+                  <ArrowRight size={14} />
+                  חזרה לעבודה
+                </button>
+              )}
+            </div>
+          </section>
+        )}
+
+        {isAppendDemandMode && shift && shift.status !== 'active' && (
+          <section className="rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-sm">
+            <p className="text-sm text-gray-600">לא ניתן להוסיף הזמנות למשמרת סגורה</p>
+          </section>
+        )}
 
         {importSuccessMessage ? (
           <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
@@ -155,7 +195,7 @@ export function ManualOperatorImportSection({
               הנתונים יישמרו לתכנון לפי אזור הפצה ולא ייכנסו עדיין למשמרת
             </p>
           </div>
-          <DatasheetImportPanel shiftId={shift?.id ?? null} />
+          <DatasheetImportPanel shiftId={shift?.id ?? null} appendTargetDate={isAppendDemandMode ? targetDate ?? null : null} />
         </section>
       </div>
 
