@@ -9,7 +9,7 @@ describe('ShiftDatePicker', () => {
   const tomorrow = '2026-06-28';
   const dayAfterTomorrow = '2026-06-29';
   const nextMonthDate = '2026-07-01';
-  const twoMonthsLater = '2026-08-15';
+  const _twoMonthsLater = '2026-08-15';
 
   const baseProps = {
     selectedDate: today,

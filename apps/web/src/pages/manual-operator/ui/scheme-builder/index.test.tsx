@@ -247,11 +247,11 @@ describe('SchemeBuilder demand lifecycle hardening', () => {
     renderBuilder(TARGET_SHIFT_ID);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'פתח עבודה' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'חזרה לעבודה' })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'פתח עבודה' }));
-    fireEvent.click(screen.getByRole('button', { name: 'פתח עבודה' }));
+    fireEvent.click(screen.getByRole('button', { name: 'חזרה לעבודה' }));
+    fireEvent.click(screen.getByRole('button', { name: 'חזרה לעבודה' }));
 
     const planCalls = mockBffRequest.mock.calls.filter(([url, init]) =>
       String(url).includes(`/demand-planning-drafts/${DRAFT_ID}/plan`) && (init as RequestInit | undefined)?.method === 'PUT',
@@ -276,10 +276,10 @@ describe('SchemeBuilder demand lifecycle hardening', () => {
     renderBuilder(TARGET_SHIFT_ID, '/operator/manual/lines?batchId=test&draftId=test&mode=demand');
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'פתח עבודה' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'חזרה לעבודה' })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'פתח עבודה' }));
+    fireEvent.click(screen.getByRole('button', { name: 'חזרה לעבודה' }));
 
     await waitFor(() => {
       expect(screen.getByTestId('location')).toHaveTextContent(`/operator/manual/work?shiftId=${TARGET_SHIFT_ID}`);
