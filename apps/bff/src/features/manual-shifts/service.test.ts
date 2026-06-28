@@ -752,6 +752,17 @@ function createRepo() {
     insertDemandPlanningAllocations: vi.fn(async () => []),
     listDemandPlanningAllocations: vi.fn(async () => []),
     listRawDemandRowsByIds: vi.fn(async () => []),
+    publishDemandPlanningDraftToShift: vi.fn(async () => ({
+      shiftId: '',
+      draftId: '',
+      createdLines: 0,
+      reusedLines: 0,
+      createdOrders: 0,
+      updatedOrders: 0,
+      createdItems: 0,
+      skippedRows: 0,
+      warnings: []
+    })),
     findBacklogItemByIdentityKey: vi.fn().mockResolvedValue(null),
     findBacklogSourceLinkByRawRowId: vi.fn().mockResolvedValue(null),
     createBacklogItem: vi.fn().mockResolvedValue({ id: 'mock-id' }),
@@ -1609,6 +1620,7 @@ describe('manual shift workers service', () => {
               k !== 'insertDemandPlanningAllocations' &&
               k !== 'listDemandPlanningAllocations' &&
               k !== 'listRawDemandRowsByIds' &&
+              k !== 'publishDemandPlanningDraftToShift' &&
               k !== 'getBacklogSummary' &&
               k !== 'countBacklogDistinctBatches'
     );
@@ -5511,6 +5523,831 @@ describe('demand planning draft — PUT plan', () => {
     })).rejects.toThrow(/not found/i);
   });
 });
+
+describe('demand planning draft — publish to shift', () => {
+  const batchId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const draftId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const shiftId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  const lineId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+  const rowId1 = '10000000-0000-4000-8000-000000000001';
+  const rowId2 = '20000000-0000-4000-8000-000000000002';
+  const rowId3 = '30000000-0000-4000-8000-000000000003';
+
+  function createPublishRepo() {
+    const state = {
+      shifts: [{
+        id: shiftId,
+        tenantId: ids.tenant,
+        date: '2026-06-25',
+        name: 'Target Shift',
+        status: 'active',
+        createdBy: 'Dispatcher',
+        createdAt: nowIso,
+        closedAt: null
+      }] as ManualShiftSession[],
+      lines: [] as Array<{
+        id: string;
+        tenant_id: string;
+        shift_id: string;
+        name: string;
+        distribution_area: string | null;
+        sort_order: number;
+        created_at: string;
+        deleted_at: string | null;
+        deleted_by_profile_id: string | null;
+        deleted_by_name: string | null;
+        delete_reason: string | null;
+      }>,
+      orders: [] as ManualShiftOrder[],
+      items: [] as ManualShiftOrderItem[],
+      drafts: [{
+        id: draftId,
+        tenantId: ids.tenant,
+        batchId,
+        status: 'draft',
+        createdBy: null,
+        createdAt: nowIso,
+        updatedAt: nowIso
+      }],
+      batches: [{
+        id: batchId,
+        tenantId: ids.tenant,
+        sourceFile: 'datasheet.xlsx',
+        sourceSheet: 'DataSheet' as const,
+        uploadedAt: nowIso,
+        uploadedBy: null,
+        status: 'ready' as const,
+        rowsCount: 3,
+        rawRowsCount: 3,
+        warningRowsCount: 0,
+        errorRowsCount: 1,
+        specialFlowRowsCount: 1,
+        distributionAreasCount: 1,
+        distinctOrdersCount: 2,
+        distinctSkuCount: 3
+      }],
+      rows: [] as RawDemandRow[],
+      buckets: [{
+        id: 'bucket-1',
+        tenantId: ids.tenant,
+        draftId,
+        batchId,
+        distributionArea: 'דרום',
+        planningLineName: 'קו א',
+        bucketName: 'סיגריות',
+        sortOrder: 0,
+        createdAt: nowIso,
+        updatedAt: nowIso
+      }],
+      allocations: [] as Array<{
+        id: string;
+        tenantId: string;
+        draftId: string;
+        batchId: string;
+        rawDemandRowId: string;
+        bucketId: string;
+        allocatedQuantity: number;
+        createdAt: string;
+        updatedAt: string;
+      }>
+    };
+
+    let createdLineCounter = 0;
+    let createdOrderCounter = 0;
+    let createdItemCounter = 0;
+
+    const base = createRepo().repo;
+    const repo: ManualShiftsRepo = {
+      ...base,
+      findShiftById: vi.fn(async (id: string) => state.shifts.find((shift) => shift.id === id) ?? null) as unknown as ManualShiftsRepo['findShiftById'],
+      getDemandPlanningDraft: vi.fn(async (input: { tenantId: string; draftId: string }) => {
+        return state.drafts.find((draft) => draft.tenantId === input.tenantId && draft.id === input.draftId) ?? null;
+      }) as unknown as ManualShiftsRepo['getDemandPlanningDraft'],
+      getDemandImportBatch: vi.fn(async (input: { tenantId: string; batchId: string }) => {
+        return state.batches.find((batch) => batch.tenantId === input.tenantId && batch.id === input.batchId) ?? null;
+      }) as unknown as ManualShiftsRepo['getDemandImportBatch'],
+      listDemandPlanningBuckets: vi.fn(async (input: { tenantId: string; draftId: string }) => {
+        return state.buckets.filter((bucket) => bucket.tenantId === input.tenantId && bucket.draftId === input.draftId);
+      }) as unknown as ManualShiftsRepo['listDemandPlanningBuckets'],
+      listDemandPlanningAllocations: vi.fn(async (input: { tenantId: string; draftId: string }) => {
+        return state.allocations.filter((allocation) => allocation.tenantId === input.tenantId && allocation.draftId === input.draftId);
+      }) as unknown as ManualShiftsRepo['listDemandPlanningAllocations'],
+      listRawDemandRowsByIds: vi.fn(async (input: { tenantId: string; rowIds: string[] }) => {
+        return state.rows.filter((row) => row.tenantId === input.tenantId && input.rowIds.includes(row.id));
+      }) as unknown as ManualShiftsRepo['listRawDemandRowsByIds'],
+      listShiftLines: vi.fn(async (id: string) => {
+        return state.lines.filter((line) => line.shift_id === id && line.deleted_at === null);
+      }) as unknown as ManualShiftsRepo['listShiftLines'],
+      publishDemandPlanningDraftToShift: vi.fn(async (input) => {
+        const allocs = state.allocations.filter(
+          a => a.draftId === input.draftId && a.tenantId === input.tenantId
+        );
+
+        const publishable = allocs.filter(a => {
+          const row = state.rows.find(r => r.id === a.rawDemandRowId);
+          const bucket = state.buckets.find(b => b.id === a.bucketId);
+          if (!row || !bucket) return false;
+          if (row.planningStatus === 'error' || row.planningStatus === 'special_flow') return false;
+          if (!row.sku?.trim()) return false;
+          if (a.allocatedQuantity <= 0) return false;
+          return true;
+        });
+
+        if (publishable.length === 0) {
+          const err = new Error('NO_PUBLISHABLE_ROWS') as Error & { code: string };
+          err.code = 'P0001';
+          throw err;
+        }
+
+        const publishableDates = new Set(
+          publishable
+            .map(a => state.rows.find(r => r.id === a.rawDemandRowId)?.plannedDeliveryDate ?? null)
+            .filter((d): d is string => d !== null)
+        );
+
+        if (publishableDates.size > 1) {
+          const err = new Error('DATE_AMBIGUOUS') as Error & { code: string };
+          err.code = 'P0001';
+          throw err;
+        }
+
+        if (publishableDates.size === 1) {
+          const shift = state.shifts.find(s => s.id === input.targetShiftId);
+          if (shift && shift.date !== [...publishableDates][0]) {
+            const err = new Error('DATE_MISMATCH') as Error & { code: string };
+            err.code = 'P0001';
+            throw err;
+          }
+        }
+
+        const existingLineByKey = new Map<string, string>();
+        for (const line of state.lines) {
+          if (line.shift_id !== input.targetShiftId || line.deleted_at !== null) continue;
+          existingLineByKey.set(`${line.distribution_area ?? ''}\u0001${line.name}`, line.id);
+        }
+
+        let createdLineCount = 0;
+        let reusedLineCount = 0;
+        let createdOrderCount = 0;
+        let createdItemCount = 0;
+
+        const processedLineKeys = new Set<string>();
+        const processedOrderKeys = new Set<string>();
+
+        for (const alloc of publishable) {
+          const row = state.rows.find(r => r.id === alloc.rawDemandRowId)!;
+          const bucket = state.buckets.find(b => b.id === alloc.bucketId)!;
+          const area = bucket.distributionArea ?? '';
+          const lineKey = `${area}\u0001${bucket.planningLineName}`;
+
+          const custName = (row.customerName ?? '').trim() || null;
+          const orderNum = (row.orderNumber ?? '').trim() || null;
+          const skuNorm = (row.sku ?? '').trim();
+          let orderKey: string;
+          if (custName || orderNum) {
+            orderKey = `${lineKey}\u0001${bucket.bucketName}\u0001${orderNum ?? ''}\u0001${custName ?? ''}`;
+          } else {
+            orderKey = `${lineKey}\u0001${bucket.bucketName}\u0001${skuNorm}\u0001${row.sourceRowNumber}`;
+          }
+
+          let currentLineId = existingLineByKey.get(lineKey);
+          if (!currentLineId) {
+            if (!processedLineKeys.has(lineKey)) {
+              createdLineCounter += 1;
+              createdLineCount += 1;
+              currentLineId = createdLineCounter === 1 ? lineId : `line-created-${createdLineCounter}`;
+              state.lines.push({
+                id: currentLineId,
+                tenant_id: input.tenantId,
+                shift_id: input.targetShiftId,
+                name: bucket.planningLineName,
+                distribution_area: bucket.distributionArea,
+                sort_order: bucket.sortOrder,
+                created_at: nowIso,
+                deleted_at: null,
+                deleted_by_profile_id: null,
+                deleted_by_name: null,
+                delete_reason: null
+              });
+              existingLineByKey.set(lineKey, currentLineId);
+              processedLineKeys.add(lineKey);
+            } else {
+              currentLineId = existingLineByKey.get(lineKey)!;
+            }
+          } else if (!processedLineKeys.has(lineKey)) {
+            reusedLineCount += 1;
+            processedLineKeys.add(lineKey);
+          }
+
+          if (!processedOrderKeys.has(orderKey)) {
+            createdOrderCounter += 1;
+            createdOrderCount += 1;
+            const orderId = `order-created-${createdOrderCounter}`;
+            const pointName = custName ?? orderNum ?? skuNorm ?? `DataSheet row ${row.sourceRowNumber}`;
+            state.orders.push({
+              id: orderId,
+              tenantId: input.tenantId,
+              shiftId: input.targetShiftId,
+              lineId: currentLineId,
+              orderNumber: orderNum,
+              customerName: custName,
+              pointName,
+              palletCount: null,
+              pickerName: null,
+              pickerWorkerId: null,
+              checkerName: null,
+              lineCount: null,
+              sortOrder: createdOrderCount,
+              size: 'unknown',
+              status: 'queued',
+              startedAt: null,
+              checkStartedAt: null,
+              waitingCheckAt: null,
+              checkedAt: null,
+              finishedAt: null,
+              comment: null,
+              createdAt: nowIso,
+              updatedAt: nowIso,
+              deletedAt: null,
+              deletedByProfileId: null,
+              deletedByName: null,
+              deleteReason: null,
+              rawRouteLine: `${bucket.planningLineName}/${bucket.bucketName}`,
+              routeBase: bucket.planningLineName,
+              workBucketName: bucket.bucketName,
+              workBucketType: null,
+              sourceZone: null,
+              rawDestinationLabel: null,
+              deliveryPointId: null,
+              deliveryPointName: null,
+              deliveryPointMatchStatus: 'not_attempted',
+              deliveryPointAliasText: null,
+              deliveryPointAliasId: null
+            });
+
+            state.items.push({
+              id: `item-created-${createdItemCounter + 1}`,
+              tenantId: input.tenantId,
+              shiftId: input.targetShiftId,
+              lineId: currentLineId,
+              orderId,
+              sku: skuNorm,
+              description: (row.description ?? '').trim() || null,
+              category: (row.category ?? '').trim() || null,
+              quantity: alloc.allocatedQuantity,
+              notes: (row.notes ?? '').trim() || null,
+              zone: null,
+              sourceSheet: 'DataSheet',
+              sourceRows: [row.sourceRowNumber],
+              sourceFile: 'datasheet.xlsx',
+              sortOrder: 1,
+              createdAt: nowIso
+            });
+            createdItemCounter += 1;
+            createdItemCount += 1;
+            processedOrderKeys.add(orderKey);
+          } else {
+            // Additional item for same order
+            state.items.push({
+              id: `item-created-${createdItemCounter + 1}`,
+              tenantId: input.tenantId,
+              shiftId: input.targetShiftId,
+              lineId: currentLineId,
+              orderId: state.orders[state.orders.length - 1].id,
+              sku: skuNorm,
+              description: (row.description ?? '').trim() || null,
+              category: (row.category ?? '').trim() || null,
+              quantity: alloc.allocatedQuantity,
+              notes: (row.notes ?? '').trim() || null,
+              zone: null,
+              sourceSheet: 'DataSheet',
+              sourceRows: [row.sourceRowNumber],
+              sourceFile: 'datasheet.xlsx',
+              sortOrder: state.items.filter(i => i.orderId === state.orders[state.orders.length - 1].id).length + 1,
+              createdAt: nowIso
+            });
+            createdItemCounter += 1;
+            createdItemCount += 1;
+          }
+        }
+
+        const skippedSpecialFlow = allocs.filter(a => {
+          const row = state.rows.find(r => r.id === a.rawDemandRowId);
+          return row?.planningStatus === 'special_flow';
+        }).length;
+        const skippedError = allocs.filter(a => {
+          const row = state.rows.find(r => r.id === a.rawDemandRowId);
+          return row?.planningStatus === 'error';
+        }).length;
+        const skippedNoSku = allocs.filter(a => {
+          const row = state.rows.find(r => r.id === a.rawDemandRowId);
+          return row && row.planningStatus !== 'error' && row.planningStatus !== 'special_flow' && (!row.sku?.trim());
+        }).length;
+        const skippedZeroQty = allocs.filter(a => {
+          const row = state.rows.find(r => r.id === a.rawDemandRowId);
+          return row && row.planningStatus !== 'error' && row.planningStatus !== 'special_flow' && row.sku?.trim() && a.allocatedQuantity <= 0;
+        }).length;
+        const totalSkipped = skippedSpecialFlow + skippedError + skippedNoSku + skippedZeroQty;
+
+        const warnings: string[] = [];
+        if (skippedSpecialFlow > 0) warnings.push(`${skippedSpecialFlow} special_flow row(s) were skipped because no explicit publish rule exists for them yet.`);
+        if (skippedError > 0) warnings.push(`${skippedError} error row(s) were skipped.`);
+        if (skippedNoSku > 0) warnings.push(`${skippedNoSku} row(s) were skipped because SKU is required for operational order items.`);
+        if (skippedZeroQty > 0) warnings.push(`${skippedZeroQty} row(s) were skipped because allocated quantity must be positive.`);
+
+        const hasNullDate = publishable.some(a => {
+          const row = state.rows.find(r => r.id === a.rawDemandRowId);
+          return !row?.plannedDeliveryDate;
+        });
+        if (hasNullDate) {
+          warnings.push('Allocated publishable rows contain null planned delivery dates alongside valid dates.');
+        }
+
+        const draft = state.drafts.find((entry) => entry.id === input.draftId && entry.tenantId === input.tenantId);
+        if (draft) {
+          draft.status = 'applied';
+        }
+
+        return {
+          shiftId: input.targetShiftId,
+          draftId: input.draftId,
+          createdLines: createdLineCount,
+          reusedLines: reusedLineCount,
+          createdOrders: createdOrderCount,
+          updatedOrders: 0,
+          createdItems: createdItemCount,
+          skippedRows: totalSkipped,
+          warnings
+        };
+      }) as unknown as ManualShiftsRepo['publishDemandPlanningDraftToShift'],
+      listShiftWorkHierarchy: vi.fn(async (id: string) => {
+        const shiftLines = state.lines.filter((line) => line.shift_id === id && line.deleted_at === null);
+        const shiftOrders = state.orders.filter((order) => order.shiftId === id && order.deletedAt === null);
+        const shiftItems = state.items.filter((item) => item.shiftId === id);
+
+        return {
+          shiftId: id,
+          areas: shiftLines.map((line) => {
+            const lineOrders = shiftOrders.filter((order) => order.lineId === line.id);
+            const totalQuantity = shiftItems
+              .filter((item) => lineOrders.some((order) => order.id === item.orderId))
+              .reduce((sum, item) => sum + item.quantity, 0);
+
+            return {
+              areaName: line.distribution_area,
+              displayName: line.distribution_area ?? 'ללא אזור',
+              totalLines: 1,
+              totalBuckets: 1,
+              totalOrders: lineOrders.length,
+              totalQuantity,
+              statusBreakdown: {
+                queued: lineOrders.length,
+                picking: 0,
+                waitingCheck: 0,
+                returned: 0,
+                done: 0
+              },
+              lines: [{
+                lineId: line.id,
+                lineGroupName: line.name,
+                lineName: line.name,
+                distributionArea: line.distribution_area,
+                status: 'open' as const,
+                totalBuckets: 1,
+                totalOrders: lineOrders.length,
+                totalQuantity,
+                statusBreakdown: {
+                  queued: lineOrders.length,
+                  picking: 0,
+                  waitingCheck: 0,
+                  returned: 0,
+                  done: 0
+                },
+                buckets: [{
+                  bucketName: lineOrders[0]?.workBucketName ?? null,
+                  displayName: lineOrders[0]?.workBucketName ?? 'כללי',
+                  totalOrders: lineOrders.length,
+                  totalQuantity,
+                  statusBreakdown: {
+                    queued: lineOrders.length,
+                    picking: 0,
+                    waitingCheck: 0,
+                    returned: 0,
+                    done: 0
+                  },
+                  orders: lineOrders.map((order) => ({
+                    orderId: order.id,
+                    orderNumber: order.orderNumber,
+                    customerName: order.customerName,
+                    pointName: order.pointName,
+                    status: order.status,
+                    lineCount: 0,
+                    totalQuantity: shiftItems.filter((item) => item.orderId === order.id).reduce((sum, item) => sum + item.quantity, 0),
+                    hasAshlama: false,
+                    hasCheckUnits: false,
+                    rawDestinationLabel: null,
+                    deliveryPointId: null,
+                    deliveryPointName: null,
+                    deliveryPointMatchStatus: 'not_attempted',
+                    deliveryPointAliasText: null
+                  }))
+                }],
+                routeGroups: []
+              }]
+            };
+          })
+        };
+      }) as unknown as ManualShiftsRepo['listShiftWorkHierarchy']
+    };
+
+    return { repo, state };
+  }
+
+  function seedPublishRows(state: ReturnType<typeof createPublishRepo>['state']) {
+    state.rows.push(
+      {
+        id: rowId1,
+        tenantId: ids.tenant,
+        batchId,
+        sourceSheet: 'DataSheet',
+        sourceRowNumber: 2,
+        agent: null,
+        orderDate: null,
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: 'SKU-1',
+        description: 'Product 1',
+        category: 'cat-a',
+        quantity: 10,
+        cost: null,
+        notes: 'note 1',
+        distributionArea: 'דרום',
+        rawRouteLine: null,
+        plannedDeliveryDate: '2026-06-25',
+        plannedRouteLine: null,
+        plannedWorkBucket: null,
+        planningStatus: 'unplanned',
+        routeFlow: 'unassigned',
+        productHandlingFlow: 'regular',
+        noteDateHints: [],
+        issues: [],
+        createdAt: nowIso
+      },
+      {
+        id: rowId2,
+        tenantId: ids.tenant,
+        batchId,
+        sourceSheet: 'DataSheet',
+        sourceRowNumber: 3,
+        agent: null,
+        orderDate: null,
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: 'SKU-2',
+        description: 'Product 2',
+        category: 'cat-b',
+        quantity: 5,
+        cost: null,
+        notes: 'note 2',
+        distributionArea: 'דרום',
+        rawRouteLine: null,
+        plannedDeliveryDate: '2026-06-25',
+        plannedRouteLine: null,
+        plannedWorkBucket: null,
+        planningStatus: 'special_flow',
+        routeFlow: 'pickup',
+        productHandlingFlow: 'regular',
+        noteDateHints: [],
+        issues: [],
+        createdAt: nowIso
+      },
+      {
+        id: rowId3,
+        tenantId: ids.tenant,
+        batchId,
+        sourceSheet: 'DataSheet',
+        sourceRowNumber: 4,
+        agent: null,
+        orderDate: null,
+        customerName: 'לקוח ב',
+        orderNumber: 'SO-2',
+        sku: 'SKU-3',
+        description: 'Product 3',
+        category: 'cat-c',
+        quantity: 7,
+        cost: null,
+        notes: 'note 3',
+        distributionArea: 'דרום',
+        rawRouteLine: null,
+        plannedDeliveryDate: '2026-06-25',
+        plannedRouteLine: null,
+        plannedWorkBucket: null,
+        planningStatus: 'error',
+        routeFlow: 'unassigned',
+        productHandlingFlow: 'regular',
+        noteDateHints: [],
+        issues: [],
+        createdAt: nowIso
+      }
+    );
+
+    state.allocations.push(
+      { id: 'alloc-1', tenantId: ids.tenant, draftId, batchId, rawDemandRowId: rowId1, bucketId: 'bucket-1', allocatedQuantity: 10, createdAt: nowIso, updatedAt: nowIso },
+      { id: 'alloc-2', tenantId: ids.tenant, draftId, batchId, rawDemandRowId: rowId2, bucketId: 'bucket-1', allocatedQuantity: 5, createdAt: nowIso, updatedAt: nowIso },
+      { id: 'alloc-3', tenantId: ids.tenant, draftId, batchId, rawDemandRowId: rowId3, bucketId: 'bucket-1', allocatedQuantity: 7, createdAt: nowIso, updatedAt: nowIso }
+    );
+  }
+
+  it('publishes draft into manual shift tables and returns summary', async () => {
+    const { repo, state } = createPublishRepo();
+    seedPublishRows(state);
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+
+    const result = await service.publishDemandPlanningDraftToShift({
+      tenantId: ids.tenant,
+      draftId,
+      targetShiftId: shiftId
+    });
+
+    expect(result).toMatchObject({
+      shiftId,
+      draftId,
+      createdLines: 1,
+      reusedLines: 0,
+      createdOrders: 1,
+      updatedOrders: 0,
+      createdItems: 1,
+      skippedRows: 2
+    });
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining('special_flow row(s) were skipped'),
+      expect.stringContaining('error row(s) were skipped')
+    ]));
+    expect(state.lines).toHaveLength(1);
+    expect(state.orders).toHaveLength(1);
+    expect(state.items).toHaveLength(1);
+    expect(state.orders[0].lineId).toBe(lineId);
+    expect(state.items[0]).toMatchObject({
+      lineId,
+      orderId: state.orders[0].id,
+      sku: 'SKU-1',
+      quantity: 10,
+      sourceRows: [2]
+    });
+    expect(state.drafts[0].status).toBe('applied');
+  });
+
+  it('reuses existing target shift line', async () => {
+    const { repo, state } = createPublishRepo();
+    seedPublishRows(state);
+    state.lines.push({
+      id: lineId,
+      tenant_id: ids.tenant,
+      shift_id: shiftId,
+      name: 'קו א',
+      distribution_area: 'דרום',
+      sort_order: 0,
+      created_at: nowIso,
+      deleted_at: null,
+      deleted_by_profile_id: null,
+      deleted_by_name: null,
+      delete_reason: null
+    });
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+
+    const result = await service.publishDemandPlanningDraftToShift({
+      tenantId: ids.tenant,
+      draftId,
+      targetShiftId: shiftId
+    });
+
+    expect(result.createdLines).toBe(0);
+    expect(result.reusedLines).toBe(1);
+    expect(state.orders[0].lineId).toBe(lineId);
+  });
+
+  it('blocks repeat publish after draft is applied', async () => {
+    const { repo, state } = createPublishRepo();
+    seedPublishRows(state);
+    state.drafts[0].status = 'applied';
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    await expect(service.publishDemandPlanningDraftToShift({
+      tenantId: ids.tenant,
+      draftId,
+      targetShiftId: shiftId
+    })).rejects.toThrow(/already published/i);
+  });
+
+  it('blocks closed shift', async () => {
+    const { repo, state } = createPublishRepo();
+    seedPublishRows(state);
+    state.shifts[0].status = 'closed';
+    state.shifts[0].closedAt = nowIso;
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    await expect(service.publishDemandPlanningDraftToShift({
+      tenantId: ids.tenant,
+      draftId,
+      targetShiftId: shiftId
+    })).rejects.toThrow(/not active/i);
+  });
+
+  it('blocks tenant mismatch', async () => {
+    const { repo, state } = createPublishRepo();
+    seedPublishRows(state);
+    state.shifts[0].tenantId = ids.otherTenant;
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    await expect(service.publishDemandPlanningDraftToShift({
+      tenantId: ids.tenant,
+      draftId,
+      targetShiftId: shiftId
+    })).rejects.toThrow(/not found/i);
+  });
+
+  it('blocks target shift date mismatch when planned delivery date exists', async () => {
+    const { repo, state } = createPublishRepo();
+    seedPublishRows(state);
+    state.rows[0].plannedDeliveryDate = '2026-06-26';
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    await expect(service.publishDemandPlanningDraftToShift({
+      tenantId: ids.tenant,
+      draftId,
+      targetShiftId: shiftId
+    })).rejects.toThrow(/does not match import date/i);
+  });
+
+  it('keeps raw demand rows immutable', async () => {
+    const { repo, state } = createPublishRepo();
+    seedPublishRows(state);
+    const originalRow = structuredClone(state.rows[0]);
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+
+    await service.publishDemandPlanningDraftToShift({
+      tenantId: ids.tenant,
+      draftId,
+      targetShiftId: shiftId
+    });
+
+    expect(state.rows[0]).toEqual(originalRow);
+  });
+
+  it('warns when allocated rows do not carry planned delivery date', async () => {
+    const { repo, state } = createPublishRepo();
+    seedPublishRows(state);
+    state.rows.forEach((row) => {
+      row.plannedDeliveryDate = null;
+    });
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+
+    const result = await service.publishDemandPlanningDraftToShift({
+      tenantId: ids.tenant,
+      draftId,
+      targetShiftId: shiftId
+    });
+
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining('null planned delivery dates')
+    ]));
+  });
+
+  it('warns when publishable rows have mixed null and non-null planned dates', async () => {
+    const { repo, state } = createPublishRepo();
+    seedPublishRows(state);
+    state.rows[0].plannedDeliveryDate = '2026-06-25'; // matches shift date
+    state.rows[1].plannedDeliveryDate = null;          // special_flow row but still picked up
+    state.rows[2].plannedDeliveryDate = null;          // error row
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+
+    const result = await service.publishDemandPlanningDraftToShift({
+      tenantId: ids.tenant,
+      draftId,
+      targetShiftId: shiftId
+    });
+
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining('null planned delivery dates')
+    ]));
+    expect(result.createdItems).toBeGreaterThan(0);
+  });
+
+  it('creates separate orders for rows without customerName or orderNumber', async () => {
+    const { repo, state } = createPublishRepo();
+    seedPublishRows(state);
+    // Modify rows: remove customer/order from row 1, add second anonymous row
+    state.rows[0].customerName = null;
+    state.rows[0].orderNumber = null;
+
+    // row 2 is special_flow, ignore
+    // row 3 is error, ignore
+
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+
+    const result = await service.publishDemandPlanningDraftToShift({
+      tenantId: ids.tenant,
+      draftId,
+      targetShiftId: shiftId
+    });
+
+    // row 1 is publishable with no customer/order → should get its own order
+    expect(result.createdOrders).toBe(1);
+  });
+
+  it('maps NO_PUBLISHABLE_ROWS to 422', async () => {
+    const { repo, state } = createPublishRepo();
+    // No allocations → mock will throw NO_PUBLISHABLE_ROWS
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+
+    await expect(service.publishDemandPlanningDraftToShift({
+      tenantId: ids.tenant,
+      draftId,
+      targetShiftId: shiftId
+    })).rejects.toMatchObject({ statusCode: 422, code: 'DEMAND_PLANNING_NO_PUBLISHABLE_ROWS' });
+  });
+
+  it('maps DATE_MISMATCH to 409', async () => {
+    const { repo, state } = createPublishRepo();
+    seedPublishRows(state);
+    state.rows[0].plannedDeliveryDate = '2026-06-26'; // mismatch with shift's 2026-06-25
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+
+    await expect(service.publishDemandPlanningDraftToShift({
+      tenantId: ids.tenant,
+      draftId,
+      targetShiftId: shiftId
+    })).rejects.toThrow(/does not match/);
+  });
+
+  it('maps DATE_AMBIGUOUS to 409', async () => {
+    const { repo, state } = createPublishRepo();
+    seedPublishRows(state);
+    // row 1 has one date, add another publishable row with different date
+    state.rows.push({
+      id: 'row-multi-date',
+      tenantId: ids.tenant,
+      batchId,
+      sourceSheet: 'DataSheet',
+      sourceRowNumber: 99,
+      agent: null,
+      orderDate: null,
+      customerName: 'Test',
+      orderNumber: 'SO-MULTI',
+      sku: 'SKU-MULTI',
+      description: null,
+      category: null,
+      quantity: 5,
+      cost: null,
+      notes: null,
+      distributionArea: 'דרום',
+      rawRouteLine: null,
+      plannedDeliveryDate: '2026-06-27',
+      plannedRouteLine: null,
+      plannedWorkBucket: null,
+      planningStatus: 'unplanned',
+      routeFlow: 'pickup',
+      productHandlingFlow: 'regular',
+      noteDateHints: [],
+      issues: [],
+      createdAt: nowIso
+    });
+    state.allocations.push({
+      id: 'alloc-multi', tenantId: ids.tenant, draftId, batchId,
+      rawDemandRowId: 'row-multi-date', bucketId: 'bucket-1',
+      allocatedQuantity: 5, createdAt: nowIso, updatedAt: nowIso
+    });
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+
+    await expect(service.publishDemandPlanningDraftToShift({
+      tenantId: ids.tenant,
+      draftId,
+      targetShiftId: shiftId
+    })).rejects.toMatchObject({ statusCode: 409, code: 'DEMAND_PLANNING_TARGET_DATE_AMBIGUOUS' });
+  });
+
+  it('work hierarchy can read published data', async () => {
+    const { repo, state } = createPublishRepo();
+    seedPublishRows(state);
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+
+    await service.publishDemandPlanningDraftToShift({
+      tenantId: ids.tenant,
+      draftId,
+      targetShiftId: shiftId
+    });
+
+    const hierarchy = await service.getShiftWorkHierarchy({
+      tenantId: ids.tenant,
+      shiftId
+    });
+
+    expect(hierarchy.shiftId).toBe(shiftId);
+    expect(hierarchy.areas[0]?.lines[0]?.lineName).toBe('קו א');
+    expect(hierarchy.areas[0]?.lines[0]?.buckets[0]?.orders[0]?.orderNumber).toBe('SO-1');
+  });
+});
+
   return {
     rowNumber: overrides.rowNumber,
     sourceLabel: overrides.sourceLabel ?? null,

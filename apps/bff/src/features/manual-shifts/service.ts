@@ -38,6 +38,7 @@ import type {
   RawDemandRow,
   RawDemandPlanningPreview,
   DemandPlanningDraftWithAssignments,
+  DemandPlanningPublishToShiftResponse,
   DemandImportAppendDiffResponse,
   DemandImportAppendExistingLine,
   DemandImportAppendExistingItem,
@@ -109,9 +110,13 @@ import {
   manualShiftMonthlyReplaceNotSafe,
   demandPlanningDraftNotFound,
   demandPlanningDraftNotMutable,
+  demandPlanningDraftAlreadyApplied,
   demandPlanningAllocationOverflow,
   demandPlanningRawDemandRowNotFound,
-  demandPlanningBucketNotFound
+  demandPlanningBucketNotFound,
+  demandPlanningTargetDateAmbiguous,
+  demandPlanningExistingLineConflict,
+  demandPlanningNoPublishableRows
 } from './errors.js';
 import { ApiError } from '../../errors.js';
 import type { ManualShiftsRepo, MonthlyImportShiftCounts } from './repo.js';
@@ -148,6 +153,7 @@ export type ManualShiftsService = {
   listBindableUsers(tenantId: string): Promise<BindableUser[]>;
   getTodayShift(tenantId: string): Promise<ManualShiftTodayResponse>;
   getShiftByDate(tenantId: string, date: string): Promise<ManualShiftTodayResponse>;
+  getShiftById(tenantId: string, shiftId: string): Promise<ManualShiftTodayResponse>;
   createShift(input: { tenantId: string; date?: string; name: string; actor: ActorContext }): Promise<ManualShiftSession>;
   closeShift(input: { tenantId: string; shiftId: string }): Promise<ManualShiftSession>;
   listShiftLines(input: { tenantId: string; shiftId: string }): Promise<ManualShiftLineSummary[]>;
@@ -378,6 +384,11 @@ export type ManualShiftsService = {
       allocatedQuantity: number;
     }>;
   }): Promise<DemandPlanningDraftWithAssignments>;
+  publishDemandPlanningDraftToShift(input: {
+    tenantId: string;
+    draftId: string;
+    targetShiftId: string;
+  }): Promise<DemandPlanningPublishToShiftResponse>;
 
   // Demand Backlog
   mergeRowsIntoBacklog(input: {
@@ -610,6 +621,11 @@ export function createManualShiftsServiceFromRepo(
     const worker = await repo.findWorkerById(workerId);
     if (!worker) throw manualShiftWorkerNotFound(workerId);
     return worker;
+  }
+
+  function normalizeOptionalString(value: string | null | undefined): string | null {
+    const normalized = value?.trim() ?? '';
+    return normalized.length > 0 ? normalized : null;
   }
 
   return {
@@ -2660,6 +2676,69 @@ export function createManualShiftsServiceFromRepo(
       });
 
       return { draft, buckets, allocations };
+    },
+
+    async publishDemandPlanningDraftToShift(input) {
+      const [draft, shift] = await Promise.all([
+        repo.getDemandPlanningDraft({
+          tenantId: input.tenantId,
+          draftId: input.draftId
+        }),
+        repo.findShiftById(input.targetShiftId)
+      ]);
+
+      if (!draft) {
+        throw demandPlanningDraftNotFound(input.draftId);
+      }
+
+      if (draft.status === 'applied') {
+        throw demandPlanningDraftAlreadyApplied(input.draftId);
+      }
+
+      if (draft.status === 'cancelled') {
+        throw demandPlanningDraftNotMutable(input.draftId, draft.status);
+      }
+
+      if (!shift || shift.tenantId !== input.tenantId) {
+        throw manualShiftImportShiftNotFound(input.targetShiftId);
+      }
+
+      if (shift.status !== 'active') {
+        throw manualShiftImportShiftNotActive(input.targetShiftId);
+      }
+
+      try {
+        return await repo.publishDemandPlanningDraftToShift({
+          tenantId: input.tenantId,
+          draftId: input.draftId,
+          targetShiftId: input.targetShiftId
+        });
+      } catch (error) {
+        const pgError = error as { code?: string; message?: string } | null;
+        if (pgError?.code === 'P0001') {
+          switch (pgError.message) {
+            case 'DEMAND_PLANNING_DRAFT_NOT_FOUND':
+              throw demandPlanningDraftNotFound(input.draftId);
+            case 'DEMAND_PLANNING_DRAFT_NOT_MUTABLE':
+              throw demandPlanningDraftAlreadyApplied(input.draftId);
+            case 'SHIFT_NOT_FOUND':
+              throw manualShiftImportShiftNotFound(input.targetShiftId);
+            case 'SHIFT_NOT_ACTIVE':
+              throw manualShiftImportShiftNotActive(input.targetShiftId);
+            case 'DATE_MISMATCH':
+              throw manualShiftImportShiftDateMismatch(input.targetShiftId, shift.date, 'unknown');
+            case 'DATE_AMBIGUOUS':
+              throw demandPlanningTargetDateAmbiguous(input.draftId, []);
+            case 'NO_PUBLISHABLE_ROWS':
+              throw demandPlanningNoPublishableRows(input.draftId);
+            case 'FORBIDDEN':
+              throw new ApiError(403, 'FORBIDDEN', 'You are not authorized to perform this action.');
+            default:
+              throw new ApiError(500, 'INTERNAL_PUBLISH_ERROR', 'An unexpected error occurred during publish.');
+          }
+        }
+        throw new ApiError(500, 'INTERNAL_PUBLISH_ERROR', 'An unexpected error occurred during publish.');
+      }
     },
 
     // --- Demand Backlog implementations ---

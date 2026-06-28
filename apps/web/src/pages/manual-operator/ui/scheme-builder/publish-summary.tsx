@@ -1,14 +1,28 @@
-import { Clock } from 'lucide-react';
+import { Send, ArrowRight, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 import type { SourceOrder, SourceOrderItem } from './scheme-types';
 import { useSchemeBuilderStore } from './scheme-store';
+
+interface PublishSummaryProps {
+  orders: SourceOrder[];
+  orderItemMap: Record<string, SourceOrderItem[]>;
+  canPublish?: boolean;
+  isPublishing?: boolean;
+  onPublish?: () => void;
+  publishResult?: { createdLines: number; createdOrders: number; createdItems: number; skippedRows: number; warnings: string[] } | null;
+  publishError?: string | null;
+  onNavigateToWork?: () => void;
+}
 
 export function PublishSummary({
   orders,
   orderItemMap,
-}: {
-  orders: SourceOrder[];
-  orderItemMap: Record<string, SourceOrderItem[]>;
-}) {
+  canPublish = false,
+  isPublishing = false,
+  onPublish,
+  publishResult,
+  publishError,
+  onNavigateToWork,
+}: PublishSummaryProps) {
   const planningLines = useSchemeBuilderStore((s) => s.planningLines);
   const workGroups = useSchemeBuilderStore((s) => s.workGroups);
   const itemAllocations = useSchemeBuilderStore((s) => s.itemAllocations);
@@ -21,8 +35,60 @@ export function PublishSummary({
   const groupCount = workGroups.length;
   const planningLineCount = planningLines.length;
 
+  if (publishResult) {
+    return (
+      <div className="bg-white border border-green-200 rounded-lg p-4 space-y-3" dir="rtl">
+        <div className="flex items-center gap-2">
+          <CheckCircle size={16} className="text-green-600" />
+          <h3 className="text-sm font-bold text-green-800">פורסם למשמרת</h3>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div className="bg-green-50 rounded p-2 text-center">
+            <div className="font-bold text-green-900 text-lg">{publishResult.createdLines}</div>
+            <div className="text-xs text-green-700">קווים חדשים</div>
+          </div>
+          <div className="bg-green-50 rounded p-2 text-center">
+            <div className="font-bold text-green-900 text-lg">{publishResult.createdOrders}</div>
+            <div className="text-xs text-green-700">הזמנות חדשות</div>
+          </div>
+          <div className="bg-green-50 rounded p-2 text-center">
+            <div className="font-bold text-green-900 text-lg">{publishResult.createdItems}</div>
+            <div className="text-xs text-green-700">שורות פריטים</div>
+          </div>
+          <div className="bg-green-50 rounded p-2 text-center">
+            <div className="font-bold text-green-900 text-lg">{publishResult.skippedRows}</div>
+            <div className="text-xs text-green-700">שורות שדולגו</div>
+          </div>
+        </div>
+
+        {publishResult.warnings.length > 0 && (
+          <div className="space-y-1">
+            {publishResult.warnings.map((w, i) => (
+              <div key={i} className="flex items-start gap-1 text-xs text-amber-700 bg-amber-50 rounded p-1.5">
+                <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                <span>{w}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {onNavigateToWork && (
+          <button
+            type="button"
+            onClick={onNavigateToWork}
+            className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors"
+          >
+            <span>פתח עבודה</span>
+            <ArrowRight size={14} />
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
+    <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3" dir="rtl">
       <h3 className="text-sm font-bold text-gray-700">סיכום נכונות</h3>
 
       <div className="grid grid-cols-2 gap-3 text-sm">
@@ -52,16 +118,33 @@ export function PublishSummary({
         </div>
       </div>
 
-      <button
-        type="button"
-        disabled
-        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-md bg-gray-200 text-gray-500 cursor-not-allowed"
-        title="פרסום יגיע בשלב הבא"
-      >
-        <Clock size={16} />
-        פרסום יגיע בשלב הבא
-      </button>
+      {canPublish && onPublish && (
+        <button
+          type="button"
+          onClick={onPublish}
+          disabled={isPublishing}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+        >
+          {isPublishing ? (
+            <>
+              <Loader2 size={16} className="animate-spin" />
+              מפרסם...
+            </>
+          ) : (
+            <>
+              <Send size={16} />
+              פרסם למשמרת
+            </>
+          )}
+        </button>
+      )}
 
+      {publishError && (
+        <div className="text-xs text-red-600 bg-red-50 rounded p-2 flex items-start gap-1">
+          <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+          <span>{publishError}</span>
+        </div>
+      )}
     </div>
   );
 }

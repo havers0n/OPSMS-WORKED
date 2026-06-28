@@ -39,7 +39,8 @@ import type {
   DemandBacklogItem,
   DemandBacklogItemStatus,
   DemandBacklogSourceRow,
-  DemandBacklogMergeAction
+  DemandBacklogMergeAction,
+  DemandPlanningPublishToShiftResponse
 } from '@wos/domain';
 
 export type ProductControlDemandRow = {
@@ -1130,6 +1131,11 @@ export type ManualShiftsRepo = {
     tenantId: string;
     rowIds: string[];
   }): Promise<RawDemandRow[]>;
+  publishDemandPlanningDraftToShift(input: {
+    tenantId: string;
+    draftId: string;
+    targetShiftId: string;
+  }): Promise<DemandPlanningPublishToShiftResponse>;
 
   // --- Demand Backlog ---
 
@@ -2961,6 +2967,17 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       if (error) throw error;
 
       return ((data ?? []) as RawDemandRowRow[]).map(mapRawDemandRow);
+    },
+
+    async publishDemandPlanningDraftToShift(input) {
+      const { data, error } = await supabase.rpc('manual_shift_publish_demand_planning_draft', {
+        p_tenant_id: input.tenantId,
+        p_draft_id: input.draftId,
+        p_target_shift_id: input.targetShiftId
+      });
+
+      if (error) throw error;
+      return data as DemandPlanningPublishToShiftResponse;
     },
 
     // --- Demand Backlog implementations ---

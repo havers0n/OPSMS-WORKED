@@ -293,3 +293,36 @@ export function demandPlanningBucketNotFound(bucketKey: string) {
     `Bucket '${bucketKey}' was not found in the plan.`
   );
 }
+
+export function demandPlanningDraftAlreadyApplied(draftId: string) {
+  return new ApiError(
+    409,
+    'DEMAND_PLANNING_DRAFT_ALREADY_APPLIED',
+    `Demand planning draft ${draftId} was already published.`
+  );
+}
+
+export function demandPlanningTargetDateAmbiguous(draftId: string, dates: string[]) {
+  return new ApiError(
+    409,
+    'DEMAND_PLANNING_TARGET_DATE_AMBIGUOUS',
+    `Demand planning draft ${draftId} contains multiple planned delivery dates: ${dates.join(', ')}.`
+  );
+}
+
+export function demandPlanningExistingLineConflict(lineName: string, distributionArea: string | null) {
+  const suffix = distributionArea ? ` in distribution area "${distributionArea}"` : '';
+  return new ApiError(
+    409,
+    'DEMAND_PLANNING_EXISTING_LINE_CONFLICT',
+    `Target shift contains multiple active lines named "${lineName}"${suffix}.`
+  );
+}
+
+export function demandPlanningNoPublishableRows(draftId: string) {
+  return new ApiError(
+    422,
+    'DEMAND_PLANNING_NO_PUBLISHABLE_ROWS',
+    `Demand planning draft ${draftId} has no publishable rows.`
+  );
+}
