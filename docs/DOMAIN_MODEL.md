@@ -69,9 +69,11 @@ The code after `:` in customer labels is internal and must not be treated as `מ
 Run from `apps/bff/`:
 
 ```bash
-# Dry-run (validate without writing):
-npm run seed:delivery-points:local -- --dry-run
-
-# Full import:
+# Dry-run (validate without writing — default mode):
 npm run seed:delivery-points:local
+
+# Full import (requires --apply):
+npm run seed:delivery-points:apply:local
 ```
+
+Safety: dry-run is the default. To write, pass `--apply`. If the target `SUPABASE_URL` matches a known production host pattern, `CONFIRM_PRODUCTION_DELIVERY_POINT_SEED=YES` is also required.

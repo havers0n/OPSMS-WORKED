@@ -239,20 +239,45 @@ function resolveSeedDir(seedDirArg: string | null): string {
 
 // ── Argument parsing ──────────────────────────────────────────────────────
 
-function parseArgs(): { dryRun: boolean; seedDir: string | null } {
+function parseArgs(): { applyMode: boolean; seedDir: string | null } {
   const args = process.argv.slice(2);
-  let dryRun = false;
+  let applyMode = false;
   let seedDir: string | null = null;
 
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--dry-run') {
-      dryRun = true;
+    if (args[i] === '--apply') {
+      applyMode = true;
     } else if (args[i] === '--seed-dir' && i + 1 < args.length) {
       seedDir = args[++i];
     }
   }
 
-  return { dryRun, seedDir };
+  return { applyMode, seedDir };
+}
+
+const PRODUCTION_HOST_PATTERNS = [
+  'supabase.co',
+  'your-production-project.supabase.co',
+];
+
+function isProductionUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return PRODUCTION_HOST_PATTERNS.some((pattern) => parsed.hostname.includes(pattern));
+  } catch {
+    return false;
+  }
+}
+
+function requireProductionConfirmation(): void {
+  if (process.env.CONFIRM_PRODUCTION_DELIVERY_POINT_SEED === 'YES') {
+    return;
+  }
+  console.error(
+    'ERROR: Target URL appears to be a production project.\n' +
+    'Set CONFIRM_PRODUCTION_DELIVERY_POINT_SEED=YES to acknowledge and proceed.',
+  );
+  process.exit(1);
 }
 
 // ── Main entry point ──────────────────────────────────────────────────────
@@ -275,7 +300,7 @@ function printDuplicateReport(duplicateGroups: AliasDuplicateGroup[], duplicateC
 }
 
 export async function main(): Promise<void> {
-  const { dryRun, seedDir: seedDirArg } = parseArgs();
+  const { applyMode, seedDir: seedDirArg } = parseArgs();
   const seedDir = resolveSeedDir(seedDirArg);
 
   // 1. Load and validate seed files
@@ -290,7 +315,7 @@ export async function main(): Promise<void> {
   // 2. Build DB rows for delivery points
   const pointDbRows = points.map(toDeliveryPointDbRow);
 
-  // 3. Build fake point map for alias validation (needed in dry-run and normal mode)
+  // 3. Build fake point map for alias validation (needed in dry-run and apply modes)
   const fakeMap = new Map<string, string>();
   for (const p of points) {
     fakeMap.set(p.sourceExternalId, 'placeholder');
@@ -313,9 +338,9 @@ export async function main(): Promise<void> {
   }
   console.log('Missing alias point refs: 0');
 
-  // 4. Dry-run stops here
-  if (dryRun) {
-    console.log('Dry-run mode — no DB writes performed');
+  // 4. Dry-run is default — require --apply to proceed with DB writes
+  if (!applyMode) {
+    console.log('Dry-run mode — no DB writes performed. Use --apply to import.');
     return;
   }
 
@@ -325,6 +350,12 @@ export async function main(): Promise<void> {
   if (!supabaseUrl || !serviceRoleKey) {
     throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
   }
+
+  console.log(`Target project URL: ${supabaseUrl}`);
+  if (isProductionUrl(supabaseUrl)) {
+    requireProductionConfirmation();
+  }
+
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
   });

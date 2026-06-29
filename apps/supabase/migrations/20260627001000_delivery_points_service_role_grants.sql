@@ -10,5 +10,5 @@
 --   This migration ensures service_role has full DML access regardless of
 --   when the original migration was applied.
 
-grant select, insert, update, delete on public.delivery_points to service_role;
-grant select, insert, update, delete on public.delivery_point_aliases to service_role;
+grant select, insert, update on public.delivery_points to service_role;
+grant select, insert, update on public.delivery_point_aliases to service_role;
