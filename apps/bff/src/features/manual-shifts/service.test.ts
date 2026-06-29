@@ -5777,12 +5777,7 @@ describe('demand planning draft — publish to shift', () => {
               workBucketName: bucket.bucketName,
               workBucketType: null,
               sourceZone: null,
-              rawDestinationLabel: null,
-              deliveryPointId: null,
-              deliveryPointName: null,
-              deliveryPointMatchStatus: 'not_attempted',
-              deliveryPointAliasText: null,
-              deliveryPointAliasId: null
+              rawDestinationLabel: null
             });
 
             state.items.push({
@@ -5935,11 +5930,7 @@ describe('demand planning draft — publish to shift', () => {
                     totalQuantity: shiftItems.filter((item) => item.orderId === order.id).reduce((sum, item) => sum + item.quantity, 0),
                     hasAshlama: false,
                     hasCheckUnits: false,
-                    rawDestinationLabel: null,
-                    deliveryPointId: null,
-                    deliveryPointName: null,
-                    deliveryPointMatchStatus: 'not_attempted',
-                    deliveryPointAliasText: null
+                    rawDestinationLabel: null
                   }))
                 }],
                 routeGroups: []
@@ -6388,12 +6379,7 @@ describe('demand planning draft — publish to shift', () => {
       workBucketName: 'סיגריות',
       workBucketType: null,
       sourceZone: null,
-      rawDestinationLabel: null,
-      deliveryPointId: null,
-      deliveryPointName: null,
-      deliveryPointMatchStatus: 'not_attempted',
-      deliveryPointAliasText: null,
-      deliveryPointAliasId: null
+      rawDestinationLabel: null
     });
     state.items.push({
       id: 'item-existing-1',

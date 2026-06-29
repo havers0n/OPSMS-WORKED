@@ -1779,7 +1779,8 @@ describe('manual shifts routes', () => {
     });
     expect(service.getDemandPlanningPreview).toHaveBeenCalledWith({
       tenantId: ids.tenant,
-      batchId: '77777777-7777-4777-8777-777777777777'
+      batchId: '77777777-7777-4777-8777-777777777777',
+      scope: 'all'
     });
 
     await app.close();

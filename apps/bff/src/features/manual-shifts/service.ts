@@ -664,6 +664,15 @@ export function createManualShiftsServiceFromRepo(
   }
 
   return {
+    async getShiftById(tenantId, shiftId) {
+      const shift = await requireShift(shiftId);
+      if (shift.tenantId !== tenantId) throw manualShiftNotFound(shiftId);
+      return {
+        shift,
+        lines: await buildShiftLineSummariesLite(repo, shift.id, tenantId)
+      };
+    },
+
     async listShiftWorkers(input) {
       const shift = await requireShift(input.shiftId);
       if (shift.tenantId !== input.tenantId) throw manualShiftNotFound(input.shiftId);
