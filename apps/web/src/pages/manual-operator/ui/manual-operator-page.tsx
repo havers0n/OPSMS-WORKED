@@ -8,7 +8,6 @@ import { useMediaQuery } from '@/shared/hooks/use-media-query';
 import { useAuth } from '@/app/providers/auth-provider';
 import {
   isManualOperatorSection,
-  manualOperatorSectionPath,
   type ManualOperatorSection,
   routes
 } from '@/shared/config/routes';
@@ -94,7 +93,7 @@ function ManualOperatorSectionContent({
   targetDate,
   targetShift,
   isLoading,
-  canImportExcelByRole
+  canImportExcelByRole,
 }: {
   section: ManualOperatorSection;
   shift: ManualShiftSession | null;
@@ -282,11 +281,6 @@ export function ManualOperatorPage() {
   const [showTargetDatePicker, setShowTargetDatePicker] = useState(false);
   const targetMaxDate = addDays(todayDate, 90);
 
-  const isToday = selectedDate === todayDate;
-  const { data: shiftData, isLoading } = useQuery(shiftByDateQueryOptions(selectedDate));
-  const shift = shiftData?.shift ?? null;
-  const lines = shiftData?.lines ?? [];
-  const isReadOnly = !isToday || shift?.status === 'closed';
   const isDemandPlanningRoute = section === 'lines' && mode === 'demand' && !!batchId && !!draftId;
   const isAppendRoute = section === 'lines' && mode === 'append' && !!shiftIdFromParams && !!batchId;
   const isAppendCurrentShiftRoute = section === 'lines' && mode === 'demand' && intent === 'append-current-shift';
@@ -416,8 +410,8 @@ export function ManualOperatorPage() {
   const sectionContent = (
     <ManualOperatorSectionContent
       section={section}
-      shift={shift}
-      lines={lines}
+      shift={resolvedShift}
+      lines={resolvedLines}
       isReadOnly={isReadOnly}
       selectedDate={selectedDate}
       canMonthlyImport={canMonthlyImport}
@@ -429,6 +423,9 @@ export function ManualOperatorPage() {
       shiftIdFromParams={shiftIdFromParams}
       targetShiftIdParam={targetShiftIdParam}
       targetDate={targetDate}
+      targetShift={targetShift}
+      isLoading={isLoading}
+      canImportExcelByRole={canImportExcelByRole}
     />
   );
   const renderSectionWithoutShift = section === 'import' || section === 'printing' || section === 'lines' || isDemandPlanningRoute || isAppendRoute || isAppendCurrentShiftRoute;

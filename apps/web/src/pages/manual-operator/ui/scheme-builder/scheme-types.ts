@@ -95,7 +95,3 @@ export interface SchemeBuilderCapabilities {
   canWriteManualShift: boolean;
   canPrint: boolean;
 }
-
-export type DemandPlanningDraftUiMode = 'planningDraft' | 'publishedDraft';
-
-export type DemandPlanningPublishUiMode = 'noTargetShift' | 'readyToPublish';

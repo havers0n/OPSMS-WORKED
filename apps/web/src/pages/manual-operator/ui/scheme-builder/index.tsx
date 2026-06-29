@@ -60,13 +60,6 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   });
 
   const {
-    data: planningPreview, isLoading: previewLoading, error: previewError
-  } = useQuery({
-    ...demandPlanningPreviewQueryOptions(batchId ?? ''),
-    enabled: isDemandMode && !!batchId,
-  });
-
-  const {
     data: draftWithAssignments, isLoading: draftLoading, error: draftError, refetch: refetchDraft
   } = useQuery({
     ...demandPlanningDraftQueryOptions(draftId ?? ''),
@@ -79,7 +72,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   const publishUiMode: DemandPlanningPublishUiMode = targetShiftId ? 'readyToPublish' : 'noTargetShift';
   const isPublishedDraft = isDemandMode && draftUiMode === 'publishedDraft';
   const draftPublication = isPublishedDraft ? draftWithAssignments?.publication ?? null : null;
-  const canRevert = draftPublication?.status === 'applied' && (draftWithAssignments?.canRevert ?? false);
+  const canRevert = draftPublication?.status === 'active' && (draftWithAssignments?.canRevert ?? false);
   const revertBlockedReason = draftWithAssignments?.revertBlockedReason ?? null;
   const sourceScope = isPublishedDraft ? 'all' as const : (draftWithAssignments?.draft?.sourceScope ?? 'all') as 'all' | 'remaining';
   const {
@@ -486,8 +479,12 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
         {
           onSuccess: (data) => {
             setPublishResult({
+              shiftId: data.shiftId,
+              draftId: data.draftId,
               createdLines: data.createdLines,
+              reusedLines: data.reusedLines,
               createdOrders: data.createdOrders,
+              updatedOrders: data.updatedOrders,
               createdItems: data.createdItems,
               skippedRows: data.skippedRows,
               warnings: data.warnings,

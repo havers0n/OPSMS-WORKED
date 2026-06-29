@@ -23,6 +23,7 @@ export const manualShiftKeys = {
   all: ['manual-shift'] as const,
   today: () => [...manualShiftKeys.all, 'today'] as const,
   byDate: (date: string) => [...manualShiftKeys.all, 'by-date', date] as const,
+  byId: (shiftId: string) => [...manualShiftKeys.all, 'by-id', shiftId] as const,
   lines: (shiftId: string) => [...manualShiftKeys.all, 'lines', shiftId] as const,
   lineOrders: (lineId: string) => [...manualShiftKeys.all, 'line-orders', lineId] as const,
   shiftOrders: (shiftId: string) => [...manualShiftKeys.all, 'shift-orders', shiftId] as const,
@@ -86,6 +87,19 @@ export function shiftByDateQueryOptions(date: string) {
     queryFn: () => fetchShiftByDate(date),
     staleTime: 60_000,
     enabled: !!date
+  });
+}
+
+async function fetchShiftById(shiftId: string): Promise<ManualShiftTodayResponse> {
+  return bffRequest<ManualShiftTodayResponse>(`/api/manual-shifts/${shiftId}`);
+}
+
+export function shiftByIdQueryOptions(shiftId: string) {
+  return queryOptions({
+    queryKey: manualShiftKeys.byId(shiftId),
+    queryFn: () => fetchShiftById(shiftId),
+    staleTime: 60_000,
+    enabled: !!shiftId
   });
 }
 

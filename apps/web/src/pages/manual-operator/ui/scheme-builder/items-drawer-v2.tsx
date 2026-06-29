@@ -289,7 +289,7 @@ export function ItemsDrawerV2({
                                   key={wgId}
                                   className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800"
                                 >
-                                  {workGroupNameById.get(wgId) ?? '—'}
+                                  {workGroupNameById.get(wgId) ?? wgId.slice(0, 8)}
                                 </span>
                               ))}
                             </div>

@@ -4,20 +4,17 @@ import type { PlanningLine, SourceOrderItem, SchemeBuilderCapabilities } from '.
 import { useSchemeBuilderStore } from './scheme-store';
 import { WorkGroupCard } from './work-group-card';
 import { WorkGroupCreateModal } from './work-group-create-modal';
-import { getVisibleWorkGroups } from './scheme-display-utils';
 
 export function PlanningLineSection({
   planningLine,
   orderItemMap,
   onStartAssign,
   capabilities,
-  orderNumberMap,
 }: {
   planningLine: PlanningLine;
   orderItemMap: Record<string, SourceOrderItem[]>;
   onStartAssign: (workGroupId: string) => void;
   capabilities: SchemeBuilderCapabilities;
-  orderNumberMap: Record<string, string | null>;
 }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -28,9 +25,7 @@ export function PlanningLineSection({
   const renamePlanningLine = useSchemeBuilderStore((s) => s.renamePlanningLine);
   const deletePlanningLine = useSchemeBuilderStore((s) => s.deletePlanningLine);
 
-  const lineGroups = getVisibleWorkGroups(
-    workGroups.filter((wg) => wg.planningLineId === planningLine.id),
-  );
+  const lineGroups = workGroups.filter((wg) => wg.planningLineId === planningLine.id);
 
   const handleCreateWorkGroup = (name: string) => {
     createWorkGroup(planningLine.id, name);
@@ -136,7 +131,6 @@ export function PlanningLineSection({
                 orderItemMap={orderItemMap}
                 onStartAssign={onStartAssign}
                 capabilities={capabilities}
-                orderNumberMap={orderNumberMap}
               />
             ))}
           </div>

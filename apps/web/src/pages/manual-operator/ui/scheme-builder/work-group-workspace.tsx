@@ -4,28 +4,23 @@ import type { SourceOrderItem, SchemeBuilderCapabilities } from './scheme-types'
 import { useSchemeBuilderStore } from './scheme-store';
 import { PlanningLineSection } from './planning-line-section';
 import { PlanningLineCreateModal } from './planning-line-create-modal';
-import { getVisiblePlanningLines } from './scheme-display-utils';
 
 export function WorkGroupWorkspace({
   selectedAreaName,
   orderItemMap,
   onStartAssign,
   capabilities,
-  orderNumberMap,
 }: {
   selectedAreaName: string;
   orderItemMap: Record<string, SourceOrderItem[]>;
   onStartAssign: (workGroupId: string) => void;
   capabilities: SchemeBuilderCapabilities;
-  orderNumberMap: Record<string, string | null>;
 }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const getPlanningLinesByArea = useSchemeBuilderStore((s) => s.getPlanningLinesByArea);
   const createPlanningLine = useSchemeBuilderStore((s) => s.createPlanningLine);
 
-  const areaLines = getVisiblePlanningLines(
-    getPlanningLinesByArea(selectedAreaName),
-  );
+  const areaLines = getPlanningLinesByArea(selectedAreaName);
 
   const handleCreate = (name: string) => {
     createPlanningLine(selectedAreaName, name);
@@ -72,7 +67,6 @@ export function WorkGroupWorkspace({
                 orderItemMap={orderItemMap}
                 onStartAssign={onStartAssign}
                 capabilities={capabilities}
-                orderNumberMap={orderNumberMap}
               />
             ))}
         </div>
