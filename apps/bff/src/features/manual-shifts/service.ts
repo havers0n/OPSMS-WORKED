@@ -277,6 +277,7 @@ export type ManualShiftsService = {
     startedAt?: string | null;
     finishedAt?: string | null;
     checkedAt?: string | null;
+    lineId?: string | null;
     actor: ActorContext;
   }): Promise<ManualShiftOrder>;
   startOrderCheck(input: {
@@ -1890,6 +1891,18 @@ export function createManualShiftsServiceFromRepo(
 
       await requireActiveShift(order.shiftId);
 
+      if (input.lineId !== undefined) {
+        if (input.lineId !== null) {
+          const targetLine = await requireLine(input.lineId);
+          if (targetLine.tenant_id !== input.tenantId) {
+            throw manualShiftLineNotFound(input.lineId);
+          }
+          if (targetLine.shift_id !== order.shiftId) {
+            throw manualShiftLineNotFound(input.lineId);
+          }
+        }
+      }
+
       const hasPickerPatch =
         input.pickerWorkerId !== undefined || input.pickerName !== undefined;
       let nextPickerWorkerId = order.pickerWorkerId;
@@ -1947,7 +1960,8 @@ export function createManualShiftsServiceFromRepo(
         comment: input.comment,
         startedAt: input.startedAt,
         finishedAt: input.finishedAt,
-        checkedAt: input.checkedAt
+        checkedAt: input.checkedAt,
+        lineId: input.lineId
       });
 
       if (!updated) {
