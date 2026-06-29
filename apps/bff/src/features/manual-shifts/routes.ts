@@ -661,6 +661,7 @@ export function registerManualShiftsRoutes(
       startedAt: body.startedAt,
       finishedAt: body.finishedAt,
       checkedAt: body.checkedAt,
+      lineId: body.lineId,
       actor: actorFromAuth(auth)
     });
 

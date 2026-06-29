@@ -154,6 +154,9 @@ export function AppendModePanel({ shiftId, batchId }: AppendModePanelProps) {
                 onStartAssign={() => {}}
                 capabilities={APPEND_CAPABILITIES}
                 orderNumberMap={{}}
+                sourceOrders={[]}
+                isShiftMode={false}
+                shiftId={null}
               />
             ) : (
               <div className="bg-white border border-dashed border-gray-300 rounded-lg p-6 text-center">
