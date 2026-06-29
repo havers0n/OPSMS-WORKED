@@ -5,6 +5,16 @@ import { z } from 'zod';
 export type DeliveryPointStatus = 'active' | 'inactive' | 'needs_review';
 export type DeliveryPointAliasConfidence = 'confirmed' | 'review' | 'rejected';
 
+// ── DeliveryPoint match status ─────────────────────────────────────────────
+
+export const deliveryPointMatchStatusSchema = z.enum([
+  'matched',
+  'unmatched',
+  'ambiguous',
+  'not_attempted'
+]);
+export type DeliveryPointMatchStatus = z.infer<typeof deliveryPointMatchStatusSchema>;
+
 // ── DeliveryPoint schema ────────────────────────────────────────────────────
 
 export const deliveryPointSchema = z.object({

@@ -155,6 +155,12 @@ type ManualShiftOrderRow = {
   work_bucket_name: string | null;
   work_bucket_type: string | null;
   source_zone: string | null;
+  raw_destination_label: string | null;
+  delivery_point_id: string | null;
+  delivery_point_name: string | null;
+  delivery_point_match_status: string;
+  delivery_point_alias_text: string | null;
+  delivery_point_alias_id: string | null;
 };
 
 type ManualShiftOrderCheckUnitRow = {
@@ -323,7 +329,7 @@ const lineColumns =
 const workerColumns =
   'id,tenant_id,shift_id,name,role,active,sort_order,auth_user_id,created_at,updated_at';
 const orderColumns =
-  'id,tenant_id,shift_id,line_id,order_number,customer_name,point_name,pallet_count,picker_name,picker_worker_id,checker_name,line_count,sort_order,size,status,started_at,check_started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at,deleted_at,deleted_by_profile_id,deleted_by_name,delete_reason,raw_route_line,route_base,work_bucket_name,work_bucket_type,source_zone';
+  'id,tenant_id,shift_id,line_id,order_number,customer_name,point_name,pallet_count,picker_name,picker_worker_id,checker_name,line_count,sort_order,size,status,started_at,check_started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at,deleted_at,deleted_by_profile_id,deleted_by_name,delete_reason,raw_route_line,route_base,work_bucket_name,work_bucket_type,source_zone,raw_destination_label,delivery_point_id,delivery_point_name,delivery_point_match_status,delivery_point_alias_text,delivery_point_alias_id';
 const checkUnitColumns =
   'id,tenant_id,shift_id,line_id,order_id,unit_number,status,note,reason,checked_at,returned_at,voided_at,created_at,updated_at';
 const ashlamaColumns =
@@ -713,7 +719,15 @@ function mapOrderRow(row: ManualShiftOrderRow): ManualShiftOrder {
     routeBase: row.route_base,
     workBucketName: row.work_bucket_name,
     workBucketType: row.work_bucket_type,
-    sourceZone: row.source_zone
+    sourceZone: row.source_zone,
+    rawDestinationLabel: row.raw_destination_label,
+    deliveryPointId: row.delivery_point_id,
+    deliveryPointName: row.delivery_point_name,
+    deliveryPointMatchStatus: row.delivery_point_match_status === 'not_attempted' || row.delivery_point_match_status === 'matched' || row.delivery_point_match_status === 'unmatched' || row.delivery_point_match_status === 'ambiguous'
+      ? (row.delivery_point_match_status as ManualShiftOrder['deliveryPointMatchStatus'])
+      : undefined,
+    deliveryPointAliasText: row.delivery_point_alias_text,
+    deliveryPointAliasId: row.delivery_point_alias_id
   };
 }
 
@@ -868,6 +882,12 @@ export type ManualShiftOrderPatch = {
   deletedByProfileId?: string | null;
   deletedByName?: string | null;
   deleteReason?: string | null;
+  rawDestinationLabel?: string | null;
+  deliveryPointId?: string | null;
+  deliveryPointName?: string | null;
+  deliveryPointMatchStatus?: string;
+  deliveryPointAliasText?: string | null;
+  deliveryPointAliasId?: string | null;
 };
 
 export type ManualShiftOrderCheckUnitPatch = {
@@ -2557,6 +2577,12 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       if (patch.deletedByProfileId !== undefined) payload.deleted_by_profile_id = patch.deletedByProfileId;
       if (patch.deletedByName !== undefined) payload.deleted_by_name = patch.deletedByName;
       if (patch.deleteReason !== undefined) payload.delete_reason = patch.deleteReason;
+      if (patch.rawDestinationLabel !== undefined) payload.raw_destination_label = patch.rawDestinationLabel;
+      if (patch.deliveryPointId !== undefined) payload.delivery_point_id = patch.deliveryPointId;
+      if (patch.deliveryPointName !== undefined) payload.delivery_point_name = patch.deliveryPointName;
+      if (patch.deliveryPointMatchStatus !== undefined) payload.delivery_point_match_status = patch.deliveryPointMatchStatus;
+      if (patch.deliveryPointAliasText !== undefined) payload.delivery_point_alias_text = patch.deliveryPointAliasText;
+      if (patch.deliveryPointAliasId !== undefined) payload.delivery_point_alias_id = patch.deliveryPointAliasId;
 
       const { data, error } = await supabase
         .from('manual_shift_orders')
@@ -4456,7 +4482,12 @@ export function buildShiftWorkHierarchy(
           lineCount: rollup ? rollup.lineCount : 0,
           totalQuantity,
           hasAshlama: orderAshlamot.some((a) => a.status === 'open'),
-          hasCheckUnits: orderCheckUnits.length > 0
+          hasCheckUnits: orderCheckUnits.length > 0,
+          rawDestinationLabel: o.rawDestinationLabel ?? null,
+          deliveryPointId: o.deliveryPointId ?? null,
+          deliveryPointName: o.deliveryPointName ?? null,
+          deliveryPointMatchStatus: o.deliveryPointMatchStatus,
+          deliveryPointAliasText: o.deliveryPointAliasText ?? null
         };
       });
 

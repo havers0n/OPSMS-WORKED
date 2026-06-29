@@ -134,13 +134,38 @@ export function DesktopOrderDetail({ detail, onClose }: DesktopOrderDetailProps)
           </span>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <HeaderMetric label="קו" value={detail.lineName ?? MISSING_VALUE} />
-          <HeaderMetric label="נקודה" value={detail.pointName ?? MISSING_VALUE} />
-          <HeaderMetric label="סטטוס" value={STATUS_LABEL[detail.status]} />
-          <HeaderMetric label="לקוח" value={detail.customerName ?? MISSING_VALUE} />
-        </div>
-      </header>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <HeaderMetric label="קו" value={detail.lineName ?? MISSING_VALUE} />
+            <HeaderMetric label="נקודה" value={detail.pointName ?? MISSING_VALUE} />
+            <HeaderMetric label="סטטוס" value={STATUS_LABEL[detail.status]} />
+            <HeaderMetric label="לקוח" value={detail.customerName ?? MISSING_VALUE} />
+          </div>
+          {detail.deliveryPointMatchStatus && detail.deliveryPointMatchStatus !== 'not_attempted' && (
+            <div className="mt-2 flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs">
+              {detail.deliveryPointMatchStatus === 'matched' && detail.deliveryPointName && (
+                <>
+                  <span className="font-semibold text-gray-700">נקודת משלוח:</span>
+                  <span className="text-gray-900">{detail.deliveryPointName}</span>
+                  <span className="mr-auto rounded-full bg-green-100 px-2 py-0.5 text-green-700">זוהה</span>
+                </>
+              )}
+              {detail.deliveryPointMatchStatus === 'unmatched' && (
+                <>
+                  <span className="text-gray-500">תווית מקור:</span>
+                  <span className="text-gray-700">{detail.rawDestinationLabel ?? detail.pointName ?? MISSING_VALUE}</span>
+                  <span className="mr-auto rounded-full bg-red-100 px-2 py-0.5 text-red-700">לא זוהה</span>
+                </>
+              )}
+              {detail.deliveryPointMatchStatus === 'ambiguous' && (
+                <>
+                  <span className="text-gray-500">תווית מקור:</span>
+                  <span className="text-gray-700">{detail.rawDestinationLabel ?? detail.pointName ?? MISSING_VALUE}</span>
+                  <span className="mr-auto rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">התאמה לא חד-משמעית</span>
+                </>
+              )}
+            </div>
+          )}
+        </header>
 
       <OrderItemsSection items={orderDetail?.items ?? []} totalQuantity={totalQuantity} />
 
