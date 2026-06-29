@@ -115,6 +115,14 @@ Storage preset domain in product context:
 - `GET /api/demand-imports/:batchId/planning-preview` is read-only: it reads staged `raw_demand_rows`, groups normal rows by `distributionArea` and `orderNumber + customerName`, and keeps `special_flow` and `error` rows visible without applying anything to `manual_shift_*`.
 - `scope=remaining` subtracts quantities recorded in `demand_planning_published_allocations` by applied publish transactions. A remaining-scoped draft is a new draft; an applied draft is never reopened. Publish locks source rows and returns `DEMAND_PLANNING_DEMAND_ALREADY_CONSUMED` (409) if another draft already consumed the requested quantity.
 
+## Demand planning availability
+
+- `GET /api/demand-planning/available-demand`
+- Read-only canonical availability view for planning inspection.
+- Available quantity is computed from `demand_backlog_items.total_quantity` minus published ledger consumption from applied `demand_planning_published_allocations` rows whose publication status is `applied`.
+- Draft allocations do not consume availability, reverted publications do not consume availability, and source batches are metadata only.
+- This endpoint is not the publish source of truth yet.
+
 ## Warehouse labels
 
 - `GET /api/floors/:floorId/rack-slot-location-refs`

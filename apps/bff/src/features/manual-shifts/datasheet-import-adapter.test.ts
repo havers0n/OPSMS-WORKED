@@ -47,6 +47,19 @@ describe('DataSheet import adapter', () => {
     expect(result.rows[0].distributionArea).toBe('גליל');
   });
 
+  it('reads the planned delivery date from the DataSheet delivery-date column', () => {
+    const deliveryDate = new Date(Date.UTC(2026, 5, 25));
+    const { buffer } = workbookFromAoA([
+      baseHeader(),
+      ['agent', '24.6.26', 'לקוח א', 'SO-1', 'SKU-1', 'מוצר', 'cat', 3, 10, null, deliveryDate, null, 'דרום']
+    ]);
+
+    const result = parseDemandImportDataSheetWorkbook({ fileName: 'datasheet.xlsx', buffer });
+
+    expect(result.rows[0].plannedDeliveryDateRaw).toBeInstanceOf(Date);
+    expect((result.rows[0].plannedDeliveryDateRaw as Date).toISOString().slice(0, 10)).toBe('2026-06-25');
+  });
+
   it('reads rows beyond a stale filter range by using the real sheet range', () => {
     const { workbook, sheet } = workbookFromAoA([
       baseHeader(),

@@ -44,6 +44,7 @@ import {
   manualShiftTodayResponseSchema,
   manualShiftBulkAddResponseSchema,
   manualShiftImportPreviewResponseSchema,
+  demandImportAvailableBatchesResponseSchema,
   demandImportDataSheetCreateResponseSchema,
   demandImportDataSheetPreviewResponseSchema,
   rawDemandPlanningPreviewResponseSchema,
@@ -75,11 +76,14 @@ import {
   demandPlanningPutPlanRequestBodySchema,
   demandPlanningPublishToShiftRequestBodySchema,
   demandPlanningPublishToShiftResponseBodySchema,
+  demandPlanningRevertPublicationResponseBodySchema,
+  demandAvailableDemandResponseSchema,
   demandImportAppendDiffResponseSchema,
   demandImportAppendDiffRequestSchema,
   demandBacklogListResponseSchema,
   demandBacklogSummaryResponseSchema,
-  demandBacklogQuerySchema
+  demandBacklogQuerySchema,
+  rollingAvailableDemandResponseSchema
 } from '../../schemas.js';
 import { parseOrThrow } from '../../validation.js';
 import { generatePickerSheetPdf, type PickerSheetPdfParams } from './picker-sheet-pdf.js';
@@ -793,6 +797,21 @@ export function registerManualShiftsRoutes(
     });
   });
 
+  app.get('/api/demand-imports/available-for-planning', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-imports/available-for-planning', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      const tenantId = requireTenant(auth);
+
+      const result = await getManualShiftsService(auth).listAvailableDemandImportBatches({
+        tenantId
+      });
+
+      return parseOrThrow(demandImportAvailableBatchesResponseSchema, { batches: result });
+    });
+  });
+
   app.get('/api/demand-imports/:batchId/planning-preview', async (request, reply) => {
     return handleManualShiftImportRoute(request, reply, '/api/demand-imports/:batchId/planning-preview', async () => {
       const auth = await getAuthContext(request, reply);
@@ -929,6 +948,53 @@ export function registerManualShiftsRoutes(
       });
 
       return parseOrThrow(demandPlanningPublishToShiftResponseBodySchema, result);
+    });
+  });
+
+  // --- Demand Planning Publication revert ---
+
+  app.post('/api/demand-planning-publications/:publicationId/revert', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-planning-publications/:publicationId/revert', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      const tenantId = requireTenant(auth);
+      const { id: publicationId } = parseOrThrow(idResponseSchema, {
+        id: request.params && typeof request.params === 'object' ? (request.params as Record<string, unknown>).publicationId : null
+      });
+
+      const result = await getManualShiftsService(auth).revertDemandPlanningPublication({
+        tenantId,
+        publicationId
+      });
+
+      return parseOrThrow(demandPlanningRevertPublicationResponseBodySchema, result);
+    });
+  });
+
+  app.get('/api/demand-planning/available-demand', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-planning/available-demand', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      const tenantId = requireTenant(auth);
+      const result = await getManualShiftsService(auth).getAvailableDemand({
+        tenantId
+      });
+
+      return parseOrThrow(demandAvailableDemandResponseSchema, result);
+    });
+  });
+
+  app.get('/api/demand-planning/rolling-available-demand', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-planning/rolling-available-demand', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      const tenantId = requireTenant(auth);
+      const result = await getManualShiftsService(auth).getRollingAvailableDemand({ tenantId });
+
+      return parseOrThrow(rollingAvailableDemandResponseSchema, result);
     });
   });
 

@@ -1441,6 +1441,269 @@ function fakeSupabase(
   };
 }
 
+function createAvailableDemandSupabaseStub(state: {
+  tenantId: string;
+  backlogItems: Array<Record<string, unknown>>;
+  sourceLinks: Array<Record<string, unknown>>;
+  batches: Array<Record<string, unknown>>;
+  publishedAllocations: Array<Record<string, unknown>>;
+  publications: Array<Record<string, unknown>>;
+}) {
+  function makeBuilder(rows: Array<Record<string, unknown>>) {
+    let filtered = [...rows];
+    const builder = {
+      select(_cols: string) {
+        return builder;
+      },
+      eq(col: string, val: unknown) {
+        filtered = filtered.filter((row) => row[col] === val);
+        return builder;
+      },
+      in(col: string, vals: unknown[]) {
+        filtered = filtered.filter((row) => vals.includes(row[col]));
+        return builder;
+      },
+      order(_col: string, _opts?: { ascending?: boolean }) {
+        return builder;
+      },
+      maybeSingle() {
+        const data = filtered.length > 0 ? filtered[0] : null;
+        return Promise.resolve({ data, error: null });
+      },
+      then(resolve: (result: { data: Array<Record<string, unknown>> | null; error: null }) => void) {
+        resolve({ data: filtered.length > 0 ? filtered : null, error: null });
+      }
+    };
+    return builder;
+  }
+
+  return {
+    from(table: string) {
+      if (table === 'demand_planning_allocations') {
+        throw new Error('draft allocations should not be queried for available demand');
+      }
+
+      const rows =
+        table === 'demand_backlog_items' ? state.backlogItems :
+        table === 'demand_backlog_item_sources' ? state.sourceLinks :
+        table === 'demand_import_batches' ? state.batches :
+        table === 'demand_planning_published_allocations' ? state.publishedAllocations :
+        table === 'demand_planning_publications' ? state.publications :
+        [];
+
+      return makeBuilder(rows);
+    }
+  };
+}
+
+function createRollingPublishedAllocationsSupabaseStub(rows: Array<Record<string, unknown>>) {
+  const selectedColumns: string[] = [];
+
+  return {
+    selectedColumns,
+    supabase: {
+      from(table: string) {
+        if (table !== 'demand_planning_published_allocations') {
+          throw new Error(`unexpected table: ${table}`);
+        }
+
+        let filtered = [...rows];
+        const builder = {
+          select(columns: string) {
+            selectedColumns.push(columns);
+            return builder;
+          },
+          eq(column: string, value: unknown) {
+            filtered = filtered.filter((row) => row[column] === value);
+            return builder;
+          },
+          then(resolve: (result: { data: Array<Record<string, unknown>>; error: null }) => void) {
+            resolve({ data: filtered, error: null });
+          }
+        };
+
+        return builder;
+      }
+    }
+  };
+}
+
+describe('rolling available demand published allocations', () => {
+  const TEST_TENANT_ID = 'a0000000-0000-4000-8000-000000000001';
+  const TEST_OTHER_TENANT_ID = 'a0000000-0000-4000-8000-000000000002';
+  const TEST_PUBLISHED_ALLOCATION_ID = 'a1000000-0000-4000-8000-000000000001';
+  const TEST_RAW_DEMAND_ROW_ID = 'a2000000-0000-4000-8000-000000000001';
+  const TEST_LEGACY_RAW_DEMAND_ROW_ID = 'a2000000-0000-4000-8000-000000000002';
+  const TEST_REVERTED_RAW_DEMAND_ROW_ID = 'a2000000-0000-4000-8000-000000000003';
+  const TEST_REVERTED_AT_RAW_DEMAND_ROW_ID = 'a2000000-0000-4000-8000-000000000004';
+  const TEST_CROSS_TENANT_RAW_DEMAND_ROW_ID = 'a2000000-0000-4000-8000-000000000005';
+  const TEST_OTHER_TENANT_RAW_DEMAND_ROW_ID = 'a2000000-0000-4000-8000-000000000006';
+  const TEST_PUBLICATION_ID = 'a3000000-0000-4000-8000-000000000001';
+  const TEST_REVERTED_PUBLICATION_ID = 'a3000000-0000-4000-8000-000000000002';
+  const TEST_REVERTED_AT_PUBLICATION_ID = 'a3000000-0000-4000-8000-000000000003';
+
+  it('maps object-shaped joins and keeps only same-tenant source rows eligible for subtraction', async () => {
+    const tenantId = TEST_TENANT_ID;
+    const rawDemandRow = {
+      tenant_id: tenantId,
+      order_number: 'SO26090001',
+      sku: '463071',
+      customer_name: 'Customer',
+      distribution_area: 'North',
+      planned_delivery_date: '2026-07-01'
+    };
+    const { supabase, selectedColumns } = createRollingPublishedAllocationsSupabaseStub([
+      {
+        id: TEST_PUBLISHED_ALLOCATION_ID,
+        tenant_id: tenantId,
+        raw_demand_row_id: TEST_RAW_DEMAND_ROW_ID,
+        published_quantity: '10',
+        publication_id: TEST_PUBLICATION_ID,
+        raw_demand_row: rawDemandRow,
+        publication: { tenant_id: tenantId, status: 'applied', reverted_at: null }
+      },
+      {
+        tenant_id: tenantId,
+        raw_demand_row_id: TEST_LEGACY_RAW_DEMAND_ROW_ID,
+        published_quantity: 2,
+        publication_id: null,
+        raw_demand_row: [rawDemandRow],
+        publication: null
+      },
+      {
+        tenant_id: tenantId,
+        raw_demand_row_id: TEST_REVERTED_RAW_DEMAND_ROW_ID,
+        published_quantity: 3,
+        publication_id: TEST_REVERTED_PUBLICATION_ID,
+        raw_demand_row: rawDemandRow,
+        publication: { tenant_id: tenantId, status: 'reverted', reverted_at: '2026-06-29T10:00:00.000Z' }
+      },
+      {
+        tenant_id: tenantId,
+        raw_demand_row_id: TEST_REVERTED_AT_RAW_DEMAND_ROW_ID,
+        published_quantity: 4,
+        publication_id: TEST_REVERTED_AT_PUBLICATION_ID,
+        raw_demand_row: rawDemandRow,
+        publication: { tenant_id: tenantId, status: 'applied', reverted_at: '2026-06-29T10:00:00.000Z' }
+      },
+      {
+        tenant_id: tenantId,
+        raw_demand_row_id: TEST_CROSS_TENANT_RAW_DEMAND_ROW_ID,
+        published_quantity: 20,
+        publication_id: null,
+        raw_demand_row: { ...rawDemandRow, tenant_id: TEST_OTHER_TENANT_ID },
+        publication: null
+      },
+      {
+        tenant_id: TEST_OTHER_TENANT_ID,
+        raw_demand_row_id: TEST_OTHER_TENANT_RAW_DEMAND_ROW_ID,
+        published_quantity: 50,
+        publication_id: null,
+        raw_demand_row: { ...rawDemandRow, tenant_id: TEST_OTHER_TENANT_ID },
+        publication: null
+      }
+    ]);
+
+    const repo = createManualShiftsRepo(supabase as never);
+    const allocations = await repo.listPublishedAllocationsForRolling({ tenantId });
+
+    expect(allocations).toHaveLength(4);
+    expect(allocations.map((allocation) => ({
+      rawDemandRowId: allocation.rawDemandRowId,
+      publishedQuantity: allocation.publishedQuantity,
+      publicationStatus: allocation.publicationStatus
+    }))).toEqual([
+      { rawDemandRowId: TEST_RAW_DEMAND_ROW_ID, publishedQuantity: 10, publicationStatus: 'applied' },
+      { rawDemandRowId: TEST_LEGACY_RAW_DEMAND_ROW_ID, publishedQuantity: 2, publicationStatus: null },
+      { rawDemandRowId: TEST_REVERTED_RAW_DEMAND_ROW_ID, publishedQuantity: 3, publicationStatus: 'reverted' },
+      { rawDemandRowId: TEST_REVERTED_AT_RAW_DEMAND_ROW_ID, publishedQuantity: 4, publicationStatus: 'reverted' }
+    ]);
+    expect(selectedColumns[0]).toContain('raw_demand_row:raw_demand_row_id');
+    expect(selectedColumns[0]).toContain('reverted_at');
+  });
+});
+
+describe('available demand snapshot', () => {
+  it('uses the published ledger, ignores draft allocations, and filters by tenant', async () => {
+    const supabase = createAvailableDemandSupabaseStub({
+      tenantId: 'tenant-a',
+      backlogItems: [
+        {
+          id: 'backlog-1',
+          tenant_id: 'tenant-a',
+          identity_key: 'k1',
+          status: 'open',
+          total_quantity: 10,
+          order_number: 'SO-1',
+          customer_name: 'Customer',
+          sku: 'SKU-1',
+          description: null,
+          category: null,
+          distribution_area: 'North',
+          product_handling_flow: 'regular',
+          route_flow: 'unassigned',
+          first_seen_at: '2026-06-27T00:00:00.000Z',
+          last_seen_at: '2026-06-27T00:00:00.000Z',
+          last_quantity_changed_at: null,
+          created_at: '2026-06-27T00:00:00.000Z',
+          updated_at: '2026-06-27T00:00:00.000Z'
+        },
+        {
+          id: 'backlog-2',
+          tenant_id: 'tenant-b',
+          identity_key: 'other',
+          status: 'open',
+          total_quantity: 99,
+          order_number: 'SO-X',
+          customer_name: 'Other',
+          sku: 'SKU-X',
+          description: null,
+          category: null,
+          distribution_area: 'South',
+          product_handling_flow: 'regular',
+          route_flow: 'unassigned',
+          first_seen_at: '2026-06-27T00:00:00.000Z',
+          last_seen_at: '2026-06-27T00:00:00.000Z',
+          last_quantity_changed_at: null,
+          created_at: '2026-06-27T00:00:00.000Z',
+          updated_at: '2026-06-27T00:00:00.000Z'
+        }
+      ],
+      sourceLinks: [
+        { tenant_id: 'tenant-a', backlog_item_id: 'backlog-1', raw_demand_row_id: 'row-1', batch_id: 'batch-1' },
+        { tenant_id: 'tenant-b', backlog_item_id: 'backlog-2', raw_demand_row_id: 'row-9', batch_id: 'batch-9' }
+      ],
+      batches: [
+        { tenant_id: 'tenant-a', id: 'batch-1', source_file: 'same.xlsx', uploaded_at: '2026-06-27T00:00:00.000Z' },
+        { tenant_id: 'tenant-b', id: 'batch-9', source_file: 'other.xlsx', uploaded_at: '2026-06-27T00:00:00.000Z' }
+      ],
+      publishedAllocations: [
+        { tenant_id: 'tenant-a', raw_demand_row_id: 'row-1', published_quantity: 4, publication_id: 'pub-1' },
+        { tenant_id: 'tenant-a', raw_demand_row_id: 'row-1', published_quantity: 1, publication_id: 'pub-2' },
+        { tenant_id: 'tenant-a', raw_demand_row_id: 'row-1', published_quantity: 7, publication_id: 'pub-3' },
+        { tenant_id: 'tenant-b', raw_demand_row_id: 'row-9', published_quantity: 50, publication_id: 'pub-9' }
+      ],
+      publications: [
+        { tenant_id: 'tenant-a', id: 'pub-1', status: 'applied' },
+        { tenant_id: 'tenant-a', id: 'pub-2', status: 'reverted' },
+        { tenant_id: 'tenant-a', id: 'pub-3', status: 'applied' },
+        { tenant_id: 'tenant-b', id: 'pub-9', status: 'applied' }
+      ]
+    });
+
+    const repo = createManualShiftsRepo(supabase as never);
+    const snapshot = await repo.getAvailableDemandSnapshot!({ tenantId: 'tenant-a' });
+
+    expect(snapshot.backlogItems).toHaveLength(1);
+    expect(snapshot.backlogItems[0].tenantId).toBe('tenant-a');
+    expect(snapshot.sourceLinks).toHaveLength(1);
+    expect(snapshot.sourceBatches).toHaveLength(1);
+    expect(snapshot.publishedAllocations).toHaveLength(3);
+    expect(snapshot.publishedAllocations[0].publicationStatus).toBe('applied');
+    expect(snapshot.publishedAllocations[1].publicationStatus).toBe('reverted');
+  });
+});
+
 describe('listBucketProductRollup sourceZone isolation', () => {
   const SHIFT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const LINE = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';

@@ -101,6 +101,7 @@ import {
   demandPlanningPutPlanRequestSchema,
   demandPlanningPublishToShiftRequestSchema,
   demandPlanningPublishToShiftResponseSchema,
+  demandAvailableDemandResponseSchema as demandAvailableDemandResponseDtoSchema,
   manualShiftMonthlyPreviewSchema,
   manualShiftMonthlyApplyResponseSchema as manualShiftMonthlyApplyResponseDtoSchema,
   manualShiftMonthlyReplaceSafetySchema as manualShiftMonthlyReplaceSafetyDtoSchema,
@@ -119,7 +120,8 @@ import {
   demandBacklogSummaryResponseSchema,
   demandBacklogQuerySchema,
   demandBacklogItemResponseSchema,
-  demandBacklogSourceBatchSchema
+  demandBacklogSourceBatchSchema,
+  rollingAvailableDemandResponseSchema
 } from '@wos/domain';
 
 // ── Rack Inspector ──────────────────────────────────────────────────────────
@@ -595,6 +597,21 @@ export const manualShiftImportPreviewResponseSchema = z.object({
 export const demandImportDataSheetPreviewResponseSchema = z.object({
   preview: demandImportDataSheetPreviewSchema
 });
+const demandImportAvailableBatchesDtoSchema = z.object({
+  id: z.string().uuid(),
+  sourceFile: z.string(),
+  sourceSheet: z.string(),
+  uploadedAt: z.string(),
+  status: z.string(),
+  totalRows: z.number(),
+  totalOrders: z.number(),
+  remainingRows: z.number(),
+  remainingQuantity: z.number(),
+  canPlan: z.boolean()
+});
+export const demandImportAvailableBatchesResponseSchema = z.object({
+  batches: z.array(demandImportAvailableBatchesDtoSchema)
+});
 export const demandImportDataSheetCreateResponseSchema = demandImportDataSheetCreateDtoSchema;
 export const rawDemandPlanningPreviewResponseSchema = rawDemandPlanningPreviewDtoSchema;
 export const demandImportBatchResponseSchema = demandImportBatchSchema;
@@ -604,6 +621,29 @@ export const demandPlanningCreateDraftRequestBodySchema = demandPlanningCreateDr
 export const demandPlanningPutPlanRequestBodySchema = demandPlanningPutPlanRequestSchema;
 export const demandPlanningPublishToShiftRequestBodySchema = demandPlanningPublishToShiftRequestSchema;
 export const demandPlanningPublishToShiftResponseBodySchema = demandPlanningPublishToShiftResponseSchema;
+const demandPlanningPublicationSchema = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  batchId: z.string().uuid(),
+  draftId: z.string().uuid(),
+  targetShiftId: z.string().uuid(),
+  status: z.enum(['active', 'reverted']),
+  createdAt: z.string(),
+  revertedAt: z.string().nullable(),
+  revertedBy: z.string().uuid().nullable()
+});
+export const demandPlanningPublicationResponseSchema = demandPlanningPublicationSchema;
+
+const demandPlanningRevertPublicationResponseSchema = z.object({
+  publicationId: z.string().uuid(),
+  draftId: z.string().uuid(),
+  shiftId: z.string().uuid(),
+  revertedOrders: z.number().int().min(0),
+  revertedItems: z.number().int().min(0),
+  releasedQuantity: z.number().min(0)
+});
+export const demandPlanningRevertPublicationResponseBodySchema = demandPlanningRevertPublicationResponseSchema;
+export const demandAvailableDemandResponseSchema = demandAvailableDemandResponseDtoSchema;
 export const manualShiftMonthlyImportPreviewResponseSchema = z.object({
   preview: manualShiftMonthlyPreviewSchema
 });
@@ -622,9 +662,7 @@ export const demandImportAppendDiffRequestSchema = z.object({
 
 export { demandBacklogListResponseSchema, demandBacklogSummaryResponseSchema, demandBacklogQuerySchema };
 export { demandBacklogItemResponseSchema, demandBacklogSourceBatchSchema };
-
-// ── Manual shift print ──────────────────────────────────────────────────────────
-
+export { rollingAvailableDemandResponseSchema };
 export { pickerSheetPrintDataSchema } from '@wos/domain';
 
 // ── Orders ────────────────────────────────────────────────────────────────────

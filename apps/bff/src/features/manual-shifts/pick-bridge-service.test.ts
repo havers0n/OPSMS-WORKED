@@ -346,6 +346,22 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
       newestItemSeenAt: null
     })),
     countBacklogDistinctBatches: vi.fn(async () => 0),
+
+    listDemandImportBatches: vi.fn(async () => []),
+    listAvailableDemandImportBatches: vi.fn(async () => []),
+    getDemandPlanningPublication: vi.fn(async () => null),
+    revertDemandPlanningPublication: vi.fn(async () => ({
+      publicationId: '',
+      draftId: '',
+      shiftId: '',
+      revertedOrders: 0,
+      revertedItems: 0,
+      releasedQuantity: 0
+    })),
+    getDemandPlanningDraftPublication: vi.fn(async () => null),
+    listReadyBatches: vi.fn(async () => []),
+    listRawDemandRowsForBatches: vi.fn(async () => []),
+    listPublishedAllocationsForRolling: vi.fn(async () => []),
   };
 }
 

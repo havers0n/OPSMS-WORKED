@@ -679,10 +679,57 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
       oldestItemSeenAt: null,
       newestItemSeenAt: null
     })),
+    getAvailableDemand: vi.fn(async () => ({
+      summary: {
+        ordersCount: 0,
+        rowsCount: 0,
+        totalQuantity: 0,
+        distributionAreasCount: 0
+      },
+      groups: [],
+      sourceBatches: [],
+      excludedCounts: {
+        specialFlowItems: 0,
+        fullyConsumedItems: 0,
+        duplicateSourceFiles: 0
+      },
+      warnings: [],
+      canPlan: false
+    })),
+    revertDemandPlanningPublication: vi.fn(async () => ({
+      publicationId: '',
+      draftId: '',
+      shiftId: '',
+      revertedOrders: 0,
+      revertedItems: 0,
+      releasedQuantity: 0
+    })),
+    listAvailableDemandImportBatches: vi.fn(async () => []),
+    getRollingAvailableDemand: vi.fn(async () => ({
+      summary: {
+        totalRows: 0,
+        totalAvailableQuantity: 0,
+        byStatus: {
+          available: 0,
+          fullyConsumed: 0,
+          duplicateConflict: 0,
+          overPublished: 0,
+          requiresReview: 0,
+          excludedNonSo: 0
+        }
+      },
+      rows: [],
+      warnings: [],
+      diagnostics: {
+        totalBatches: 0,
+        totalRawRows: 0,
+        totalFallbackKeys: 0,
+        batchesAnalyzed: []
+      }
+    })),
     ...overrides
   };
 }
-
 async function buildTestApp(service: ManualShiftsService, auth: AuthenticatedRequestContext | null = authContext) {
   const app = Fastify({ logger: false });
   await app.register(multipart, {
@@ -3615,6 +3662,23 @@ describe('demand planning draft routes', () => {
       getDemandPlanningDraft: vi.fn(async () => draftResponse) as unknown as ManualShiftsService['getDemandPlanningDraft'],
       putDemandPlanningPlan: vi.fn(async () => draftResponse) as unknown as ManualShiftsService['putDemandPlanningPlan'],
       publishDemandPlanningDraftToShift: vi.fn(async () => publishResponse) as unknown as ManualShiftsService['publishDemandPlanningDraftToShift'],
+      getAvailableDemand: vi.fn(async () => ({
+        summary: {
+          ordersCount: 0,
+          rowsCount: 0,
+          totalQuantity: 0,
+          distributionAreasCount: 0
+        },
+        groups: [],
+        sourceBatches: [],
+        excludedCounts: {
+          specialFlowItems: 0,
+          fullyConsumedItems: 0,
+          duplicateSourceFiles: 0
+        },
+        warnings: [],
+        canPlan: false
+      })) as unknown as ManualShiftsService['getAvailableDemand'],
       ...overrides
     };
   }
@@ -3635,6 +3699,7 @@ describe('demand planning draft routes', () => {
 
     await app.close();
   });
+
 
   it('GET /api/demand-planning-drafts/:draftId returns 200', async () => {
     const service = createDemandMock();
@@ -3666,6 +3731,62 @@ describe('demand planning draft routes', () => {
     });
 
     expect(response.statusCode).toBe(200);
+
+    await app.close();
+  });
+
+  it('GET /api/demand-planning/available-demand returns 200', async () => {
+    const service = createDemandMock({
+      getAvailableDemand: vi.fn(async () => ({
+        summary: {
+          ordersCount: 1,
+          rowsCount: 1,
+          totalQuantity: 10,
+          distributionAreasCount: 1
+        },
+        groups: [{
+          backlogItemId: '99999999-9999-4999-8999-999999999999',
+          identityKey: 'k1',
+          status: 'open' as const,
+          orderNumber: 'SO-1',
+          customerName: 'Customer',
+          sku: 'SKU-1',
+          distributionArea: 'North',
+          totalQuantity: 10,
+          consumedQuantity: 0,
+          availableQuantity: 10,
+          sourceBatchIds: ['88888888-8888-4888-8888-888888888888'],
+          sourceRowCount: 1,
+          firstSeenAt: '2026-06-27T00:00:00.000Z',
+          lastSeenAt: '2026-06-27T00:00:00.000Z'
+        }],
+        sourceBatches: [{
+          batchId: '88888888-8888-4888-8888-888888888888',
+          sourceFile: 'same.xlsx',
+          uploadedAt: '2026-06-27T00:00:00.000Z',
+          rowCount: 1,
+          backlogItemCount: 1
+        }],
+        excludedCounts: {
+          specialFlowItems: 0,
+          fullyConsumedItems: 0,
+          duplicateSourceFiles: 0
+        },
+        warnings: [],
+        canPlan: true
+      })) as unknown as ManualShiftsService['getAvailableDemand']
+    });
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/demand-planning/available-demand'
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.payload);
+    expect(body.canPlan).toBe(true);
+    expect(body.summary.totalQuantity).toBe(10);
 
     await app.close();
   });

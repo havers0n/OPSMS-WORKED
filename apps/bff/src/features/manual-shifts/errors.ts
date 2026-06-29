@@ -326,3 +326,23 @@ export function demandPlanningNoPublishableRows(draftId: string) {
     `Demand planning draft ${draftId} has no publishable rows.`
   );
 }
+
+export function demandPlanningPublicationNotFound(publicationId: string) {
+  return new ApiError(404, 'PUBLICATION_NOT_FOUND', `Publication ${publicationId} not found.`);
+}
+
+export function demandPlanningPublicationAlreadyReverted(publicationId: string) {
+  return new ApiError(409, 'PUBLICATION_ALREADY_REVERTED', `Publication ${publicationId} is already reverted.`);
+}
+
+export function demandPlanningDraftNotApplied(draftId: string) {
+  return new ApiError(409, 'DRAFT_NOT_APPLIED', `Draft ${draftId} has not been applied.`);
+}
+
+export function demandPlanningPublishedShiftHasActivity(shiftId: string, reasons: string[]) {
+  return new ApiError(409, 'PUBLISHED_SHIFT_HAS_ACTIVITY', `Shift ${shiftId} has activity: ${reasons.join(', ')}.`);
+}
+
+export function demandPlanningPublicationOldNoLineage(draftId: string) {
+  return new ApiError(409, 'PUBLICATION_OLD_NO_LINEAGE', `Publication for draft ${draftId} is too old to revert.`);
+}
