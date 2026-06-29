@@ -297,8 +297,8 @@ export function ManualOperatorPage() {
   const resolvedShift = shiftData?.shift ?? null;
   const resolvedLines = shiftData?.lines ?? [];
   const effectiveDate = resolvedShift?.date ?? selectedDate;
-  const effectiveToday = effectiveDate === todayDate;
-  const isReadOnly = !effectiveToday || resolvedShift?.status === 'closed';
+  const isToday = selectedDate === todayDate;
+  const isReadOnly = !isToday || resolvedShift?.status === 'closed';
   const hasExistingWork = resolvedLines.length > 0;
 
   const { data: demandDraftData } = useQuery({
@@ -439,7 +439,7 @@ export function ManualOperatorPage() {
           lines={resolvedLines}
           isLoading={isLoading}
           isReadOnly={isReadOnly}
-          isToday={effectiveToday}
+          isToday={isToday}
           canMonthlyImport={canMonthlyImport}
           hasExistingWork={hasExistingWork}
           isDesktop={isDesktop}
@@ -512,7 +512,7 @@ export function ManualOperatorPage() {
             <Loader2 size={32} className="animate-spin text-gray-400" />
           </div>
         ) : !resolvedShift && !renderSectionWithoutShift ? (
-          <ShiftEmptyState onCreateShift={handleCreateShift} isCreating={createShift.isPending} isToday={effectiveToday} />
+          <ShiftEmptyState onCreateShift={handleCreateShift} isCreating={createShift.isPending} isToday={isToday} />
         ) : isDesktop && section !== 'lines' && section !== 'products' ? (
           <div className="mx-auto max-w-4xl px-4 py-6">
             {sectionContent}
