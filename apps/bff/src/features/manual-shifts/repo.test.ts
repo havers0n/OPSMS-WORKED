@@ -1496,6 +1496,133 @@ function createAvailableDemandSupabaseStub(state: {
   };
 }
 
+function createRollingPublishedAllocationsSupabaseStub(rows: Array<Record<string, unknown>>) {
+  const selectedColumns: string[] = [];
+
+  return {
+    selectedColumns,
+    supabase: {
+      from(table: string) {
+        if (table !== 'demand_planning_published_allocations') {
+          throw new Error(`unexpected table: ${table}`);
+        }
+
+        let filtered = [...rows];
+        const builder = {
+          select(columns: string) {
+            selectedColumns.push(columns);
+            return builder;
+          },
+          eq(column: string, value: unknown) {
+            filtered = filtered.filter((row) => row[column] === value);
+            return builder;
+          },
+          then(resolve: (result: { data: Array<Record<string, unknown>>; error: null }) => void) {
+            resolve({ data: filtered, error: null });
+          }
+        };
+
+        return builder;
+      }
+    }
+  };
+}
+
+describe('rolling available demand published allocations', () => {
+  const TEST_TENANT_ID = 'a0000000-0000-4000-8000-000000000001';
+  const TEST_OTHER_TENANT_ID = 'a0000000-0000-4000-8000-000000000002';
+  const TEST_PUBLISHED_ALLOCATION_ID = 'a1000000-0000-4000-8000-000000000001';
+  const TEST_RAW_DEMAND_ROW_ID = 'a2000000-0000-4000-8000-000000000001';
+  const TEST_LEGACY_RAW_DEMAND_ROW_ID = 'a2000000-0000-4000-8000-000000000002';
+  const TEST_REVERTED_RAW_DEMAND_ROW_ID = 'a2000000-0000-4000-8000-000000000003';
+  const TEST_REVERTED_AT_RAW_DEMAND_ROW_ID = 'a2000000-0000-4000-8000-000000000004';
+  const TEST_CROSS_TENANT_RAW_DEMAND_ROW_ID = 'a2000000-0000-4000-8000-000000000005';
+  const TEST_OTHER_TENANT_RAW_DEMAND_ROW_ID = 'a2000000-0000-4000-8000-000000000006';
+  const TEST_PUBLICATION_ID = 'a3000000-0000-4000-8000-000000000001';
+  const TEST_REVERTED_PUBLICATION_ID = 'a3000000-0000-4000-8000-000000000002';
+  const TEST_REVERTED_AT_PUBLICATION_ID = 'a3000000-0000-4000-8000-000000000003';
+
+  it('maps object-shaped joins and keeps only same-tenant source rows eligible for subtraction', async () => {
+    const tenantId = TEST_TENANT_ID;
+    const rawDemandRow = {
+      tenant_id: tenantId,
+      order_number: 'SO26090001',
+      sku: '463071',
+      customer_name: 'Customer',
+      distribution_area: 'North',
+      planned_delivery_date: '2026-07-01'
+    };
+    const { supabase, selectedColumns } = createRollingPublishedAllocationsSupabaseStub([
+      {
+        id: TEST_PUBLISHED_ALLOCATION_ID,
+        tenant_id: tenantId,
+        raw_demand_row_id: TEST_RAW_DEMAND_ROW_ID,
+        published_quantity: '10',
+        publication_id: TEST_PUBLICATION_ID,
+        raw_demand_row: rawDemandRow,
+        publication: { tenant_id: tenantId, status: 'applied', reverted_at: null }
+      },
+      {
+        tenant_id: tenantId,
+        raw_demand_row_id: TEST_LEGACY_RAW_DEMAND_ROW_ID,
+        published_quantity: 2,
+        publication_id: null,
+        raw_demand_row: [rawDemandRow],
+        publication: null
+      },
+      {
+        tenant_id: tenantId,
+        raw_demand_row_id: TEST_REVERTED_RAW_DEMAND_ROW_ID,
+        published_quantity: 3,
+        publication_id: TEST_REVERTED_PUBLICATION_ID,
+        raw_demand_row: rawDemandRow,
+        publication: { tenant_id: tenantId, status: 'reverted', reverted_at: '2026-06-29T10:00:00.000Z' }
+      },
+      {
+        tenant_id: tenantId,
+        raw_demand_row_id: TEST_REVERTED_AT_RAW_DEMAND_ROW_ID,
+        published_quantity: 4,
+        publication_id: TEST_REVERTED_AT_PUBLICATION_ID,
+        raw_demand_row: rawDemandRow,
+        publication: { tenant_id: tenantId, status: 'applied', reverted_at: '2026-06-29T10:00:00.000Z' }
+      },
+      {
+        tenant_id: tenantId,
+        raw_demand_row_id: TEST_CROSS_TENANT_RAW_DEMAND_ROW_ID,
+        published_quantity: 20,
+        publication_id: null,
+        raw_demand_row: { ...rawDemandRow, tenant_id: TEST_OTHER_TENANT_ID },
+        publication: null
+      },
+      {
+        tenant_id: TEST_OTHER_TENANT_ID,
+        raw_demand_row_id: TEST_OTHER_TENANT_RAW_DEMAND_ROW_ID,
+        published_quantity: 50,
+        publication_id: null,
+        raw_demand_row: { ...rawDemandRow, tenant_id: TEST_OTHER_TENANT_ID },
+        publication: null
+      }
+    ]);
+
+    const repo = createManualShiftsRepo(supabase as never);
+    const allocations = await repo.listPublishedAllocationsForRolling({ tenantId });
+
+    expect(allocations).toHaveLength(4);
+    expect(allocations.map((allocation) => ({
+      rawDemandRowId: allocation.rawDemandRowId,
+      publishedQuantity: allocation.publishedQuantity,
+      publicationStatus: allocation.publicationStatus
+    }))).toEqual([
+      { rawDemandRowId: TEST_RAW_DEMAND_ROW_ID, publishedQuantity: 10, publicationStatus: 'applied' },
+      { rawDemandRowId: TEST_LEGACY_RAW_DEMAND_ROW_ID, publishedQuantity: 2, publicationStatus: null },
+      { rawDemandRowId: TEST_REVERTED_RAW_DEMAND_ROW_ID, publishedQuantity: 3, publicationStatus: 'reverted' },
+      { rawDemandRowId: TEST_REVERTED_AT_RAW_DEMAND_ROW_ID, publishedQuantity: 4, publicationStatus: 'reverted' }
+    ]);
+    expect(selectedColumns[0]).toContain('raw_demand_row:raw_demand_row_id');
+    expect(selectedColumns[0]).toContain('reverted_at');
+  });
+});
+
 describe('available demand snapshot', () => {
   it('uses the published ledger, ignores draft allocations, and filters by tenant', async () => {
     const supabase = createAvailableDemandSupabaseStub({
