@@ -124,6 +124,8 @@ import {
   demandPlanningDraftAlreadyApplied,
   demandPlanningRollingPublishNotSupported,
   demandPlanningRollingDraftNotSupported,
+  demandPlanningNoRollingAvailableDemand,
+  demandPlanningRollingAvailableDemandInvariantViolation,
   demandPlanningAllocationOverflow,
   demandPlanningRawDemandRowNotFound,
   demandPlanningBucketNotFound,
@@ -389,6 +391,10 @@ export type ManualShiftsService = {
     batchId: string;
     createdBy: string | null;
     sourceScope?: 'all' | 'remaining';
+  }): Promise<DemandPlanningDraftWithAssignments>;
+  createRollingDemandPlanningDraft(input: {
+    tenantId: string;
+    createdBy: string | null;
   }): Promise<DemandPlanningDraftWithAssignments>;
   getDemandPlanningDraft(input: {
     tenantId: string;
@@ -2729,6 +2735,93 @@ export function createManualShiftsServiceFromRepo(
         buckets,
         allocations: []
       };
+    },
+
+    async createRollingDemandPlanningDraft(input) {
+      const rollingDemand = await this.getRollingAvailableDemand({ tenantId: input.tenantId });
+
+      const availableRows = rollingDemand.rows.filter(r => r.status === 'available');
+
+      if (availableRows.length === 0) {
+        throw demandPlanningNoRollingAvailableDemand();
+      }
+
+      for (const row of availableRows) {
+        if (!row.latestRawDemandRowId) {
+          throw demandPlanningRollingAvailableDemandInvariantViolation(
+            `Row with fallbackKey ${row.fallbackKeyFingerprint} has null latestRawDemandRowId`
+          );
+        }
+        if (!row.latestBatchId) {
+          throw demandPlanningRollingAvailableDemandInvariantViolation(
+            `Row with fallbackKey ${row.fallbackKeyFingerprint} has null latestBatchId`
+          );
+        }
+        if (row.availableQuantity <= 0) {
+          throw demandPlanningRollingAvailableDemandInvariantViolation(
+            `Row with fallbackKey ${row.fallbackKeyFingerprint} has non-positive availableQuantity ${row.availableQuantity}`
+          );
+        }
+      }
+
+      const draft = await repo.createRollingDemandPlanningDraft({
+        tenantId: input.tenantId,
+        createdBy: input.createdBy
+      });
+
+      // Group by distributionArea, using sentinel for null
+      const areaGroups = new Map<string, typeof availableRows>();
+      for (const row of availableRows) {
+        const key = row.distributionArea ?? '__NULL_DISTRIBUTION_AREA__';
+        const group = areaGroups.get(key) ?? [];
+        group.push(row);
+        areaGroups.set(key, group);
+      }
+
+      const bucketInputs = [...areaGroups.entries()].map(([areaKey, groupRows], i) => ({
+        distributionArea: groupRows[0].distributionArea,
+        planningLineName: 'default' as const,
+        bucketName: 'unassigned' as const,
+        sortOrder: i
+      }));
+
+      const buckets = await repo.insertDemandPlanningBuckets({
+        tenantId: input.tenantId,
+        draftId: draft.id,
+        batchId: null,
+        buckets: bucketInputs
+      });
+
+      // Build bucket key map using sentinel
+      const bucketByKey = new Map<string, typeof buckets[0]>();
+      for (const bucket of buckets) {
+        const key = [bucket.distributionArea ?? '__NULL_DISTRIBUTION_AREA__', bucket.planningLineName, bucket.bucketName].join('|');
+        bucketByKey.set(key, bucket);
+      }
+
+      const allocationInputs = availableRows.map(row => {
+        const areaKey = row.distributionArea ?? '__NULL_DISTRIBUTION_AREA__';
+        const bucketKey = [areaKey, 'default', 'unassigned'].join('|');
+        const bucket = bucketByKey.get(bucketKey);
+        if (!bucket) {
+          throw new Error(`Bucket not found for distribution area ${row.distributionArea}`);
+        }
+        return {
+          rawDemandRowId: row.latestRawDemandRowId!,
+          bucketId: bucket.id,
+          allocatedQuantity: row.availableQuantity,
+          batchId: row.latestBatchId
+        };
+      });
+
+      const allocations = await repo.insertDemandPlanningAllocations({
+        tenantId: input.tenantId,
+        draftId: draft.id,
+        batchId: availableRows[0].latestBatchId,
+        allocations: allocationInputs
+      });
+
+      return { draft, buckets, allocations };
     },
 
     async getDemandPlanningDraft(input) {

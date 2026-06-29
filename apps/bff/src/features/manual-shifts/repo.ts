@@ -1168,6 +1168,10 @@ export type ManualShiftsRepo = {
     createdBy: string | null;
     sourceScope?: 'all' | 'remaining';
   }): Promise<DemandPlanningDraft>;
+  createRollingDemandPlanningDraft(input: {
+    tenantId: string;
+    createdBy: string | null;
+  }): Promise<DemandPlanningDraft>;
   getDemandPlanningDraft(input: {
     tenantId: string;
     draftId: string;
@@ -1184,7 +1188,7 @@ export type ManualShiftsRepo = {
   insertDemandPlanningBuckets(input: {
     tenantId: string;
     draftId: string;
-    batchId: string;
+    batchId: string | null;
     buckets: Array<{
       distributionArea: string | null;
       planningLineName: string;
@@ -1208,6 +1212,7 @@ export type ManualShiftsRepo = {
       rawDemandRowId: string;
       bucketId: string;
       allocatedQuantity: number;
+      batchId?: string;
     }>;
   }): Promise<DemandPlanningAllocation[]>;
   listDemandPlanningAllocations(input: {
@@ -3070,6 +3075,24 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       return mapDemandPlanningDraftRow(data as DemandPlanningDraftRow);
     },
 
+    async createRollingDemandPlanningDraft(input) {
+      const { data, error } = await supabase
+        .from('demand_planning_drafts')
+        .insert({
+          tenant_id: input.tenantId,
+          batch_id: null,
+          source_kind: 'rolling',
+          created_by: input.createdBy,
+          source_scope: 'all'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return mapDemandPlanningDraftRow(data as DemandPlanningDraftRow);
+    },
+
     async getDemandPlanningDraft(input) {
       const { data, error } = await supabase
         .from('demand_planning_drafts')
@@ -3165,7 +3188,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         .insert(input.allocations.map((a) => ({
           tenant_id: input.tenantId,
           draft_id: input.draftId,
-          batch_id: input.batchId,
+          batch_id: a.batchId ?? input.batchId,
           raw_demand_row_id: a.rawDemandRowId,
           bucket_id: a.bucketId,
           allocated_quantity: a.allocatedQuantity

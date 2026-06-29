@@ -302,6 +302,22 @@ export function demandPlanningDraftAlreadyApplied(draftId: string) {
   );
 }
 
+export function demandPlanningNoRollingAvailableDemand() {
+  return new ApiError(
+    422,
+    'ROLLING_NO_AVAILABLE_DEMAND',
+    'No available rolling demand rows to create a draft.'
+  );
+}
+
+export function demandPlanningRollingAvailableDemandInvariantViolation(detail: string) {
+  return new ApiError(
+    500,
+    'ROLLING_AVAILABLE_DEMAND_INVARIANT_VIOLATION',
+    `Rolling available demand invariant violation: ${detail}`
+  );
+}
+
 export function demandPlanningRollingPublishNotSupported(draftId: string) {
   return new ApiError(
     422,

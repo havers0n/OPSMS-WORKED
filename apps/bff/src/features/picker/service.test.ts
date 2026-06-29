@@ -221,6 +221,7 @@ function createManualRepoMock(): ManualShiftsRepo {
     ),
     findLineByShiftAndName: vi.fn(async () => null),
     createDemandPlanningDraft: vi.fn(async () => ({ id: '', tenantId: '', batchId: '', sourceKind: 'batch' as const, status: 'draft' as const, createdBy: null, createdAt: '', updatedAt: '' })),
+    createRollingDemandPlanningDraft: vi.fn(async () => ({ id: '', tenantId: '', batchId: null, sourceKind: 'rolling' as const, status: 'draft' as const, createdBy: null, createdAt: '', updatedAt: '' })),
     getDemandPlanningDraft: vi.fn(async () => ({ id: '', tenantId: '', batchId: '', sourceKind: 'batch' as const, status: 'draft' as const, createdBy: null, createdAt: '', updatedAt: '' })),
     updateDemandPlanningDraftStatus: vi.fn(async () => ({ id: '', tenantId: '', batchId: '', sourceKind: 'batch' as const, status: 'draft' as const, createdBy: null, createdAt: '', updatedAt: '' })),
     deleteDemandPlanningBucketsByDraft: vi.fn(async () => undefined),

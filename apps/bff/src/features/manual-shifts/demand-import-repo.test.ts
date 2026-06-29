@@ -442,4 +442,94 @@ describe('demand planning draft repo methods', () => {
     expect(result).toHaveLength(1);
     expect(result[0].sku).toBe('SKU-A');
   });
+
+  it('createRollingDemandPlanningDraft inserts with source_kind rolling and null batch_id', async () => {
+    const { supabase, tables } = createFakeSupabase();
+    const repo = createManualShiftsRepo(supabase as never);
+
+    const draft = await repo.createRollingDemandPlanningDraft({
+      tenantId: tenantA,
+      createdBy: null
+    });
+
+    expect(draft.tenantId).toBe(tenantA);
+    expect(draft.batchId).toBeNull();
+    expect(draft.sourceKind).toBe('rolling');
+    expect(draft.status).toBe('draft');
+    expect(draft.id).toBeTruthy();
+    expect(tables.demand_planning_drafts).toHaveLength(1);
+    expect(tables.demand_planning_drafts[0].source_kind).toBe('rolling');
+    expect(tables.demand_planning_drafts[0].batch_id).toBeNull();
+  });
+
+  it('insertDemandPlanningBuckets accepts null batchId for rolling drafts', async () => {
+    const { supabase, tables } = createFakeSupabase();
+    const repo = createManualShiftsRepo(supabase as never);
+
+    const draft = await repo.createRollingDemandPlanningDraft({
+      tenantId: tenantA,
+      createdBy: null
+    });
+
+    const buckets = await repo.insertDemandPlanningBuckets({
+      tenantId: tenantA,
+      draftId: draft.id,
+      batchId: null,
+      buckets: [
+        { distributionArea: 'דרום', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 0 },
+        { distributionArea: 'צפון', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 1 }
+      ]
+    });
+
+    expect(buckets).toHaveLength(2);
+    expect(buckets[0].batchId).toBeNull();
+    expect(buckets[1].batchId).toBeNull();
+    expect(buckets[0].distributionArea).toBe('דרום');
+    expect(buckets[1].distributionArea).toBe('צפון');
+
+    const listed = await repo.listDemandPlanningBuckets({ tenantId: tenantA, draftId: draft.id });
+    expect(listed).toHaveLength(2);
+  });
+
+  it('round-trip rolling draft with null-batch buckets and per-row-batch allocations', async () => {
+    const { supabase, tables } = createFakeSupabase();
+    const repo = createManualShiftsRepo(supabase as never);
+
+    const draft = await repo.createRollingDemandPlanningDraft({
+      tenantId: tenantA,
+      createdBy: null
+    });
+
+    const buckets = await repo.insertDemandPlanningBuckets({
+      tenantId: tenantA,
+      draftId: draft.id,
+      batchId: null,
+      buckets: [
+        { distributionArea: 'דרום', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 0 },
+        { distributionArea: 'צפון', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 1 }
+      ]
+    });
+
+    const batchId1 = '11111111-1111-4111-8111-111111111111';
+    const batchId2 = '22222222-2222-4222-8222-222222222222';
+
+    const allocations = await repo.insertDemandPlanningAllocations({
+      tenantId: tenantA,
+      draftId: draft.id,
+      batchId: batchId1,
+      allocations: [
+        { rawDemandRowId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', bucketId: buckets[0].id, allocatedQuantity: 10, batchId: batchId1 },
+        { rawDemandRowId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', bucketId: buckets[1].id, allocatedQuantity: 20, batchId: batchId2 }
+      ]
+    });
+
+    expect(allocations).toHaveLength(2);
+    expect(allocations[0].batchId).toBe(batchId1);
+    expect(allocations[0].allocatedQuantity).toBe(10);
+    expect(allocations[1].batchId).toBe(batchId2);
+    expect(allocations[1].allocatedQuantity).toBe(20);
+
+    const listed = await repo.listDemandPlanningAllocations({ tenantId: tenantA, draftId: draft.id });
+    expect(listed).toHaveLength(2);
+  });
 });

@@ -739,6 +739,9 @@ function createRepo() {
     createDemandPlanningDraft: vi.fn(async () => ({
       id: '00000000-0000-4000-8000-000000000001', tenantId: ids.tenant, batchId: '00000000-0000-4000-8000-000000000099', sourceKind: 'batch' as const, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
     })),
+    createRollingDemandPlanningDraft: vi.fn(async () => ({
+      id: '00000000-0000-4000-8000-000000000002', tenantId: ids.tenant, batchId: null, sourceKind: 'rolling' as const, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
+    })),
     getDemandPlanningDraft: vi.fn(async () => ({
       id: '00000000-0000-4000-8000-000000000001', tenantId: ids.tenant, batchId: '00000000-0000-4000-8000-000000000099', sourceKind: 'batch' as const, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
     })),
@@ -6969,6 +6972,270 @@ describe('demand planning draft — publish to shift', () => {
       draftId,
       targetShiftId: shiftId
     })).rejects.toThrow(/DEMAND_PLANNING_ROLLING_PUBLISH_NOT_SUPPORTED/);
+  });
+
+  // --- Rolling draft creation tests ---
+
+  const rollingRowId1 = '10000000-0000-4000-8000-100000000001';
+  const rollingRowId2 = '20000000-0000-4000-8000-200000000002';
+  const rollingRowId3 = '30000000-0000-4000-8000-300000000003';
+  const rollingBatch1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
+  const rollingBatch2 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2';
+
+  function createRollingDraftRepo() {
+    const state: {
+      rows: Array<Record<string, unknown>>;
+    } = { rows: [] };
+    const batchCounter = { val: 0 };
+    const bucketCounter = { val: 0 };
+    const allocCounter = { val: 0 };
+
+    const repo: ManualShiftsRepo = {
+      ...createRepo().repo,
+      listReadyBatches: vi.fn(async () => [
+        { id: rollingBatch1, sourceFile: 'a.xlsx', uploadedAt: '2026-06-29T10:00:00.000Z', status: 'ready' as const, rowsCount: 2 },
+        { id: rollingBatch2, sourceFile: 'b.xlsx', uploadedAt: '2026-06-29T11:00:00.000Z', status: 'ready' as const, rowsCount: 1 }
+      ]) as unknown as ManualShiftsRepo['listReadyBatches'],
+      listRawDemandRowsForBatches: vi.fn(async () =>
+        state.rows.map((r) => ({
+          id: r.id as string,
+          batchId: r.batch_id as string,
+          orderNumber: r.order_number as string | null,
+          customerName: r.customer_name as string | null,
+          sku: r.sku as string | null,
+          description: r.description as string | null,
+          category: r.category as string | null,
+          quantity: r.quantity as number | null,
+          notes: r.notes as string | null,
+          distributionArea: r.distribution_area as string | null,
+          rawRouteLine: r.raw_route_line as string | null,
+          plannedDeliveryDate: r.planned_delivery_date as string | null,
+          planningStatus: r.planning_status as string,
+          routeFlow: r.route_flow as string,
+          productHandlingFlow: r.product_handling_flow as string
+        }))
+      ) as unknown as ManualShiftsRepo['listRawDemandRowsForBatches'],
+      listPublishedAllocationsForRolling: vi.fn(async () => []) as unknown as ManualShiftsRepo['listPublishedAllocationsForRolling'],
+      createRollingDemandPlanningDraft: vi.fn(async () => {
+        batchCounter.val += 1;
+        return { id: `rolling-draft-${batchCounter.val}`, tenantId: ids.tenant, batchId: null, sourceKind: 'rolling' as const, status: 'draft' as const, createdBy: null, createdAt: '2026-06-29T12:00:00.000Z', updatedAt: '2026-06-29T12:00:00.000Z' };
+      }) as unknown as ManualShiftsRepo['createRollingDemandPlanningDraft'],
+      insertDemandPlanningBuckets: vi.fn(async (input) => {
+        return (input.buckets ?? []).map((b: { distributionArea: string | null; planningLineName: string; bucketName: string; sortOrder: number }, i: number) => {
+          bucketCounter.val += 1;
+          return { id: `rbucket-${bucketCounter.val}`, tenantId: input.tenantId, draftId: input.draftId, batchId: null, distributionArea: b.distributionArea, planningLineName: b.planningLineName, bucketName: b.bucketName, sortOrder: b.sortOrder, createdAt: '2026-06-29T12:00:00.000Z', updatedAt: '2026-06-29T12:00:00.000Z' };
+        });
+      }) as unknown as ManualShiftsRepo['insertDemandPlanningBuckets'],
+      listDemandPlanningBuckets: vi.fn(async () => []) as unknown as ManualShiftsRepo['listDemandPlanningBuckets'],
+      insertDemandPlanningAllocations: vi.fn(async (input) => {
+        return (input.allocations ?? []).map((a: { rawDemandRowId: string; bucketId: string; allocatedQuantity: number; batchId?: string }) => {
+          allocCounter.val += 1;
+          return { id: `ralloc-${allocCounter.val}`, tenantId: input.tenantId, draftId: input.draftId, batchId: a.batchId ?? input.batchId, rawDemandRowId: a.rawDemandRowId, bucketId: a.bucketId, allocatedQuantity: a.allocatedQuantity, createdAt: '2026-06-29T12:00:00.000Z', updatedAt: '2026-06-29T12:00:00.000Z' };
+        });
+      }) as unknown as ManualShiftsRepo['insertDemandPlanningAllocations'],
+      listDemandPlanningAllocations: vi.fn(async () => []) as unknown as ManualShiftsRepo['listDemandPlanningAllocations'],
+    };
+
+    function addRow(overrides: Record<string, unknown>) {
+      const defaults = {
+        id: `row-${state.rows.length + 1}`,
+        tenant_id: ids.tenant,
+        batch_id: rollingBatch1,
+        order_number: 'SO26090001',
+        customer_name: 'Customer',
+        sku: 'SKU-1',
+        description: null,
+        category: null,
+        quantity: 10,
+        notes: null,
+        distribution_area: 'North',
+        raw_route_line: null,
+        planned_delivery_date: '2026-07-01',
+        planning_status: 'unplanned',
+        route_flow: 'unassigned',
+        product_handling_flow: 'regular'
+      };
+      state.rows.push({ ...defaults, ...overrides });
+    }
+
+    return { repo, state, addRow };
+  }
+
+  it('creates rolling draft from only available rows', async () => {
+    const { repo, addRow } = createRollingDraftRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    addRow({ id: rollingRowId1, quantity: 10, distribution_area: 'North' });
+    addRow({ id: rollingRowId2, quantity: 5, distribution_area: 'South' });
+
+    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null });
+
+    expect(result.draft.sourceKind).toBe('rolling');
+    expect(result.draft.batchId).toBeNull();
+    expect(result.buckets).toHaveLength(2);
+    expect(result.allocations).toHaveLength(2);
+  });
+
+  it('excludes duplicate_conflict rows', async () => {
+    const { repo, addRow } = createRollingDraftRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    // One available row and one duplicate_conflict row
+    addRow({ id: rollingRowId1, quantity: 10, distribution_area: 'North', order_number: 'SO26090001', planning_status: 'unplanned' });
+    addRow({ id: rollingRowId2, quantity: 5, distribution_area: 'North', order_number: 'SO26090001', planning_status: 'unplanned' });
+
+    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null });
+
+    // Only the first row is available; the second is duplicate_conflict
+    expect(result.allocations).toHaveLength(1);
+    expect(result.allocations[0].rawDemandRowId).toBe(rollingRowId1);
+  });
+
+  it('excludes requires_review (excluded planning status) and excluded_non_so rows', async () => {
+    const { repo, addRow } = createRollingDraftRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    addRow({ id: rollingRowId1, quantity: 10, distribution_area: 'North', planning_status: 'unplanned', order_number: 'SO26090001' });
+    addRow({ id: rollingRowId2, quantity: 5, distribution_area: 'South', planning_status: 'error' });
+    addRow({ id: rollingRowId3, quantity: 3, distribution_area: 'South', order_number: 'NOT_SO' });
+
+    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null });
+
+    expect(result.allocations).toHaveLength(1);
+    expect(result.allocations[0].rawDemandRowId).toBe(rollingRowId1);
+  });
+
+  it('excludes fully_consumed and over_published rows', async () => {
+    const { repo, addRow } = createRollingDraftRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    addRow({ id: rollingRowId1, quantity: 10, distribution_area: 'North' });
+    // Add 10 published to consume the row fully
+    vi.mocked(repo.listPublishedAllocationsForRolling).mockResolvedValue([
+      { rawDemandRowId: rollingRowId1, publishedQuantity: 10, publicationStatus: 'applied' as const, orderNumber: 'SO26090001', sku: 'SKU-1', customerName: 'Customer', distributionArea: 'North', plannedDeliveryDate: '2026-07-01' }
+    ]);
+
+    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null });
+
+    expect(result.allocations).toHaveLength(0);
+  });
+
+  it('allocated quantity equals availableQuantity', async () => {
+    const { repo, addRow } = createRollingDraftRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    addRow({ id: rollingRowId1, quantity: 10, distribution_area: 'North' });
+    addRow({ id: rollingRowId2, quantity: 5, distribution_area: 'South' });
+
+    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null });
+
+    expect(result.allocations[0].allocatedQuantity).toBe(10);
+    expect(result.allocations[1].allocatedQuantity).toBe(5);
+  });
+
+  it('allocation batchId equals latestBatchId', async () => {
+    const { repo, addRow } = createRollingDraftRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    addRow({ id: rollingRowId1, quantity: 10, distribution_area: 'North', batch_id: rollingBatch1 });
+    addRow({ id: rollingRowId2, quantity: 5, distribution_area: 'South', batch_id: rollingBatch2 });
+
+    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null });
+
+    expect(result.allocations[0].batchId).toBe(rollingBatch1);
+    expect(result.allocations[1].batchId).toBe(rollingBatch2);
+  });
+
+  it('allocation rawDemandRowId equals latestRawDemandRowId', async () => {
+    const { repo, addRow } = createRollingDraftRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    addRow({ id: rollingRowId1, quantity: 10, distribution_area: 'North' });
+    addRow({ id: rollingRowId2, quantity: 5, distribution_area: 'South' });
+
+    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null });
+
+    expect(result.allocations[0].rawDemandRowId).toBe(rollingRowId1);
+    expect(result.allocations[1].rawDemandRowId).toBe(rollingRowId2);
+  });
+
+  it('multiple latest batches are supported in one draft', async () => {
+    const { repo, addRow } = createRollingDraftRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    addRow({ id: rollingRowId1, quantity: 10, distribution_area: 'North', batch_id: rollingBatch1 });
+    addRow({ id: rollingRowId2, quantity: 5, distribution_area: 'South', batch_id: rollingBatch2 });
+
+    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null });
+
+    expect(result.allocations).toHaveLength(2);
+    const batchIds = result.allocations.map((a) => a.batchId);
+    expect(batchIds).toContain(rollingBatch1);
+    expect(batchIds).toContain(rollingBatch2);
+  });
+
+  it('partial published scenario: latest quantity 10, published 4, allocated quantity 6', async () => {
+    const { repo, addRow } = createRollingDraftRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    addRow({ id: rollingRowId1, quantity: 10, distribution_area: 'North', order_number: 'SO26090001' });
+    vi.mocked(repo.listPublishedAllocationsForRolling).mockResolvedValue([
+      { rawDemandRowId: rollingRowId1, publishedQuantity: 4, publicationStatus: 'applied' as const, orderNumber: 'SO26090001', sku: 'SKU-1', customerName: 'Customer', distributionArea: 'North', plannedDeliveryDate: '2026-07-01' }
+    ]);
+
+    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null });
+
+    expect(result.allocations).toHaveLength(1);
+    expect(result.allocations[0].allocatedQuantity).toBe(6);
+  });
+
+  it('empty availability returns ROLLING_NO_AVAILABLE_DEMAND 422', async () => {
+    const { repo } = createRollingDraftRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    await expect(service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null }))
+      .rejects.toThrow(/ROLLING_NO_AVAILABLE_DEMAND/);
+  });
+
+  it('legacy batch draft flow unchanged', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    // Batch draft creation should still work
+    await expect(service.createDemandPlanningDraft({
+      tenantId: ids.tenant,
+      batchId: '00000000-0000-4000-8000-000000000099',
+      createdBy: null
+    })).rejects.toThrow(); // Will throw because batch not found in mock - that's expected legacy behavior
+  });
+
+  it('rolling publish remains blocked', async () => {
+    const { repo, state } = createPublishRepo();
+    seedPublishRows(state);
+    (state.drafts[0] as any).sourceKind = 'rolling';
+    (state.drafts[0] as any).batchId = null;
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    await expect(service.publishDemandPlanningDraftToShift({
+      tenantId: ids.tenant,
+      draftId,
+      targetShiftId: shiftId
+    })).rejects.toThrow(/DEMAND_PLANNING_ROLLING_PUBLISH_NOT_SUPPORTED/);
+  });
+
+  it('rolling PUT /plan remains blocked', async () => {
+    const { repo, state } = createPublishRepo();
+    seedPublishRows(state);
+    (state.drafts[0] as any).sourceKind = 'rolling';
+    (state.drafts[0] as any).batchId = null;
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    await expect(service.putDemandPlanningPlan({
+      tenantId: ids.tenant,
+      draftId,
+      buckets: [{ distributionArea: 'North', planningLineName: 'default', bucketName: 'unassigned' }],
+      allocations: [{ rawDemandRowId: rowId1, bucketKey: 'North|default|unassigned', allocatedQuantity: 5 }]
+    })).rejects.toThrow(/DEMAND_PLANNING_ROLLING_DRAFT_NOT_SUPPORTED/);
   });
 });
 

@@ -999,6 +999,23 @@ export function registerManualShiftsRoutes(
     });
   });
 
+  app.post('/api/demand-planning/rolling-drafts', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-planning/rolling-drafts', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      const tenantId = requireTenant(auth);
+
+      const result = await getManualShiftsService(auth).createRollingDemandPlanningDraft({
+        tenantId,
+        createdBy: auth.user.id ?? null
+      });
+
+      void reply.code(201);
+      return parseOrThrow(demandPlanningDraftWithAssignmentsResponseSchema, result);
+    });
+  });
+
   app.get('/api/demand-planning/rolling-available-demand', async (request, reply) => {
     return handleManualShiftImportRoute(request, reply, '/api/demand-planning/rolling-available-demand', async () => {
       const auth = await getAuthContext(request, reply);

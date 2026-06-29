@@ -727,6 +727,11 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
         batchesAnalyzed: []
       }
     })),
+    createRollingDemandPlanningDraft: vi.fn(async () => ({
+      draft: { id: '00000000-0000-0000-0000-000000000000', tenantId: ids.tenant, batchId: null, sourceKind: 'rolling' as const, status: 'draft' as const, createdBy: null, createdAt: '2026-06-29T12:00:00.000Z', updatedAt: '2026-06-29T12:00:00.000Z' },
+      buckets: [],
+      allocations: []
+    })) as unknown as ManualShiftsService['createRollingDemandPlanningDraft'],
     ...overrides
   };
 }
@@ -3972,6 +3977,83 @@ describe('demand planning draft routes', () => {
     });
 
     expect(response.statusCode).toBe(422);
+    await app.close();
+  });
+
+  it('POST /api/demand-planning/rolling-drafts returns 201 and valid draft-with-assignments', async () => {
+    const rollingDraftId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
+    const rollingBucketId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1';
+    const rollingAllocId = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1';
+    const rollingRawRowId = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd1';
+    const rollingAllocBatchId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1';
+    const rollingDraftResponse = {
+      draft: { id: rollingDraftId, tenantId: ids.tenant, batchId: null, sourceKind: 'rolling', status: 'draft', createdBy: null, createdAt: '2026-06-29T12:00:00.000Z', updatedAt: '2026-06-29T12:00:00.000Z' },
+      buckets: [
+        { id: rollingBucketId, tenantId: ids.tenant, draftId: rollingDraftId, batchId: null, distributionArea: 'North', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 0, createdAt: '2026-06-29T12:00:00.000Z', updatedAt: '2026-06-29T12:00:00.000Z' }
+      ],
+      allocations: [
+        { id: rollingAllocId, tenantId: ids.tenant, draftId: rollingDraftId, batchId: rollingAllocBatchId, rawDemandRowId: rollingRawRowId, bucketId: rollingBucketId, allocatedQuantity: 10, createdAt: '2026-06-29T12:00:00.000Z', updatedAt: '2026-06-29T12:00:00.000Z' }
+      ]
+    };
+    const svc = createDemandMock({
+      createRollingDemandPlanningDraft: vi.fn(async () => rollingDraftResponse) as unknown as ManualShiftsService['createRollingDemandPlanningDraft']
+    });
+    const app = await buildTestApp(svc);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/demand-planning/rolling-drafts'
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = JSON.parse(response.body);
+    expect(body.draft.sourceKind).toBe('rolling');
+    expect(body.draft.batchId).toBeNull();
+    expect(body.buckets).toHaveLength(1);
+    expect(body.allocations).toHaveLength(1);
+    await app.close();
+  });
+
+  it('POST /api/demand-planning/rolling-drafts returns 422 when no available demand', async () => {
+    const svc = createDemandMock({
+      createRollingDemandPlanningDraft: vi.fn(async () => { throw new ApiError(422, 'ROLLING_NO_AVAILABLE_DEMAND', 'No available rolling demand rows to create a draft.'); }) as unknown as ManualShiftsService['createRollingDemandPlanningDraft']
+    });
+    const app = await buildTestApp(svc);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/demand-planning/rolling-drafts'
+    });
+
+    expect(response.statusCode).toBe(422);
+    await app.close();
+  });
+
+  it('repeated POST /api/demand-planning/rolling-drafts calls create separate drafts and do not conflict', async () => {
+    let callCount = 0;
+    const svc = createDemandMock({
+      createRollingDemandPlanningDraft: vi.fn(async () => {
+        callCount += 1;
+        const draftId = callCount === 1
+          ? 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'
+          : 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2';
+        return {
+          draft: { id: draftId, tenantId: ids.tenant, batchId: null, sourceKind: 'rolling', status: 'draft', createdBy: null, createdAt: '2026-06-29T12:00:00.000Z', updatedAt: '2026-06-29T12:00:00.000Z' },
+          buckets: [],
+          allocations: []
+        };
+      }) as unknown as ManualShiftsService['createRollingDemandPlanningDraft']
+    });
+    const app = await buildTestApp(svc);
+
+    const r1 = await app.inject({ method: 'POST', url: '/api/demand-planning/rolling-drafts' });
+    const r2 = await app.inject({ method: 'POST', url: '/api/demand-planning/rolling-drafts' });
+
+    expect(r1.statusCode).toBe(201);
+    expect(r2.statusCode).toBe(201);
+    const body1 = JSON.parse(r1.body);
+    const body2 = JSON.parse(r2.body);
+    expect(body1.draft.id).not.toBe(body2.draft.id);
     await app.close();
   });
 });
