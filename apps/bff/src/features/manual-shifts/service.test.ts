@@ -786,8 +786,11 @@ function createRepo() {
       releasedQuantity: 0
     }),
     getDemandPlanningDraftPublication: vi.fn().mockResolvedValue(null),
+    listReadyBatches: vi.fn().mockResolvedValue([]),
+    listRawDemandRowsForBatches: vi.fn().mockResolvedValue([]),
+    listPublishedAllocationsForRolling: vi.fn().mockResolvedValue([]),
   };
- 
+
   return { repo, state };
 }
 

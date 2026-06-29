@@ -163,6 +163,37 @@ describe('demand import DataSheet parser', () => {
     ]);
     expect(result.rows[0].plannedDeliveryDate).toBeNull();
   });
+
+  it('normalizes a planned delivery date from the DataSheet row', () => {
+    const result = parseDemandImportDataSheetPreview({
+      sourceFile: 'datasheet.xlsx',
+      sourceSheet: 'DataSheet',
+      rows: [buildRow({ plannedDeliveryDateRaw: '25.06.26' })]
+    });
+
+    expect(result.errorRowsCount).toBe(0);
+    expect(result.rows[0]).toMatchObject({
+      plannedDeliveryDate: '2026-06-25',
+      planningStatus: 'unplanned'
+    });
+  });
+
+  it('rejects a non-empty invalid planned delivery date', () => {
+    const result = parseDemandImportDataSheetPreview({
+      sourceFile: 'datasheet.xlsx',
+      sourceSheet: 'DataSheet',
+      rows: [buildRow({ plannedDeliveryDateRaw: '31.02.2026' })]
+    });
+
+    expect(result.errorRowsCount).toBe(1);
+    expect(result.rows[0].plannedDeliveryDate).toBeNull();
+    expect(result.rows[0].planningStatus).toBe('error');
+    expect(result.rows[0].issues).toContainEqual(expect.objectContaining({
+      code: 'INVALID_PLANNED_DELIVERY_DATE',
+      severity: 'error',
+      field: 'plannedDeliveryDate'
+    }));
+  });
 });
 
 describe('demand planning publish schemas', () => {

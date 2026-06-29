@@ -262,6 +262,11 @@ function createManualRepoMock(): ManualShiftsRepo {
       releasedQuantity: 0
     }),
     getDemandPlanningDraftPublication: vi.fn().mockResolvedValue(null),
+    listDemandImportBatches: vi.fn().mockResolvedValue([]),
+    listAvailableDemandImportBatches: vi.fn().mockResolvedValue([]),
+    listReadyBatches: vi.fn().mockResolvedValue([]),
+    listRawDemandRowsForBatches: vi.fn().mockResolvedValue([]),
+    listPublishedAllocationsForRolling: vi.fn().mockResolvedValue([]),
   };
 }
 

@@ -123,7 +123,8 @@ import {
   demandBacklogItemResponseSchema,
   demandBacklogSourceBatchSchema,
   demandPlanningPublicationSchema,
-  demandPlanningRevertPublicationResponseSchema
+  demandPlanningRevertPublicationResponseSchema,
+  rollingAvailableDemandResponseSchema
 } from '@wos/domain';
 
 // ── Rack Inspector ──────────────────────────────────────────────────────────
@@ -631,6 +632,7 @@ export const demandImportAppendDiffRequestSchema = z.object({
 
 export { demandBacklogListResponseSchema, demandBacklogSummaryResponseSchema, demandBacklogQuerySchema };
 export { demandBacklogItemResponseSchema, demandBacklogSourceBatchSchema };
+export { rollingAvailableDemandResponseSchema };
 
 // ── Manual shift print ──────────────────────────────────────────────────────────
 

@@ -191,7 +191,7 @@ describe('demand import repo methods', () => {
           notes: null,
           distributionArea: 'דרום',
           rawRouteLine: null,
-          plannedDeliveryDate: null,
+          plannedDeliveryDate: '2026-06-25',
           plannedRouteLine: null,
           plannedWorkBucket: null,
           planningStatus: 'unplanned',
@@ -207,7 +207,7 @@ describe('demand import repo methods', () => {
     expect(tables.raw_demand_rows).toHaveLength(1);
     expect(tables.raw_demand_rows[0]).toMatchObject({
       batch_id: batch.id,
-      planned_delivery_date: null,
+      planned_delivery_date: '2026-06-25',
       planned_route_line: null,
       planned_work_bucket: null
     });

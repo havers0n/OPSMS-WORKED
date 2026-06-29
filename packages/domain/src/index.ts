@@ -69,4 +69,5 @@ export * from './operations/warehouse-stock-snapshot';
 export * from './operations/manual-shift-print';
 export * from './operations/bonded-coverage-request';
 export * from './operations/demand-backlog';
+export * from './operations/rolling-available-demand';
 export * from './master-data/delivery-point';
