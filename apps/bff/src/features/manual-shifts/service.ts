@@ -65,12 +65,12 @@ import {
   aggregatePickerItems,
   processCollisions,
   getDisplaySku,
-  computeDemandBacklogIdentityKey,
   computeBacklogMergeAction,
   computeBacklogItemStatus,
   computeOpenQuantity,
   type SkuBondedAggregate
 } from '@wos/domain';
+import { computeDemandBacklogIdentityKey } from './demand-backlog-crypto.js';
 import type { BondedService } from '../bonded/bonded-service.js';
 import type { WarehouseStockService } from '../warehouse-stock/warehouse-stock-service.js';
 import type { SupabaseClient } from '@supabase/supabase-js';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  computeDemandBacklogIdentityKey,
+  normalizeDemandBacklogKey,
   computeBacklogMergeAction,
   computeBacklogItemStatus,
   computeOpenQuantity,
@@ -54,40 +54,40 @@ function makeItem(overrides: Partial<DemandBacklogItem> = {}): DemandBacklogItem
 
 // ──── Identity normalization ─────────────────────────────────────────────────
 
-describe('computeDemandBacklogIdentityKey', () => {
+describe('normalizeDemandBacklogKey', () => {
   it('produces deterministic keys for identical inputs', () => {
-    const a = computeDemandBacklogIdentityKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
-    const b = computeDemandBacklogIdentityKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
+    const a = normalizeDemandBacklogKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
+    const b = normalizeDemandBacklogKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
     expect(a).toBe(b);
   });
 
   it('is case-insensitive', () => {
-    const a = computeDemandBacklogIdentityKey('SO-001', 'Client', 'SKU-100', 'North');
-    const b = computeDemandBacklogIdentityKey('so-001', 'client', 'sku-100', 'north');
+    const a = normalizeDemandBacklogKey('SO-001', 'Client', 'SKU-100', 'North');
+    const b = normalizeDemandBacklogKey('so-001', 'client', 'sku-100', 'north');
     expect(a).toBe(b);
   });
 
   it('trims whitespace', () => {
-    const a = computeDemandBacklogIdentityKey('  SO-001 ', ' Client ', ' SKU-100  ', ' North ');
-    const b = computeDemandBacklogIdentityKey('SO-001', 'Client', 'SKU-100', 'North');
+    const a = normalizeDemandBacklogKey('  SO-001 ', ' Client ', ' SKU-100  ', ' North ');
+    const b = normalizeDemandBacklogKey('SO-001', 'Client', 'SKU-100', 'North');
     expect(a).toBe(b);
   });
 
   it('treats null and empty string identically', () => {
-    const a = computeDemandBacklogIdentityKey(null, null, null, null);
-    const b = computeDemandBacklogIdentityKey('', '', '', '');
+    const a = normalizeDemandBacklogKey(null, null, null, null);
+    const b = normalizeDemandBacklogKey('', '', '', '');
     expect(a).toBe(b);
   });
 
   it('produces different keys when any field differs', () => {
-    const a = computeDemandBacklogIdentityKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
-    const b = computeDemandBacklogIdentityKey('SO-002', 'לקוח א', 'SKU-100', 'דרום');
+    const a = normalizeDemandBacklogKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
+    const b = normalizeDemandBacklogKey('SO-002', 'לקוח א', 'SKU-100', 'דרום');
     expect(a).not.toBe(b);
   });
 
   it('produces different keys when distribution area differs', () => {
-    const a = computeDemandBacklogIdentityKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
-    const b = computeDemandBacklogIdentityKey('SO-001', 'לקוח א', 'SKU-100', 'צפון');
+    const a = normalizeDemandBacklogKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
+    const b = normalizeDemandBacklogKey('SO-001', 'לקוח א', 'SKU-100', 'צפון');
     expect(a).not.toBe(b);
   });
 });
@@ -206,7 +206,7 @@ describe('computeOpenQuantity', () => {
 
 describe('backlog merge scenarios', () => {
   it('dedup across batches: same identity key, same quantity -> matched', () => {
-    const key = computeDemandBacklogIdentityKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
+    const key = normalizeDemandBacklogKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
     const item = makeItem({ identityKey: key, totalQuantity: 10 });
     const row = makeRow({ quantity: 10 });
     const result = computeBacklogMergeAction(row, item, 1);

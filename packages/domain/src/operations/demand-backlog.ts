@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { createHash } from 'node:crypto';
 import {
   rawDemandProductHandlingFlowSchema,
   rawDemandRouteFlowSchema,
@@ -12,7 +11,7 @@ import {
 
 const IDENTITY_KEY_SEP = '\x00';
 
-export function computeDemandBacklogIdentityKey(
+export function normalizeDemandBacklogKey(
   orderNumber: string | null,
   customerName: string | null,
   sku: string | null,
@@ -24,8 +23,7 @@ export function computeDemandBacklogIdentityKey(
     (sku ?? '').trim().toLowerCase(),
     (distributionArea ?? '').trim().toLowerCase()
   ];
-  const normalized = parts.join(IDENTITY_KEY_SEP);
-  return createHash('sha256').update(normalized, 'utf8').digest('hex');
+  return parts.join(IDENTITY_KEY_SEP);
 }
 
 // ──── Status ────────────────────────────────────────────────────────────────
@@ -185,10 +183,6 @@ export function computeBacklogMergeAction(
   if (row.planningStatus === 'error') {
     throw new Error('Cannot merge error rows into backlog. Filter before calling merge.');
   }
-
-  const identityKey = computeDemandBacklogIdentityKey(
-    row.orderNumber, row.customerName, row.sku, row.distributionArea
-  );
 
   if (!existingItem) {
     return {
