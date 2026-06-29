@@ -737,13 +737,13 @@ function createRepo() {
     ),
     findLineByShiftAndName: vi.fn(async (_shiftId: string, _lineName: string) => null),
     createDemandPlanningDraft: vi.fn(async () => ({
-      id: '00000000-0000-4000-8000-000000000001', tenantId: ids.tenant, batchId: '00000000-0000-4000-8000-000000000099', status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
+      id: '00000000-0000-4000-8000-000000000001', tenantId: ids.tenant, batchId: '00000000-0000-4000-8000-000000000099', sourceKind: 'batch' as const, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
     })),
     getDemandPlanningDraft: vi.fn(async () => ({
-      id: '00000000-0000-4000-8000-000000000001', tenantId: ids.tenant, batchId: '00000000-0000-4000-8000-000000000099', status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
+      id: '00000000-0000-4000-8000-000000000001', tenantId: ids.tenant, batchId: '00000000-0000-4000-8000-000000000099', sourceKind: 'batch' as const, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
     })),
     updateDemandPlanningDraftStatus: vi.fn(async () => ({
-      id: '00000000-0000-4000-8000-000000000001', tenantId: ids.tenant, batchId: '00000000-0000-4000-8000-000000000099', status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
+      id: '00000000-0000-4000-8000-000000000001', tenantId: ids.tenant, batchId: '00000000-0000-4000-8000-000000000099', sourceKind: 'batch' as const, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
     })),
     deleteDemandPlanningBucketsByDraft: vi.fn(async () => undefined),
     insertDemandPlanningBuckets: vi.fn(async () => []),
@@ -6000,6 +6000,24 @@ describe('demand planning draft — PUT plan', () => {
       buckets: [], allocations: []
     })).rejects.toThrow(/not found/i);
   });
+
+  it('blocks rolling draft plan with DEMAND_PLANNING_ROLLING_DRAFT_NOT_SUPPORTED', async () => {
+    const { repo, state } = createPlanRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    state.drafts.push({
+      id: draftId, tenantId: ids.tenant, batchId, status: 'draft',
+      createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
+    });
+    (state.drafts[0] as any).sourceKind = 'rolling';
+    (state.drafts[0] as any).batchId = null;
+
+    await expect(service.putDemandPlanningPlan({
+      tenantId: ids.tenant,
+      draftId,
+      buckets: [], allocations: []
+    })).rejects.toThrow(/DEMAND_PLANNING_ROLLING_DRAFT_NOT_SUPPORTED/);
+  });
 });
 
 describe('demand planning draft — publish to shift', () => {
@@ -6936,6 +6954,21 @@ describe('demand planning draft — publish to shift', () => {
     expect(newOrder).toBeDefined();
     expect(oldOrder!.status).toBe('picking');
     expect(newOrder!.status).toBe('queued');
+  });
+
+  it('blocks rolling draft publish with DEMAND_PLANNING_ROLLING_PUBLISH_NOT_SUPPORTED', async () => {
+    const { repo, state } = createPublishRepo();
+    seedPublishRows(state);
+    // Override draft to be a rolling draft (cast to any for mock data flexibility)
+    (state.drafts[0] as any).sourceKind = 'rolling';
+    (state.drafts[0] as any).batchId = null;
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    await expect(service.publishDemandPlanningDraftToShift({
+      tenantId: ids.tenant,
+      draftId,
+      targetShiftId: shiftId
+    })).rejects.toThrow(/DEMAND_PLANNING_ROLLING_PUBLISH_NOT_SUPPORTED/);
   });
 });
 

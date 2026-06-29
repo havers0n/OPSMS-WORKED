@@ -474,7 +474,8 @@ function mapRawDemandRow(row: RawDemandRowRow): RawDemandRow {
 type DemandPlanningDraftRow = {
   id: string;
   tenant_id: string;
-  batch_id: string;
+  batch_id: string | null;
+  source_kind: string;
   status: string;
   source_scope?: string;
   created_by: string | null;
@@ -487,6 +488,7 @@ function mapDemandPlanningDraftRow(row: DemandPlanningDraftRow): DemandPlanningD
     id: row.id,
     tenantId: row.tenant_id,
     batchId: row.batch_id,
+    sourceKind: (row.source_kind ?? 'batch') as DemandPlanningDraft['sourceKind'],
     status: row.status as DemandPlanningDraft['status'],
     sourceScope: (row.source_scope ?? 'all') as DemandPlanningDraft['sourceScope'],
     createdBy: row.created_by,
@@ -499,7 +501,7 @@ type DemandPlanningBucketRow = {
   id: string;
   tenant_id: string;
   draft_id: string;
-  batch_id: string;
+  batch_id: string | null;
   distribution_area: string | null;
   planning_line_name: string;
   bucket_name: string;
@@ -3056,6 +3058,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         .insert({
           tenant_id: input.tenantId,
           batch_id: input.batchId,
+          source_kind: 'batch',
           created_by: input.createdBy,
           source_scope: input.sourceScope ?? 'all'
         })

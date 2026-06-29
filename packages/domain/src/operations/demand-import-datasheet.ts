@@ -279,10 +279,14 @@ export type DemandPlanningSourceScope = z.infer<typeof demandPlanningSourceScope
 export const demandPlanningDraftStatusSchema = z.enum(['draft', 'ready', 'cancelled', 'applied']);
 export type DemandPlanningDraftStatus = z.infer<typeof demandPlanningDraftStatusSchema>;
 
+export const demandPlanningSourceKindSchema = z.enum(['batch', 'rolling']);
+export type DemandPlanningSourceKind = z.infer<typeof demandPlanningSourceKindSchema>;
+
 export const demandPlanningDraftSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),
-  batchId: z.string().uuid(),
+  batchId: z.string().uuid().nullable(),
+  sourceKind: demandPlanningSourceKindSchema.default('batch'),
   status: demandPlanningDraftStatusSchema,
   sourceScope: demandPlanningSourceScopeSchema.optional(),
   createdBy: z.string().uuid().nullable(),
@@ -295,7 +299,7 @@ export const demandPlanningBucketSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),
   draftId: z.string().uuid(),
-  batchId: z.string().uuid(),
+  batchId: z.string().uuid().nullable(),
   distributionArea: z.string().nullable(),
   planningLineName: z.string().min(1),
   bucketName: z.string().min(1),
