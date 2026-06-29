@@ -61,3 +61,33 @@ export function demandImportAppendDiffQueryOptions(batchId: string, shiftId: str
     staleTime: 60_000
   });
 }
+
+interface DemandImportAvailableBatch {
+  id: string;
+  sourceFile: string;
+  sourceSheet: string;
+  totalRows: number;
+  remainingRows: number;
+  totalQuantity: number;
+  remainingQuantity: number;
+  canPlan: boolean;
+  status: string;
+}
+
+interface DemandImportAvailableBatchesResponse {
+  batches: DemandImportAvailableBatch[];
+}
+
+async function fetchDemandImportAvailableBatches(): Promise<DemandImportAvailableBatchesResponse> {
+  return bffRequest<DemandImportAvailableBatchesResponse>('/api/demand-imports/available-for-planning');
+}
+
+export const demandImportAvailableBatchesQueryKey = [...demandImportKeys.all, 'available-batches'] as const;
+
+export function demandImportAvailableBatchesQueryOptions() {
+  return queryOptions({
+    queryKey: demandImportAvailableBatchesQueryKey,
+    queryFn: fetchDemandImportAvailableBatches,
+    staleTime: 30_000
+  });
+}

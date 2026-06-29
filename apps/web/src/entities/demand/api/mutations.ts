@@ -1,6 +1,19 @@
-import type { DemandImportDataSheetPreview, DemandImportDataSheetCreateResponse, DemandPlanningDraftWithAssignments, DemandPlanningPutPlanRequest, DemandPlanningPublishToShiftRequest, DemandPlanningPublishToShiftResponse } from '@wos/domain';
+import type { DemandImportDataSheetPreview, DemandImportDataSheetCreateResponse, DemandPlanningDraftWithAssignments, DemandPlanningPutPlanRequest, DemandPlanningPublishToShiftRequest, DemandPlanningPublishToShiftResponse, DemandPlanningRevertPublicationResponse } from '@wos/domain';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
+import { demandImportAvailableBatchesQueryKey } from './queries';
+
+const manualShiftAll = ['manual-shift'] as const;
+const msk = {
+  all: manualShiftAll,
+  today: () => [...manualShiftAll, 'today'] as const,
+  byDate: (date: string) => [...manualShiftAll, 'by-date', date] as const,
+  byId: (shiftId: string) => [...manualShiftAll, 'by-id', shiftId] as const,
+  lines: (shiftId: string) => [...manualShiftAll, 'lines', shiftId] as const,
+  shiftOrders: (shiftId: string) => [...manualShiftAll, 'shift-orders', shiftId] as const,
+  workHierarchy: (shiftId: string) => [...manualShiftAll, 'work-hierarchy', shiftId] as const,
+  daySummary: (shiftId: string) => [...manualShiftAll, 'day-summary', shiftId] as const,
+};
 
 type DemandImportDataSheetPreviewResponse = {
   preview: DemandImportDataSheetPreview;
@@ -48,8 +61,12 @@ export function useCreateDataSheetDemandImport() {
 }
 
 export function useCreateDemandPlanningDraft() {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: createDemandPlanningDraft
+    mutationFn: createDemandPlanningDraft,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: demandImportAvailableBatchesQueryKey });
+    }
   });
 }
 
@@ -92,9 +109,38 @@ export function usePublishDemandPlanningDraftToShift() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['demand-import', 'draft', data.draftId] });
       queryClient.invalidateQueries({ queryKey: ['demand-import', 'planning-preview'] });
-      queryClient.invalidateQueries({ queryKey: ['manual-shift', 'work-hierarchy', data.shiftId] });
-      queryClient.invalidateQueries({ queryKey: ['manual-shift', 'lines', data.shiftId] });
-      queryClient.invalidateQueries({ queryKey: ['manual-shift', 'orders', data.shiftId] });
+      queryClient.invalidateQueries({ queryKey: demandImportAvailableBatchesQueryKey });
+      queryClient.invalidateQueries({ queryKey: msk.workHierarchy(data.shiftId) });
+      queryClient.invalidateQueries({ queryKey: msk.lines(data.shiftId) });
+      queryClient.invalidateQueries({ queryKey: msk.shiftOrders(data.shiftId) });
+      queryClient.invalidateQueries({ queryKey: msk.byId(data.shiftId) });
+      queryClient.invalidateQueries({ queryKey: msk.today() });
+      queryClient.invalidateQueries({ queryKey: msk.daySummary(data.shiftId) });
+    },
+  });
+}
+
+async function revertDemandPlanningPublication(publicationId: string): Promise<DemandPlanningRevertPublicationResponse> {
+  return bffRequest<DemandPlanningRevertPublicationResponse>(
+    `/api/demand-planning-publications/${publicationId}/revert`,
+    { method: 'POST' }
+  );
+}
+
+export function useRevertDemandPlanningPublication() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: revertDemandPlanningPublication,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['demand-import', 'draft', data.draftId] });
+      queryClient.invalidateQueries({ queryKey: ['demand-import', 'planning-preview'] });
+      queryClient.invalidateQueries({ queryKey: demandImportAvailableBatchesQueryKey });
+      queryClient.invalidateQueries({ queryKey: msk.workHierarchy(data.shiftId) });
+      queryClient.invalidateQueries({ queryKey: msk.lines(data.shiftId) });
+      queryClient.invalidateQueries({ queryKey: msk.shiftOrders(data.shiftId) });
+      queryClient.invalidateQueries({ queryKey: msk.byId(data.shiftId) });
+      queryClient.invalidateQueries({ queryKey: msk.today() });
+      queryClient.invalidateQueries({ queryKey: msk.daySummary(data.shiftId) });
     },
   });
 }

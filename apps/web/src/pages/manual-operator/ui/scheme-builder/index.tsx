@@ -1,13 +1,17 @@
-﻿import { useState, useMemo, useCallback, useEffect } from 'react';
+﻿import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, ChevronDown, ChevronUp, Save, Search, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { workHierarchyQueryOptions, orderItemsQueryOptions } from '@/entities/manual-shift/api/queries';
 import { demandPlanningPreviewQueryOptions, demandPlanningDraftQueryOptions } from '@/entities/demand/api/queries';
-import { usePutDemandPlanningPlan } from '@/entities/demand/api/mutations';
+import { usePutDemandPlanningPlan, usePublishDemandPlanningDraftToShift, useCreateDemandPlanningDraft, useRevertDemandPlanningPublication } from '@/entities/demand/api/mutations';
+import { saveDemandLastContext } from '@/entities/demand/lib/last-context';
+import { BffRequestError } from '@/shared/api/bff/client';
 import { useSchemeBuilderStore } from './scheme-store';
 import { adaptWorkHierarchyToSource, adaptOrderItemsToSource } from './source-data-adapter';
 import { adaptDemandPlanningPreviewToSource } from './demand-source-adapter';
-import type { SourceOrderItem, OrderBadgeStatus, PlanningLine, WorkGroup, ItemAllocation, SchemeBuilderCapabilities } from './scheme-types';
+import type { DemandPlanningPublishToShiftResponse } from '@wos/domain';
+import type { SourceOrderItem, OrderBadgeStatus, PlanningLine, WorkGroup, ItemAllocation, SchemeBuilderCapabilities, DemandPlanningDraftUiMode, DemandPlanningPublishUiMode } from './scheme-types';
 import { AreaOverview } from './area-overview';
 import { WorkGroupWorkspace } from './work-group-workspace';
 import { ItemsDrawerV2 } from './items-drawer-v2';
@@ -29,27 +33,24 @@ interface DemandModeProps {
   mode: 'demand';
   batchId: string;
   draftId: string;
+  targetDate?: string | null;
+  targetShiftId?: string | null;
+  intent?: 'plan-for-date' | 'append-current-shift';
   shiftId?: never;
 }
 
 export type SchemeBuilderProps = ShiftModeProps | DemandModeProps;
 
 export function SchemeBuilder(props: SchemeBuilderProps) {
+  const navigate = useNavigate();
   const isDemandMode = props.mode === 'demand';
   const shiftId = !isDemandMode ? (props as ShiftModeProps).shiftId : undefined;
   const batchId = isDemandMode ? (props as DemandModeProps).batchId : undefined;
   const draftId = isDemandMode ? (props as DemandModeProps).draftId : undefined;
+  const targetDate = isDemandMode ? (props as DemandModeProps).targetDate : undefined;
+  const targetShiftId = isDemandMode ? (props as DemandModeProps).targetShiftId : undefined;
+  const lineIntent = isDemandMode ? (props as DemandModeProps).intent : undefined;
 
-  const capabilities: SchemeBuilderCapabilities = useMemo(() => ({
-    canCreatePlanningLines: !isDemandMode || true,
-    canCreateWorkGroups: !isDemandMode || true,
-    canAssignOrders: !isDemandMode || true,
-    canMoveOrders: !isDemandMode || true,
-    canSaveDraft: isDemandMode,
-    canPublishToShift: !isDemandMode,
-    canWriteManualShift: !isDemandMode,
-    canPrint: !isDemandMode,
-  }), [isDemandMode]);
 
   const {
     data: hierarchy, isLoading: hierarchyLoading, error: hierarchyError
@@ -59,18 +60,61 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   });
 
   const {
-    data: planningPreview, isLoading: previewLoading, error: previewError
-  } = useQuery({
-    ...demandPlanningPreviewQueryOptions(batchId ?? ''),
-    enabled: isDemandMode && !!batchId,
-  });
-
-  const {
-    data: draftWithAssignments, isLoading: draftLoading, error: draftError
+    data: draftWithAssignments, isLoading: draftLoading, error: draftError, refetch: refetchDraft
   } = useQuery({
     ...demandPlanningDraftQueryOptions(draftId ?? ''),
     enabled: isDemandMode && !!draftId,
   });
+
+  const draftUiMode: DemandPlanningDraftUiMode = isDemandMode && draftWithAssignments?.draft?.status === 'applied'
+    ? 'publishedDraft'
+    : 'planningDraft';
+  const publishUiMode: DemandPlanningPublishUiMode = targetShiftId ? 'readyToPublish' : 'noTargetShift';
+  const isPublishedDraft = isDemandMode && draftUiMode === 'publishedDraft';
+  const draftPublication = isPublishedDraft ? draftWithAssignments?.publication ?? null : null;
+  const canRevert = draftPublication?.status === 'active' && (draftWithAssignments?.canRevert ?? false);
+  const revertBlockedReason = draftWithAssignments?.revertBlockedReason ?? null;
+  const sourceScope = isPublishedDraft ? 'all' as const : (draftWithAssignments?.draft?.sourceScope ?? 'all') as 'all' | 'remaining';
+  const {
+    data: planningPreview, isLoading: previewLoading, error: previewError
+  } = useQuery({
+    ...demandPlanningPreviewQueryOptions(batchId ?? '', sourceScope),
+    enabled: isDemandMode && !!batchId && !!draftWithAssignments,
+  });
+
+  const { data: remainingPreview } = useQuery({
+    ...demandPlanningPreviewQueryOptions(batchId ?? '', 'remaining'),
+    enabled: isPublishedDraft && !!batchId,
+  });
+  const hasRemainingDemand = (remainingPreview?.summary.normalRowsCount ?? 0) > 0
+    && (remainingPreview?.summary.totalQuantity ?? 0) > 0;
+
+  const capabilities: SchemeBuilderCapabilities = useMemo(() => {
+    if (isDemandMode) {
+      const canEditDraft = !isPublishedDraft;
+      return {
+        canCreatePlanningLines: canEditDraft,
+        canCreateWorkGroups: canEditDraft,
+        canAssignOrders: canEditDraft,
+        canMoveOrders: canEditDraft,
+        canSaveDraft: canEditDraft,
+        canPublishToShift: canEditDraft && publishUiMode === 'readyToPublish',
+        canWriteManualShift: false,
+        canPrint: false,
+      };
+    }
+
+    return {
+      canCreatePlanningLines: true,
+      canCreateWorkGroups: true,
+      canAssignOrders: true,
+      canMoveOrders: true,
+      canSaveDraft: false,
+      canPublishToShift: true,
+      canWriteManualShift: true,
+      canPrint: true,
+    };
+  }, [isDemandMode, isPublishedDraft, publishUiMode]);
 
   const selectedAreaName = useSchemeBuilderStore((s) => s.selectedAreaName);
   const setSelectedArea = useSchemeBuilderStore((s) => s.setSelectedArea);
@@ -87,6 +131,11 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   const workGroups = useSchemeBuilderStore((s) => s.workGroups);
 
   const savePlan = usePutDemandPlanningPlan();
+  const publishPlan = usePublishDemandPlanningDraftToShift();
+  const createDraft = useCreateDemandPlanningDraft();
+  const revertPublication = useRevertDemandPlanningPublication();
+  const [publishResult, setPublishResult] = useState<DemandPlanningPublishToShiftResponse | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   const [drawerOrderId, setDrawerOrderId] = useState<string | null>(null);
   const [assignItemIds, setAssignItemIds] = useState<string[]>([]);
@@ -128,8 +177,10 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   /* Hydrate draft into store when data arrives */
   const lastDraftKey = useMemo(() => {
     if (!isDemandMode || !draftWithAssignments) return null;
-    return `${draftWithAssignments.draft.id}:${draftWithAssignments.allocations.length}:${draftWithAssignments.buckets.length}`;
+    return `${draftWithAssignments.draft.id}:${draftWithAssignments.draft.status}:${draftWithAssignments.allocations.length}:${draftWithAssignments.buckets.length}`;
   }, [isDemandMode, draftWithAssignments]);
+
+  const demandContextSavedRef = useRef(false);
 
   useEffect(() => {
     if (!isDemandMode || !draftWithAssignments) return;
@@ -160,6 +211,21 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     }));
 
     hydrateFromDraft({ planningLines, workGroups, itemAllocations });
+
+    if (draftId && batchId && !demandContextSavedRef.current) {
+      demandContextSavedRef.current = true;
+      const params = new URLSearchParams(window.location.search);
+      saveDemandLastContext({
+        mode: 'demand',
+        batchId,
+        draftId,
+        url: window.location.pathname + window.location.search,
+        savedAt: new Date().toISOString(),
+        targetDate: targetDate ?? params.get('targetDate') ?? undefined,
+        sourceFile: planningPreview?.batch.sourceFile,
+        sourceSheet: planningPreview?.batch.sourceSheet,
+      });
+    }
   }, [isDemandMode, lastDraftKey]);
 
   /* Cleanup when leaving demand mode */
@@ -207,6 +273,14 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     }
     return shiftSource?.orders ?? [];
   }, [isDemandMode, demandSource, shiftSource]);
+
+  const orderNumberMap = useMemo(() => {
+    const map: Record<string, string | null> = {};
+    for (const o of allOrders) {
+      map[o.orderId] = o.orderNumber;
+    }
+    return map;
+  }, [allOrders]);
 
   const areaOrders = useMemo(() => {
     if (!allOrders || !selectedAreaName) return [];
@@ -320,8 +394,37 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
 
   const plMap = useMemo(() => new Map(planningLines.map((pl) => [pl.id, pl])), [planningLines]);
 
-  const handleSaveDraft = useCallback(() => {
-    if (!draftId || !capabilities.canSaveDraft) return;
+  const BANNER_DISMISS_KEY = 'wos:demand-planning:banner-dismiss';
+  const [userDismissed, setUserDismissed] = useState(false);
+
+  const bannerDismissKey = useMemo(() => {
+    if (!isDemandMode || !batchId || !planningPreview) return null;
+    return `${BANNER_DISMISS_KEY}:${batchId}:${draftId ?? 'no-draft'}:${planningPreview.batch.status}`;
+  }, [isDemandMode, batchId, draftId, planningPreview]);
+
+  const isBannerPermanentDismiss = useMemo(() => {
+    if (!bannerDismissKey) return true;
+    try {
+      return localStorage.getItem(bannerDismissKey) === 'true';
+    } catch {
+      return false;
+    }
+  }, [bannerDismissKey]);
+
+  const isBannerDismissed = userDismissed || isBannerPermanentDismiss;
+
+  const handleDismissBanner = useCallback(() => {
+    if (bannerDismissKey) {
+      try {
+        localStorage.setItem(bannerDismissKey, 'true');
+      } catch {
+        // localStorage may be unavailable
+      }
+      setUserDismissed(true);
+    }
+  }, [bannerDismissKey]);
+
+  const buildPlanPayload = useCallback(() => {
     const buckets = workGroups.map((wg) => {
       const pl = plMap.get(wg.planningLineId);
       return {
@@ -330,20 +433,155 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
         bucketName: wg.name,
       };
     });
+
     const bucketKeyByWgId = new Map<string, string>();
     for (const wg of workGroups) {
       const pl = plMap.get(wg.planningLineId);
-      const key = `${wg.areaName === '__missing__' ? '' : (wg.areaName ?? '')}|${pl?.name ?? 'default'}|${wg.name}`;
-      bucketKeyByWgId.set(wg.id, key);
+      bucketKeyByWgId.set(
+        wg.id,
+        `${wg.areaName === '__missing__' ? '' : (wg.areaName ?? '')}|${pl?.name ?? 'default'}|${wg.name}`,
+      );
     }
+
     const allocations = itemAllocations.map((alloc) => {
       const bucketKey = bucketKeyByWgId.get(alloc.workGroupId);
       if (!bucketKey) return null;
       return { rawDemandRowId: alloc.itemRowId, bucketKey, allocatedQuantity: alloc.qty };
-    }).filter((x): x is NonNullable<typeof x> => x !== null);
-    savePlan.mutate({ draftId, body: { buckets, allocations } });
-  }, [draftId, capabilities.canSaveDraft, planningLines, workGroups, itemAllocations, plMap, savePlan]);
+    }).filter((value): value is NonNullable<typeof value> => value !== null);
 
+    return { buckets, allocations };
+  }, [workGroups, plMap, itemAllocations]);
+
+  function isDraftNotMutableError(err: unknown): boolean {
+    return err instanceof BffRequestError
+      ? err.code === 'DEMAND_PLANNING_DRAFT_NOT_MUTABLE'
+      : err instanceof Error && (err.message.includes('DEMAND_PLANNING_DRAFT_NOT_MUTABLE') || err.message.includes('NOT_MUTABLE'));
+  }
+
+  const handleSaveDraft = useCallback(() => {
+    if (!draftId || !capabilities.canSaveDraft || isPublishedDraft) return;
+    savePlan.mutate({ draftId, body: buildPlanPayload() });
+  }, [draftId, capabilities.canSaveDraft, isPublishedDraft, buildPlanPayload, savePlan]);
+
+  const handlePublish = useCallback(() => {
+    if (!draftId || !targetShiftId) return;
+    setPublishResult(null);
+    setPublishError(null);
+    if (isPublishedDraft) {
+      setPublishError('הטיוטה כבר פורסמה למשמרת');
+      return;
+    }
+    if (!capabilities.canPublishToShift) return;
+
+    const publishToShift = () => {
+      publishPlan.mutate(
+        { draftId, body: { targetShiftId } },
+        {
+          onSuccess: (data) => {
+            setPublishResult({
+              shiftId: data.shiftId,
+              draftId: data.draftId,
+              createdLines: data.createdLines,
+              reusedLines: data.reusedLines,
+              createdOrders: data.createdOrders,
+              updatedOrders: data.updatedOrders,
+              createdItems: data.createdItems,
+              skippedRows: data.skippedRows,
+              warnings: data.warnings,
+            });
+          },
+          onError: (err) => {
+            setPublishError(getPublishErrorMessage(err));
+          },
+        },
+      );
+    };
+
+    savePlan.mutate(
+      { draftId, body: buildPlanPayload() },
+      {
+        onSuccess: publishToShift,
+        onError: (err) => {
+          if (isDraftNotMutableError(err)) {
+            setPublishError('הטיוטה כבר פורסמה למשמרת');
+            void refetchDraft();
+            return;
+          }
+          setPublishError('שמירת הטיוטה נכשלה. נסה שוב.');
+        },
+      },
+    );
+  }, [draftId, targetShiftId, isPublishedDraft, capabilities.canPublishToShift, savePlan, publishPlan, buildPlanPayload, refetchDraft]);
+
+  function getPublishErrorMessage(err: unknown): string {
+    if (isDraftNotMutableError(err)) return 'הטיוטה כבר פורסמה למשמרת';
+    const msg = err instanceof Error ? err.message : '';
+    if (msg.includes('NO_PUBLISHABLE_ROWS')) return 'אין שורות לפרסום למשמרת';
+    if (msg.includes('already applied') || msg.includes('NOT_MUTABLE')) return 'הטיוטה כבר פורסמה למשמרת';
+    if (msg.includes('DATE_MISMATCH') || msg.includes('does not match')) return 'תאריך הביקוש לא תואם לתאריך המשמרת';
+    if (msg.includes('DATE_AMBIGUOUS') || msg.includes('multiple')) return 'נמצאו כמה תאריכי אספקה שונים בביקוש';
+    if (msg.includes('not active') || msg.includes('SHIFT_NOT_ACTIVE')) return 'לא ניתן לפרסם למשמרת שאינה פעילה';
+    if (msg.includes('FORBIDDEN') || msg.includes('403')) return 'אין הרשאה לפרסם למשמרת הזו';
+    if (msg.includes('422') || msg.includes('NO_PUBLISHABLE')) return 'אין שורות לפרסום למשמרת';
+    if (msg.includes('409')) return 'הטיוטה כבר פורסמה או שהמשמרת אינה פעילה';
+    return 'הפרסום למשמרת נכשל';
+  }
+
+  const handleNavigateToWork = useCallback(() => {
+    if (!targetShiftId) return;
+    navigate(`/operator/manual/work?shiftId=${targetShiftId}`);
+  }, [navigate, targetShiftId]);
+
+
+  const handlePlanRemaining = useCallback(() => {
+    if (!batchId || !isPublishedDraft || !hasRemainingDemand) return;
+    createDraft.mutate(
+      { batchId, scope: 'remaining' },
+      {
+        onSuccess: (result) => {
+          const params = new URLSearchParams();
+          params.set('batchId', batchId);
+          params.set('draftId', result.draft.id);
+          params.set('mode', 'demand');
+          if (lineIntent) {
+            params.set('intent', lineIntent);
+          }
+          if (targetShiftId) {
+            params.set('targetShiftId', targetShiftId);
+          }
+          if (targetDate) {
+            params.set('targetDate', targetDate);
+          }
+          const url = `/operator/manual/lines?${params.toString()}`;
+          saveDemandLastContext({
+            mode: 'demand',
+            batchId,
+            draftId: result.draft.id,
+            url,
+            targetDate: targetDate ?? undefined,
+            savedAt: new Date().toISOString(),
+            sourceFile: remainingPreview?.batch.sourceFile,
+            sourceSheet: remainingPreview?.batch.sourceSheet,
+          });
+          navigate(url);
+        },
+      }
+    );
+  }, [batchId, isPublishedDraft, hasRemainingDemand, createDraft, navigate, remainingPreview, lineIntent, targetShiftId, targetDate]);
+
+  const handleRevertPublication = useCallback(() => {
+    if (!draftPublication) return;
+    revertPublication.mutate(draftPublication.id, {
+      onSuccess: (_data) => {
+        setPublishResult(null);
+        setPublishError(null);
+        void refetchDraft();
+      },
+      onError: () => {
+        void refetchDraft();
+      },
+    });
+  }, [draftPublication, revertPublication, refetchDraft]);
   const isLoading = isDemandMode ? (previewLoading || draftLoading) : hierarchyLoading;
   const error = isDemandMode ? (previewError || draftError) : hierarchyError;
 
@@ -387,43 +625,78 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     <div className="flex-1 flex flex-col bg-gray-50" dir="rtl">
 
       {/* Demand mode banner */}
-      {isDemandMode && (
-        <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-2 text-sm">
-          <p className="font-bold text-amber-900">תכנון ביקוש גולמי מ-DataSheet</p>
-          <div className="text-xs text-amber-700 mt-0.5 space-y-0.5">
-            {planningPreview && (
-              <>
+      {isDemandMode && !isBannerDismissed && (
+        <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-2 text-sm flex items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-amber-900">תכנון ביקוש גולמי מ-DataSheet</p>
+            <div className="text-xs text-amber-700 mt-0.5 space-y-0.5">
+              {planningPreview && (
                 <p>קובץ: {planningPreview.batch.sourceFile} | גיליון: {planningPreview.batch.sourceSheet} | סטטוס: {planningPreview.batch.status}</p>
-              </>
-            )}
-            <p>לא שויך למשמרת — הנתונים מגיעים מ-DataSheet ונמצאים בשלב תכנון בלבד</p>
+              )}
+              <p>{isPublishedDraft ? 'הטיוטה כבר פורסמה למשמרת ונשארת לקריאה בלבד' : 'לא שויך למשמרת — הנתונים מגיעים מ-DataSheet ונמצאים בשלב תכנון בלבד'}</p>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={handleDismissBanner}
+            className="shrink-0 text-amber-400 hover:text-amber-600 transition-colors p-0.5"
+            aria-label="סגור"
+          >
+            <X size={16} />
+          </button>
         </div>
       )}
 
       {/* Compact toolbar — area selector pills */}
-      <div className="shrink-0 border-b border-gray-200 bg-white px-3 py-1.5">
+      <div className="shrink-0 border-b border-gray-200 bg-white px-3 py-1.5 flex items-center gap-2">
         <AreaOverview
           areas={source.areas}
           selectedAreaName={selectedAreaName}
           onSelectArea={setSelectedArea}
         />
+        {isDemandMode && (
+          <div className="md:hidden ms-auto">
+            <button
+              type="button"
+              onClick={() => setShowOrders((v) => !v)}
+              className="text-xs px-2 py-1 rounded-md bg-gray-100 text-gray-600"
+            >
+              סיכום ({workGroups.length} קבו׳)
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main board area */}
       <main className="flex-1 flex overflow-hidden">
-        {/* Left rail (appears on the right in RTL) */}
-        <aside className="w-64 shrink-0 border-e border-gray-200 bg-gray-50 p-2 flex flex-col gap-2 overflow-y-auto">
-          {!isDemandMode && (
+        {/* Left rail (appears on the right in RTL) - responsive */}
+        <aside className="hidden md:flex w-72 xl:w-80 shrink-0 border-e border-gray-200 bg-gray-50 p-2 flex-col gap-2 overflow-y-auto">
+          {isDemandMode && (
             <PublishSummary
               orders={source.orders}
               orderItemMap={orderItemMap}
+              draftUiMode={draftUiMode}
+              publishUiMode={publishUiMode}
+              canPublish={capabilities.canPublishToShift}
+              isPublishing={savePlan.isPending || publishPlan.isPending}
+              onPublish={handlePublish}
+              publishResult={publishResult}
+              publishError={publishError}
+              onNavigateToWork={targetShiftId ? handleNavigateToWork : undefined}
+              hasRemainingDemand={hasRemainingDemand}
+              isCreatingRemainingDraft={createDraft.isPending}
+              onPlanRemaining={handlePlanRemaining}
+              canRevert={canRevert}
+              revertBlockedReason={revertBlockedReason}
+              isReverting={revertPublication.isPending}
+              onRevert={canRevert ? handleRevertPublication : undefined}
+              intent={lineIntent}
             />
           )}
 
           {isDemandMode ? (
             <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm space-y-2">
-              <p className="font-bold text-blue-800">תצוגת תכנון בלבד</p>
+              <p className="font-bold text-blue-800">{isPublishedDraft ? 'פורסם למשמרת' : 'תכנון ביקוש'}</p>
               <p className="text-xs text-blue-700">
                 אזורים: {source.areas.length} | הזמנות: {source.orders.length} | סה"כ כמות:{' '}
                 {source.orders.reduce((s, o) => s + o.totalQuantity, 0)}
@@ -436,6 +709,11 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
               {demandSource && demandSource.errorItems.length > 0 && (
                 <p className="text-xs text-red-600">
                   שגיאות: {demandSource.errorItems.length} שורות
+                </p>
+              )}
+              {isPublishedDraft && (
+                <p className="text-xs font-semibold text-blue-800">
+                  הבנאי במצב קריאה בלבד. ל-append/diff השתמש במסלול הנפרד.
                 </p>
               )}
               {capabilities.canSaveDraft && (
@@ -466,6 +744,11 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
 
         {/* Center board */}
         <div className="flex-1 flex flex-col min-h-0">
+          {isPublishedDraft && (
+            <div className="shrink-0 border-b border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
+              טיוטה זו כבר פורסמה למשמרת. העריכה והשמירה מושבתות, ו-append/diff נשארים בזרימה נפרדת.
+            </div>
+          )}
           {capabilities.canAssignOrders && targetWg && (
             <div className="shrink-0 flex items-center gap-2 bg-blue-50 border-b border-blue-200 px-3 py-1.5 text-sm">
               <span className="font-bold text-blue-800">קבוצת יעד: {targetWg.name}</span>
@@ -489,6 +772,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
                 orderItemMap={orderItemMap}
                 onStartAssign={handleStartAssign}
                 capabilities={capabilities}
+                orderNumberMap={orderNumberMap}
               />
             ) : (
               <div className="bg-white border border-dashed border-gray-300 rounded-lg p-6 text-center">
