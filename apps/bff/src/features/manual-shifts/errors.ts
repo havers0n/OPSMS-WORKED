@@ -302,6 +302,22 @@ export function demandPlanningDraftAlreadyApplied(draftId: string) {
   );
 }
 
+export function demandPlanningRollingPublishNotSupported(draftId: string) {
+  return new ApiError(
+    422,
+    'DEMAND_PLANNING_ROLLING_PUBLISH_NOT_SUPPORTED',
+    `Rolling draft ${draftId} publish requires availability validation and is not enabled yet.`
+  );
+}
+
+export function demandPlanningRollingDraftNotSupported(draftId: string) {
+  return new ApiError(
+    422,
+    'DEMAND_PLANNING_ROLLING_DRAFT_NOT_SUPPORTED',
+    `Rolling draft ${draftId} editing is not supported yet.`
+  );
+}
+
 export function demandPlanningTargetDateAmbiguous(draftId: string, dates: string[]) {
   return new ApiError(
     409,

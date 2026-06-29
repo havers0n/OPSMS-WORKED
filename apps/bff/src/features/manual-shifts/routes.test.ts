@@ -621,17 +621,17 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
       }
     })),
     createDemandPlanningDraft: vi.fn(async () => ({
-      draft: { id: ids.shift, tenantId: ids.tenant, batchId: ids.shift, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000+00:00', updatedAt: '2026-06-25T00:00:00.000+00:00' },
+      draft: { id: ids.shift, tenantId: ids.tenant, batchId: ids.shift, sourceKind: 'batch' as const, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000+00:00', updatedAt: '2026-06-25T00:00:00.000+00:00' },
       buckets: [],
       allocations: []
     })),
     getDemandPlanningDraft: vi.fn(async () => ({
-      draft: { id: ids.shift, tenantId: ids.tenant, batchId: ids.shift, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000+00:00', updatedAt: '2026-06-25T00:00:00.000+00:00' },
+      draft: { id: ids.shift, tenantId: ids.tenant, batchId: ids.shift, sourceKind: 'batch' as const, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000+00:00', updatedAt: '2026-06-25T00:00:00.000+00:00' },
       buckets: [],
       allocations: []
     })),
     putDemandPlanningPlan: vi.fn(async () => ({
-      draft: { id: ids.shift, tenantId: ids.tenant, batchId: ids.shift, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000+00:00', updatedAt: '2026-06-25T00:00:00.000+00:00' },
+      draft: { id: ids.shift, tenantId: ids.tenant, batchId: ids.shift, sourceKind: 'batch' as const, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000+00:00', updatedAt: '2026-06-25T00:00:00.000+00:00' },
       buckets: [],
       allocations: []
     })),

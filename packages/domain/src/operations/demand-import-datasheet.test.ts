@@ -792,3 +792,69 @@ describe('demand planning draft schema offset timestamp acceptance', () => {
     expect(result.allocations[0].updatedAt).toBe(offsetTimestamp);
   });
 });
+
+describe('demand planning source kind schema', () => {
+  const uuid = () => '00000000-0000-4000-8000-000000000000';
+
+  it('batch draft parses with non-null batchId and defaults to sourceKind batch', () => {
+    const payload = {
+      id: uuid(),
+      tenantId: uuid(),
+      batchId: uuid(),
+      status: 'draft' as const,
+      createdBy: null,
+      createdAt: '2026-06-26T08:49:57.681454+00:00',
+      updatedAt: '2026-06-26T08:49:57.681454+00:00'
+    };
+    const result = demandPlanningDraftSchema.parse(payload);
+    expect(result.batchId).toBe(payload.batchId);
+    expect(result.sourceKind).toBe('batch');
+  });
+
+  it('rolling draft parses with null batchId and explicit sourceKind rolling', () => {
+    const payload = {
+      id: uuid(),
+      tenantId: uuid(),
+      batchId: null,
+      sourceKind: 'rolling' as const,
+      status: 'draft' as const,
+      createdBy: null,
+      createdAt: '2026-06-26T08:49:57.681454+00:00',
+      updatedAt: '2026-06-26T08:49:57.681454+00:00'
+    };
+    const result = demandPlanningDraftSchema.parse(payload);
+    expect(result.batchId).toBeNull();
+    expect(result.sourceKind).toBe('rolling');
+  });
+
+  it('invalid sourceKind is rejected', () => {
+    const payload = {
+      id: uuid(),
+      tenantId: uuid(),
+      batchId: uuid(),
+      sourceKind: 'invalid',
+      status: 'draft' as const,
+      createdBy: null,
+      createdAt: '2026-06-26T08:49:57.681454+00:00',
+      updatedAt: '2026-06-26T08:49:57.681454+00:00'
+    };
+    expect(() => demandPlanningDraftSchema.parse(payload)).toThrow();
+  });
+
+  it('allocation still requires batchId', () => {
+    const payloadWithoutBatchId = {
+      id: uuid(),
+      tenantId: uuid(),
+      draftId: uuid(),
+      rawDemandRowId: uuid(),
+      bucketId: uuid(),
+      allocatedQuantity: 5,
+      createdAt: '2026-06-26T08:49:57.681454+00:00',
+      updatedAt: '2026-06-26T08:49:57.681454+00:00'
+    };
+    expect(() => demandPlanningAllocationSchema.parse(payloadWithoutBatchId)).toThrow();
+    // With valid batchId it should pass
+    const payloadWithBatchId = { ...payloadWithoutBatchId, batchId: uuid() };
+    expect(() => demandPlanningAllocationSchema.parse(payloadWithBatchId)).not.toThrow();
+  });
+});

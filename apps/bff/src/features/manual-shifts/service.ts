@@ -122,6 +122,8 @@ import {
   demandPlanningDraftNotFound,
   demandPlanningDraftNotMutable,
   demandPlanningDraftAlreadyApplied,
+  demandPlanningRollingPublishNotSupported,
+  demandPlanningRollingDraftNotSupported,
   demandPlanningAllocationOverflow,
   demandPlanningRawDemandRowNotFound,
   demandPlanningBucketNotFound,
@@ -2788,6 +2790,10 @@ export function createManualShiftsServiceFromRepo(
         throw demandPlanningDraftNotMutable(input.draftId, draft.status);
       }
 
+      if (draft.sourceKind === 'rolling') {
+        throw demandPlanningRollingDraftNotSupported(input.draftId);
+      }
+
       // Validate rawDemandRowIds belong to this tenant/batch
       const rowIds = [...new Set(input.allocations.map((a) => a.rawDemandRowId))];
       const rows = rowIds.length > 0
@@ -2828,7 +2834,7 @@ export function createManualShiftsServiceFromRepo(
       const buckets = await repo.insertDemandPlanningBuckets({
         tenantId: input.tenantId,
         draftId: input.draftId,
-        batchId: draft.batchId,
+        batchId: draft.batchId!,
         buckets: input.buckets.map((b, i) => ({
           distributionArea: b.distributionArea,
           planningLineName: b.planningLineName,
@@ -2888,7 +2894,7 @@ export function createManualShiftsServiceFromRepo(
       const allocations = await repo.insertDemandPlanningAllocations({
         tenantId: input.tenantId,
         draftId: input.draftId,
-        batchId: draft.batchId,
+        batchId: draft.batchId!,
         allocations: allocationInputs
       });
 
@@ -2906,6 +2912,10 @@ export function createManualShiftsServiceFromRepo(
 
       if (!draft) {
         throw demandPlanningDraftNotFound(input.draftId);
+      }
+
+      if (draft.sourceKind === 'rolling') {
+        throw demandPlanningRollingPublishNotSupported(input.draftId);
       }
 
       if (draft.status === 'applied') {
