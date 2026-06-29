@@ -63,8 +63,8 @@ export function ManualOperatorImportSection({
   selectedDate,
   canMonthlyImport,
   hasExistingWork,
-  isLoading: _isLoading,
-  canImportExcelByRole: _canImportExcelByRole,
+  isLoading,
+  canImportExcelByRole,
   mode,
   targetShiftId,
   targetDate,
@@ -76,6 +76,14 @@ export function ManualOperatorImportSection({
   const [showImportExcel, setShowImportExcel] = useState(false);
   const [showMonthlyPreview, setShowMonthlyPreview] = useState(false);
   const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
+
+  function getDisabledReason(): string | undefined {
+    if (isLoading) return 'טוען מידע על המשמרת...';
+    if (!shift) return 'לא נבחרה משמרת. יש לבחור תאריך או לפתוח משמרת.';
+    if (shift.status === 'closed') return 'המשמרת סגורה. יש לפתוח משמרת פעילה.';
+    if (!canImportExcelByRole) return 'אין לך הרשאת ייבוא. נדרשת הרשאת מנהל.';
+    return undefined;
+  }
 
   const canFetchReplaceSafety = canMonthlyImport && hasExistingWork && !!shift?.id;
   const { data: replaceSafety } = useQuery({
@@ -147,7 +155,7 @@ export function ManualOperatorImportSection({
             description="פתיחת גיליון הייבוא היומי עבור המשמרת והתאריך שנבחרו."
             actionLabel="פתיחת ייבוא יומי"
             disabled={!canMonthlyImport}
-            disabledMessage="נדרשת משמרת פעילה עם הרשאת ייבוא כדי לבצע ייבוא יומי."
+            disabledMessage={getDisabledReason()}
             onClick={() => setShowImportExcel(true)}
           />
           <ImportEntryCard
@@ -155,7 +163,7 @@ export function ManualOperatorImportSection({
             description="בדיקת קובץ אקסל חודשי לפי תאריך נבחר לפני ייבוא."
             actionLabel={hasExistingWork ? 'פתיחת החלפת ייבוא לפי תאריך' : 'פתיחת ייבוא הזמנות לתאריך נבחר'}
             disabled={!canMonthlyImport}
-            disabledMessage="נדרשת משמרת פעילה עם הרשאת ייבוא כדי לבצע ייבוא הזמנות."
+            disabledMessage={getDisabledReason()}
             onClick={() => setShowMonthlyPreview(true)}
           />
         </div>

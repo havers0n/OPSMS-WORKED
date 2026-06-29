@@ -16,6 +16,8 @@ vi.mock('@/shared/hooks/use-media-query', () => ({
   useMediaQuery: () => isDesktop
 }));
 
+let authMembershipRole = 'tenant_admin';
+
 vi.mock('@/app/providers/auth-provider', () => ({
   useAuth: () => ({
     currentTenantId: 'tenant-1',
@@ -24,7 +26,7 @@ vi.mock('@/app/providers/auth-provider', () => ({
         tenantId: 'tenant-1',
         tenantCode: 'default',
         tenantName: 'Default',
-        role: 'tenant_admin'
+        role: authMembershipRole
       }
     ]
   })
@@ -204,6 +206,9 @@ function mockWorkspaceData(options?: {
   mockedBffRequest.mockImplementation((url: string) => {
     const path = String(url);
     if (path.includes('/api/manual-shifts/by-date')) return Promise.resolve({ shift, lines });
+    if (path.match(/\/api\/manual-shifts\/[^/]+$/) && !path.includes('/by-date') && !path.includes('/today')) {
+      return Promise.resolve({ shift, lines });
+    }
     if (path.endsWith(`/api/manual-shifts/${shift.id}/work-hierarchy`)) return Promise.resolve(workHierarchyData);
     if (path.endsWith(`/api/manual-shifts/${shift.id}/day-summary`)) return Promise.resolve(daySummary);
     if (path.endsWith(`/api/manual-shifts/${shift.id}/orders`)) return Promise.resolve(orders);
@@ -1268,6 +1273,160 @@ describe('ManualOperatorPage URL sections', () => {
     fireEvent.click(screen.getByTestId('area-card-south'));
     await waitFor(() => {
       expect(screen.getByTestId('work-bucket-card-Point A')).toBeTruthy();
+    });
+  });
+
+  describe('shift resolved gating regression', () => {
+    function todayIsrael(): string {
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Jerusalem',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).format(new Date());
+    }
+
+    function mockNoShiftByDate() {
+      mockedBffRequest.mockImplementation((url: string) => {
+        const path = String(url);
+        if (path.includes('/api/manual-shifts/by-date')) return Promise.resolve({ shift: null, lines: [] });
+        if (path.match(/\/api\/manual-shifts\/[^/]+$/)) {
+          return Promise.resolve({ shift: null, lines: [] });
+        }
+        if (path.includes('/work-hierarchy')) return Promise.resolve(workHierarchy);
+        if (path.includes('/day-summary')) return Promise.resolve({ shiftId: 'shift-1', totalOrders: 0, queuedOrders: 0, pickingOrders: 0, waitingCheckOrders: 0, returnedOrders: 0, doneOrders: 0, errorsCount: 0, byErrorType: [], byLine: [], byPicker: [] });
+        if (path.includes('/orders')) return Promise.resolve([]);
+        if (path.includes('/workers')) return Promise.resolve([]);
+        if (path.includes('/people-summary')) return Promise.resolve({ shiftId: 'shift-1', items: [] });
+        return Promise.resolve([]);
+      });
+    }
+
+    it('shiftId in URL enables import even when selectedDate/today differs', async () => {
+      const today = todayIsrael();
+      const activeShift = {
+        id: 'shift-resolved',
+        tenantId: 'tenant-1',
+        date: today,
+        name: `Shift ${today}`,
+        status: 'active' as const,
+        createdBy: null,
+        createdAt: new Date().toISOString(),
+        closedAt: null
+      };
+
+      mockedBffRequest.mockImplementation((url: string) => {
+        const path = String(url);
+        if (path.includes('/api/manual-shifts/by-date')) return Promise.resolve({ shift: null, lines: [] });
+        if (path.endsWith('/api/manual-shifts/shift-resolved')) return Promise.resolve({ shift: activeShift, lines: [] });
+        if (path.includes('/work-hierarchy')) return Promise.resolve(workHierarchy);
+        if (path.includes('/day-summary')) return Promise.resolve({ shiftId: activeShift.id, totalOrders: 0, queuedOrders: 0, pickingOrders: 0, waitingCheckOrders: 0, returnedOrders: 0, doneOrders: 0, errorsCount: 0, byErrorType: [], byLine: [], byPicker: [] });
+        if (path.includes('/orders')) return Promise.resolve([]);
+        if (path.includes('/workers')) return Promise.resolve([]);
+        if (path.includes('/people-summary')) return Promise.resolve({ shiftId: activeShift.id, items: [] });
+        return Promise.resolve([]);
+      });
+
+      renderAt(`/operator/manual/import?date=2020-01-01&shiftId=shift-resolved`);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('manual-import-section')).toBeTruthy();
+      });
+
+      const dailyBtn = screen.getByRole('button', { name: 'פתיחת ייבוא יומי' });
+      const monthlyBtn = screen.getByRole('button', { name: 'פתיחת ייבוא הזמנות לתאריך נבחר' });
+      expect(dailyBtn.hasAttribute('disabled')).toBe(false);
+      expect(monthlyBtn.hasAttribute('disabled')).toBe(false);
+    });
+
+    it('closed resolved shift disables import', async () => {
+      const today = todayIsrael();
+      const closedShift = {
+        id: 'shift-closed',
+        tenantId: 'tenant-1',
+        date: today,
+        name: 'Closed Shift',
+        status: 'closed' as const,
+        createdBy: null,
+        createdAt: new Date().toISOString(),
+        closedAt: new Date().toISOString()
+      };
+
+      mockedBffRequest.mockImplementation((url: string) => {
+        const path = String(url);
+        if (path.includes('/api/manual-shifts/by-date')) return Promise.resolve({ shift: null, lines: [] });
+        if (path.endsWith('/api/manual-shifts/shift-closed')) return Promise.resolve({ shift: closedShift, lines: [] });
+        if (path.includes('/work-hierarchy')) return Promise.resolve(workHierarchy);
+        if (path.includes('/day-summary')) return Promise.resolve({ shiftId: closedShift.id, totalOrders: 0, queuedOrders: 0, pickingOrders: 0, waitingCheckOrders: 0, returnedOrders: 0, doneOrders: 0, errorsCount: 0, byErrorType: [], byLine: [], byPicker: [] });
+        if (path.includes('/orders')) return Promise.resolve([]);
+        if (path.includes('/workers')) return Promise.resolve([]);
+        if (path.includes('/people-summary')) return Promise.resolve({ shiftId: closedShift.id, items: [] });
+        return Promise.resolve([]);
+      });
+
+      renderAt('/operator/manual/import?shiftId=shift-closed');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('manual-import-section')).toBeTruthy();
+      });
+
+      expect(screen.getAllByText('המשמרת סגורה. יש לפתוח משמרת פעילה.').length).toBeGreaterThanOrEqual(1);
+      const dailyBtn = screen.getByRole('button', { name: 'פתיחת ייבוא יומי' });
+      expect(dailyBtn.hasAttribute('disabled')).toBe(true);
+    });
+
+    it('no import permission shows explicit disabled reason', async () => {
+      authMembershipRole = 'operator';
+
+      const today = todayIsrael();
+      const activeShift = {
+        id: 'shift-op',
+        tenantId: 'tenant-1',
+        date: today,
+        name: 'Operator Shift',
+        status: 'active' as const,
+        createdBy: null,
+        createdAt: new Date().toISOString(),
+        closedAt: null
+      };
+
+      mockedBffRequest.mockImplementation((url: string) => {
+        const path = String(url);
+        if (path.includes('/api/manual-shifts/by-date')) return Promise.resolve({ shift: null, lines: [] });
+        if (path.endsWith('/api/manual-shifts/shift-op')) return Promise.resolve({ shift: activeShift, lines: [] });
+        if (path.includes('/work-hierarchy')) return Promise.resolve(workHierarchy);
+        if (path.includes('/day-summary')) return Promise.resolve({ shiftId: activeShift.id, totalOrders: 0, queuedOrders: 0, pickingOrders: 0, waitingCheckOrders: 0, returnedOrders: 0, doneOrders: 0, errorsCount: 0, byErrorType: [], byLine: [], byPicker: [] });
+        if (path.includes('/orders')) return Promise.resolve([]);
+        if (path.includes('/workers')) return Promise.resolve([]);
+        if (path.includes('/people-summary')) return Promise.resolve({ shiftId: activeShift.id, items: [] });
+        return Promise.resolve([]);
+      });
+
+      renderAt('/operator/manual/import?shiftId=shift-op');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('manual-import-section')).toBeTruthy();
+      });
+
+      expect(screen.getAllByText('אין לך הרשאת ייבוא. נדרשת הרשאת מנהל.').length).toBeGreaterThanOrEqual(1);
+      const dailyBtn = screen.getByRole('button', { name: 'פתיחת ייבוא יומי' });
+      expect(dailyBtn.hasAttribute('disabled')).toBe(true);
+
+      authMembershipRole = 'tenant_admin';
+    });
+
+    it('no shift shows explicit disabled reason', async () => {
+      mockNoShiftByDate();
+
+      renderAt('/operator/manual/import');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('manual-import-section')).toBeTruthy();
+      });
+
+      expect(screen.getAllByText('לא נבחרה משמרת. יש לבחור תאריך או לפתוח משמרת.').length).toBeGreaterThanOrEqual(1);
+      const dailyBtn = screen.getByRole('button', { name: 'פתיחת ייבוא יומי' });
+      expect(dailyBtn.hasAttribute('disabled')).toBe(true);
     });
   });
 });
