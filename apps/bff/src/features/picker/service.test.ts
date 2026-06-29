@@ -251,17 +251,6 @@ function createManualRepoMock(): ManualShiftsRepo {
     listBacklogSourceBatches: vi.fn().mockResolvedValue([]),
     getBacklogSummary: vi.fn().mockResolvedValue({ totalItems: 0, byStatus: [], byDistributionArea: [], oldestItemSeenAt: null, newestItemSeenAt: null, totalOpenQuantity: 0, totalAllocatedQuantity: 0 }),
     countBacklogDistinctBatches: vi.fn().mockResolvedValue(0),
-
-    getDemandPlanningPublication: vi.fn().mockResolvedValue(null),
-    revertDemandPlanningPublication: vi.fn().mockResolvedValue({
-      publicationId: '',
-      draftId: '',
-      shiftId: '',
-      revertedOrders: 0,
-      revertedItems: 0,
-      releasedQuantity: 0
-    }),
-    getDemandPlanningDraftPublication: vi.fn().mockResolvedValue(null),
   };
 }
 
