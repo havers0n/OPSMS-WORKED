@@ -884,6 +884,11 @@ it('past date with a closed shift hides import actions', async () => {
 
     it('selecting a future date as targetDate shows no-shift state and preserves demand context in URL', async () => {
       mockNoShift();
+      const today = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Jerusalem',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+      }).format(new Date());
+      const todayMonth = today.slice(5, 7);
       const tomorrow = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'Asia/Jerusalem',
         year: 'numeric', month: '2-digit', day: '2-digit'
@@ -896,6 +901,14 @@ it('past date with a closed shift hides import actions', async () => {
       });
 
       fireEvent.click(screen.getByRole('button', { name: 'בחר תאריך עבודה' }));
+
+      // Navigate to next month if tomorrow is in a different month
+      const tomorrowMonth = tomorrow.slice(5, 7);
+      if (tomorrowMonth !== todayMonth) {
+        const nextBtn = await screen.findByRole('button', { name: 'חודש הבא' });
+        expect(nextBtn).not.toBeDisabled();
+        fireEvent.click(nextBtn);
+      }
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: tomorrow })).toBeTruthy();
