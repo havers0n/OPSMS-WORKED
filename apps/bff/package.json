@@ -11,7 +11,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "sync:products": "node dist/apps/bff/src/scripts/sync-products.js",
-    "sync:products:local": "node --env-file=.env.local --import tsx/esm src/scripts/sync-products.ts"
+    "sync:products:local": "node --env-file=.env.local --import tsx/esm src/scripts/sync-products.ts",
+    "seed:delivery-points": "node dist/apps/bff/src/scripts/seed-delivery-points.js",
+    "seed:delivery-points:local": "node --env-file=.env.local --import tsx/esm src/scripts/seed-delivery-points.ts",
+    "seed:delivery-points:apply": "node dist/apps/bff/src/scripts/seed-delivery-points.js --apply",
+    "seed:delivery-points:apply:local": "node --env-file=.env.local --import tsx/esm src/scripts/seed-delivery-points.ts --apply"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",
