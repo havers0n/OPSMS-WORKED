@@ -2904,7 +2904,7 @@ export function createManualShiftsServiceFromRepo(
       for (const row of input.rows) {
         if (row.planningStatus === 'error') continue;
 
-        const identityKey = computeDemandBacklogIdentityKey(
+        const identityKey = await computeDemandBacklogIdentityKey(
           row.orderNumber, row.customerName, row.sku, row.distributionArea
         );
 
@@ -2937,7 +2937,7 @@ export function createManualShiftsServiceFromRepo(
           productHandlingFlow: row.productHandlingFlow
         };
 
-        const result = computeBacklogMergeAction(mergeInput, existingItem, 0);
+        const result = await computeBacklogMergeAction(mergeInput, existingItem, 0);
 
         if (result.isNew) {
           const newItem = await repo.createBacklogItem({

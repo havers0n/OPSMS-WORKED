@@ -323,7 +323,11 @@ export const demandPlanningDraftWithAssignmentsSchema = z.object({
   buckets: z.array(demandPlanningBucketSchema),
   allocations: z.array(demandPlanningAllocationSchema)
 });
-export type DemandPlanningDraftWithAssignments = z.infer<typeof demandPlanningDraftWithAssignmentsSchema>;
+export type DemandPlanningDraftWithAssignments = z.infer<typeof demandPlanningDraftWithAssignmentsSchema> & {
+  publication?: import('./rolling-available-demand').DemandPlanningPublication | null;
+  canRevert?: boolean;
+  revertBlockedReason?: string | null;
+};
 
 export const demandPlanningPreviewQuerySchema = z.object({
   scope: demandPlanningSourceScopeSchema.default('all')

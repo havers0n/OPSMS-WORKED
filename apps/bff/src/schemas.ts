@@ -597,7 +597,21 @@ export const manualShiftImportPreviewResponseSchema = z.object({
 export const demandImportDataSheetPreviewResponseSchema = z.object({
   preview: demandImportDataSheetPreviewSchema
 });
-export const demandImportAvailableBatchesResponseSchema = demandImportAvailableBatchesDtoSchema;
+const demandImportAvailableBatchesDtoSchema = z.object({
+  id: z.string().uuid(),
+  sourceFile: z.string(),
+  sourceSheet: z.string(),
+  uploadedAt: z.string(),
+  status: z.string(),
+  totalRows: z.number(),
+  totalOrders: z.number(),
+  remainingRows: z.number(),
+  remainingQuantity: z.number(),
+  canPlan: z.boolean()
+});
+export const demandImportAvailableBatchesResponseSchema = z.object({
+  batches: z.array(demandImportAvailableBatchesDtoSchema)
+});
 export const demandImportDataSheetCreateResponseSchema = demandImportDataSheetCreateDtoSchema;
 export const rawDemandPlanningPreviewResponseSchema = rawDemandPlanningPreviewDtoSchema;
 export const demandImportBatchResponseSchema = demandImportBatchSchema;

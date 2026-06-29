@@ -651,3 +651,41 @@ export async function resolveRollingAvailableDemandV1(
     }
   };
 }
+
+// ──── Available batch card ────────────────────────────────────────────────────
+
+export type DemandImportAvailableBatchCard = {
+  id: string;
+  sourceFile: string;
+  sourceSheet: string;
+  uploadedAt: string;
+  status: string;
+  totalRows: number;
+  totalOrders: number;
+  remainingRows: number;
+  remainingQuantity: number;
+  canPlan: boolean;
+};
+
+// ──── Demand Planning Publication types ─────────────────────────────────────────
+
+export type DemandPlanningPublication = {
+  id: string;
+  tenantId: string;
+  batchId: string;
+  draftId: string;
+  targetShiftId: string;
+  status: 'active' | 'reverted';
+  createdAt: string;
+  revertedAt: string | null;
+  revertedBy: string | null;
+};
+
+export type DemandPlanningRevertPublicationResponse = {
+  publicationId: string;
+  draftId: string;
+  shiftId: string;
+  revertedOrders: number;
+  revertedItems: number;
+  releasedQuantity: number;
+};

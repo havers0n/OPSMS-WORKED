@@ -23,7 +23,7 @@ export function normalizeDemandBacklogKey(
     (sku ?? '').trim().toLowerCase(),
     (distributionArea ?? '').trim().toLowerCase()
   ];
-  return parts.join(IDENTITY_KEY_SEP);
+  return Promise.resolve(parts.join(IDENTITY_KEY_SEP));
 }
 
 // ──── Status ────────────────────────────────────────────────────────────────

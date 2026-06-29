@@ -618,6 +618,15 @@ type DemandAvailableDemandPublicationRow = {
   status: 'applied' | 'reverted';
 };
 
+function getEmbeddedRecord(value: unknown): Record<string, unknown> | null {
+  if (Array.isArray(value)) {
+    const first = value[0];
+    return first && typeof first === 'object' ? first as Record<string, unknown> : null;
+  }
+
+  return value && typeof value === 'object' ? value as Record<string, unknown> : null;
+}
+
 function mapDemandBacklogItemRow(row: DemandBacklogItemRow): DemandBacklogItem {
   return {
     id: row.id,
@@ -3747,6 +3756,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
           published_quantity,
           publication_id,
           raw_demand_row:raw_demand_row_id(
+            tenant_id,
             order_number,
             sku,
             customer_name,
@@ -3754,7 +3764,9 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
             planned_delivery_date
           ),
           publication:publication_id(
-            status
+            tenant_id,
+            status,
+            reverted_at
           )
         `)
         .eq('tenant_id', input.tenantId);
@@ -3763,28 +3775,30 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
 
       const raw = (data ?? []) as Array<Record<string, unknown>>;
 
-      return raw
-        .filter(r => {
-          const rowArr = r.raw_demand_row;
-          return Array.isArray(rowArr) && rowArr.length > 0 && rowArr[0] != null;
-        })
-        .map(r => {
-          const rowArr = r.raw_demand_row as Array<Record<string, unknown>>;
-          const pubArr = r.publication as Array<Record<string, unknown>> | null;
-          const row = rowArr[0];
-          return {
-            rawDemandRowId: String(r.raw_demand_row_id ?? ''),
-            publishedQuantity: Number(r.published_quantity ?? 0),
-            publicationStatus: !r.publication_id
-              ? null
-              : (pubArr && pubArr.length > 0 && pubArr[0]?.status === 'reverted' ? 'reverted' as const : 'applied' as const),
-            orderNumber: (row.order_number as string | null) ?? null,
-            sku: (row.sku as string | null) ?? null,
-            customerName: (row.customer_name as string | null) ?? null,
-            distributionArea: (row.distribution_area as string | null) ?? null,
-            plannedDeliveryDate: (row.planned_delivery_date as string | null) ?? null
-          };
-        });
+      return raw.flatMap(r => {
+        const row = getEmbeddedRecord(r.raw_demand_row);
+        if (!row || row.tenant_id !== input.tenantId) return [];
+
+        const publication = getEmbeddedRecord(r.publication);
+        const publicationStatus = !r.publication_id
+          ? null
+          : publication?.tenant_id === input.tenantId
+            && publication.status === 'applied'
+            && publication.reverted_at == null
+            ? 'applied' as const
+            : 'reverted' as const;
+
+        return [{
+          rawDemandRowId: String(r.raw_demand_row_id ?? ''),
+          publishedQuantity: Number(r.published_quantity ?? 0),
+          publicationStatus,
+          orderNumber: (row.order_number as string | null) ?? null,
+          sku: (row.sku as string | null) ?? null,
+          customerName: (row.customer_name as string | null) ?? null,
+          distributionArea: (row.distribution_area as string | null) ?? null,
+          plannedDeliveryDate: (row.planned_delivery_date as string | null) ?? null
+        }];
+      });
     }
   };
 }

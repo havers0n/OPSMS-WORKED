@@ -810,6 +810,72 @@ describe('manual shifts service', () => {
     });
   });
 
+  it('subtracts active published quantities before rolling status and summary calculation', async () => {
+    const { repo } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+    const batchId = '10000000-0000-4000-8000-000000000001';
+    const TEST_RAW_DEMAND_ROW_ID = '20000000-0000-4000-8000-000000000001';
+
+    vi.mocked(repo.listReadyBatches).mockResolvedValue([{
+      id: batchId,
+      sourceFile: 'demand.xlsx',
+      uploadedAt: '2026-06-29T10:00:00.000Z',
+      status: 'ready',
+      rowsCount: 1
+    }]);
+    vi.mocked(repo.listRawDemandRowsForBatches).mockResolvedValue([{
+      id: TEST_RAW_DEMAND_ROW_ID,
+      batchId,
+      orderNumber: 'SO26090001',
+      customerName: 'Customer',
+      sku: '463071',
+      description: null,
+      category: null,
+      quantity: 10,
+      notes: null,
+      distributionArea: 'North',
+      rawRouteLine: null,
+      plannedDeliveryDate: '2026-07-01',
+      planningStatus: 'unplanned',
+      routeFlow: 'unassigned',
+      productHandlingFlow: 'regular'
+    }]);
+    vi.mocked(repo.listPublishedAllocationsForRolling).mockResolvedValue([
+      {
+        rawDemandRowId: TEST_RAW_DEMAND_ROW_ID,
+        publishedQuantity: 10,
+        publicationStatus: 'applied',
+        orderNumber: 'SO26090001',
+        sku: '463071',
+        customerName: 'Customer',
+        distributionArea: 'North',
+        plannedDeliveryDate: '2026-07-01'
+      },
+      {
+        rawDemandRowId: TEST_RAW_DEMAND_ROW_ID,
+        publishedQuantity: 5,
+        publicationStatus: 'reverted',
+        orderNumber: 'SO26090001',
+        sku: '463071',
+        customerName: 'Customer',
+        distributionArea: 'North',
+        plannedDeliveryDate: '2026-07-01'
+      }
+    ]);
+
+    const result = await service.getRollingAvailableDemand({ tenantId: ids.tenant });
+
+    expect(result.rows[0]).toMatchObject({
+      latestRawDemandRowId: TEST_RAW_DEMAND_ROW_ID,
+      latestQuantity: 10,
+      publishedQuantity: 10,
+      availableQuantity: 0,
+      status: 'fully_consumed'
+    });
+    expect(result.summary.totalAvailableQuantity).toBe(0);
+    expect(result.summary.byStatus.fullyConsumed).toBe(1);
+  });
+
   it('builds today line summaries via repo aggregate without loading full orders/errors', async () => {
     const { repo, state } = createRepo();
     state.orders.push(
@@ -1639,7 +1705,10 @@ describe('manual shift workers service', () => {
               k !== 'listRawDemandRowsByIds' &&
               k !== 'publishDemandPlanningDraftToShift' &&
               k !== 'getBacklogSummary' &&
-              k !== 'countBacklogDistinctBatches'
+              k !== 'countBacklogDistinctBatches' &&
+              k !== 'getDemandPlanningPublication' &&
+              k !== 'revertDemandPlanningPublication' &&
+              k !== 'getDemandPlanningDraftPublication'
     );
     expect(canonicalKeys).toEqual([]);
   });
@@ -5095,7 +5164,8 @@ describe('demand planning draft — create', () => {
       drafts: Array<{ id: string; tenantId: string; batchId: string; status: string; createdBy: string | null; createdAt: string; updatedAt: string }>;
       buckets: Array<{ id: string; tenantId: string; draftId: string; batchId: string; distributionArea: string | null; planningLineName: string; bucketName: string; sortOrder: number; createdAt: string; updatedAt: string }>;
       allocations: Array<{ id: string; tenantId: string; draftId: string; batchId: string; rawDemandRowId: string; bucketId: string; allocatedQuantity: number; createdAt: string; updatedAt: string }>;
-    } = { batches: [], rows: [], drafts: [], buckets: [], allocations: [] };
+      published: Array<{ rawDemandRowId: string; publishedQuantity: number }>;
+    } = { batches: [], rows: [], drafts: [], buckets: [], allocations: [], published: [] };
 
     let draftCounter = 0;
     let bucketCounter = 0;

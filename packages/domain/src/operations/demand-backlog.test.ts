@@ -114,39 +114,39 @@ function makeAvailableSnapshot(overrides: {
 // ──── Identity normalization ─────────────────────────────────────────────────
 
 describe('normalizeDemandBacklogKey', () => {
-  it('produces deterministic keys for identical inputs', () => {
-    const a = normalizeDemandBacklogKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
-    const b = normalizeDemandBacklogKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
+  it('produces deterministic keys for identical inputs', async () => {
+    const a = await normalizeDemandBacklogKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
+    const b = await normalizeDemandBacklogKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
     expect(a).toBe(b);
   });
 
-  it('is case-insensitive', () => {
-    const a = normalizeDemandBacklogKey('SO-001', 'Client', 'SKU-100', 'North');
-    const b = normalizeDemandBacklogKey('so-001', 'client', 'sku-100', 'north');
+  it('is case-insensitive', async () => {
+    const a = await normalizeDemandBacklogKey('SO-001', 'Client', 'SKU-100', 'North');
+    const b = await normalizeDemandBacklogKey('so-001', 'client', 'sku-100', 'north');
     expect(a).toBe(b);
   });
 
-  it('trims whitespace', () => {
-    const a = normalizeDemandBacklogKey('  SO-001 ', ' Client ', ' SKU-100  ', ' North ');
-    const b = normalizeDemandBacklogKey('SO-001', 'Client', 'SKU-100', 'North');
+  it('trims whitespace', async () => {
+    const a = await normalizeDemandBacklogKey('  SO-001 ', ' Client ', ' SKU-100  ', ' North ');
+    const b = await normalizeDemandBacklogKey('SO-001', 'Client', 'SKU-100', 'North');
     expect(a).toBe(b);
   });
 
-  it('treats null and empty string identically', () => {
-    const a = normalizeDemandBacklogKey(null, null, null, null);
-    const b = normalizeDemandBacklogKey('', '', '', '');
+  it('treats null and empty string identically', async () => {
+    const a = await normalizeDemandBacklogKey(null, null, null, null);
+    const b = await normalizeDemandBacklogKey('', '', '', '');
     expect(a).toBe(b);
   });
 
-  it('produces different keys when any field differs', () => {
-    const a = normalizeDemandBacklogKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
-    const b = normalizeDemandBacklogKey('SO-002', 'לקוח א', 'SKU-100', 'דרום');
+  it('produces different keys when any field differs', async () => {
+    const a = await normalizeDemandBacklogKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
+    const b = await normalizeDemandBacklogKey('SO-002', 'לקוח א', 'SKU-100', 'דרום');
     expect(a).not.toBe(b);
   });
 
-  it('produces different keys when distribution area differs', () => {
-    const a = normalizeDemandBacklogKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
-    const b = normalizeDemandBacklogKey('SO-001', 'לקוח א', 'SKU-100', 'צפון');
+  it('produces different keys when distribution area differs', async () => {
+    const a = await normalizeDemandBacklogKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
+    const b = await normalizeDemandBacklogKey('SO-001', 'לקוח א', 'SKU-100', 'צפון');
     expect(a).not.toBe(b);
   });
 });
@@ -264,8 +264,8 @@ describe('computeOpenQuantity', () => {
 // ──── Cross-cutting scenarios (merge + status + open quantity) ────────────────
 
 describe('backlog merge scenarios', () => {
-  it('dedup across batches: same identity key, same quantity -> matched', () => {
-    const key = normalizeDemandBacklogKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
+  it('dedup across batches: same identity key, same quantity -> matched', async () => {
+    const key = await normalizeDemandBacklogKey('SO-001', 'לקוח א', 'SKU-100', 'דרום');
     const item = makeItem({ identityKey: key, totalQuantity: 10 });
     const row = makeRow({ quantity: 10 });
     const result = await computeBacklogMergeAction(row, item, 1);
