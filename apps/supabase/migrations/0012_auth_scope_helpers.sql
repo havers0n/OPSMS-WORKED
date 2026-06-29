@@ -10,21 +10,26 @@ $$;
 
 create or replace function public.is_platform_admin()
 returns boolean
-language sql
+language plpgsql
 stable
+security definer
+set search_path = pg_catalog, public
 as $$
-  select exists (
+begin
+  return exists (
     select 1
     from public.tenant_members tm
     where tm.profile_id = auth.uid()
       and tm.role = 'platform_admin'
-  )
+  );
+end;
 $$;
 
 create or replace function public.can_access_tenant(tenant_uuid uuid)
 returns boolean
 language sql
 stable
+cost 10000
 as $$
   select
     public.is_platform_admin()
@@ -40,6 +45,7 @@ create or replace function public.can_manage_tenant(tenant_uuid uuid)
 returns boolean
 language sql
 stable
+cost 10000
 as $$
   select
     public.is_platform_admin()

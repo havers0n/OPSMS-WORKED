@@ -96,7 +96,11 @@ import {
   demandPlanningBucketSchema,
   demandPlanningAllocationSchema,
   demandPlanningDraftWithAssignmentsSchema,
+  demandPlanningPreviewQuerySchema,
+  demandPlanningCreateDraftRequestSchema,
   demandPlanningPutPlanRequestSchema,
+  demandPlanningPublishToShiftRequestSchema,
+  demandPlanningPublishToShiftResponseSchema,
   manualShiftMonthlyPreviewSchema,
   manualShiftMonthlyApplyResponseSchema as manualShiftMonthlyApplyResponseDtoSchema,
   manualShiftMonthlyReplaceSafetySchema as manualShiftMonthlyReplaceSafetyDtoSchema,
@@ -110,7 +114,12 @@ import {
   productControlResponseSchema,
   demandImportAppendDiffResponseSchema as demandImportAppendDiffDtoSchema,
   demandImportAppendExistingLineSchema,
-  demandImportAppendExistingItemSchema
+  demandImportAppendExistingItemSchema,
+  demandBacklogListResponseSchema,
+  demandBacklogSummaryResponseSchema,
+  demandBacklogQuerySchema,
+  demandBacklogItemResponseSchema,
+  demandBacklogSourceBatchSchema
 } from '@wos/domain';
 
 // ── Rack Inspector ──────────────────────────────────────────────────────────
@@ -590,7 +599,11 @@ export const demandImportDataSheetCreateResponseSchema = demandImportDataSheetCr
 export const rawDemandPlanningPreviewResponseSchema = rawDemandPlanningPreviewDtoSchema;
 export const demandImportBatchResponseSchema = demandImportBatchSchema;
 export const demandPlanningDraftWithAssignmentsResponseSchema = demandPlanningDraftWithAssignmentsSchema;
+export const demandPlanningPreviewQueryParamsSchema = demandPlanningPreviewQuerySchema;
+export const demandPlanningCreateDraftRequestBodySchema = demandPlanningCreateDraftRequestSchema;
 export const demandPlanningPutPlanRequestBodySchema = demandPlanningPutPlanRequestSchema;
+export const demandPlanningPublishToShiftRequestBodySchema = demandPlanningPublishToShiftRequestSchema;
+export const demandPlanningPublishToShiftResponseBodySchema = demandPlanningPublishToShiftResponseSchema;
 export const manualShiftMonthlyImportPreviewResponseSchema = z.object({
   preview: manualShiftMonthlyPreviewSchema
 });
@@ -606,6 +619,9 @@ export const demandImportAppendDiffResponseSchema = demandImportAppendDiffDtoSch
 export const demandImportAppendDiffRequestSchema = z.object({
   shiftId: z.string().uuid()
 });
+
+export { demandBacklogListResponseSchema, demandBacklogSummaryResponseSchema, demandBacklogQuerySchema };
+export { demandBacklogItemResponseSchema, demandBacklogSourceBatchSchema };
 
 // ── Manual shift print ──────────────────────────────────────────────────────────
 

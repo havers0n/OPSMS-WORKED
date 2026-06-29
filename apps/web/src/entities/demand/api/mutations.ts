@@ -1,4 +1,4 @@
-import type { DemandImportDataSheetPreview, DemandImportDataSheetCreateResponse, DemandPlanningDraftWithAssignments, DemandPlanningPutPlanRequest } from '@wos/domain';
+import type { DemandImportDataSheetPreview, DemandImportDataSheetCreateResponse, DemandPlanningDraftWithAssignments, DemandPlanningPutPlanRequest, DemandPlanningPublishToShiftRequest, DemandPlanningPublishToShiftResponse } from '@wos/domain';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
 
@@ -24,9 +24,14 @@ async function createDataSheetDemandImport(file: File): Promise<DemandImportData
   });
 }
 
-async function createDemandPlanningDraft(batchId: string): Promise<DemandPlanningDraftWithAssignments> {
+type CreateDemandPlanningDraftInput = string | { batchId: string; scope: 'all' | 'remaining' };
+
+async function createDemandPlanningDraft(input: CreateDemandPlanningDraftInput): Promise<DemandPlanningDraftWithAssignments> {
+  const batchId = typeof input === 'string' ? input : input.batchId;
+  const scope = typeof input === 'string' ? 'all' : input.scope;
   return bffRequest<DemandPlanningDraftWithAssignments>(`/api/demand-imports/${batchId}/planning-drafts`, {
-    method: 'POST'
+    method: 'POST',
+    body: JSON.stringify({ scope })
   });
 }
 
@@ -65,6 +70,31 @@ export function usePutDemandPlanningPlan() {
       putDemandPlanningPlan(draftId, body),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['demand-import', 'draft', variables.draftId] });
+    },
+  });
+}
+
+async function publishDemandPlanningDraftToShift(
+  draftId: string,
+  body: DemandPlanningPublishToShiftRequest
+): Promise<DemandPlanningPublishToShiftResponse> {
+  return bffRequest<DemandPlanningPublishToShiftResponse>(
+    `/api/demand-planning-drafts/${draftId}/publish-to-shift`,
+    { method: 'POST', body: JSON.stringify(body) }
+  );
+}
+
+export function usePublishDemandPlanningDraftToShift() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ draftId, body }: { draftId: string; body: DemandPlanningPublishToShiftRequest }) =>
+      publishDemandPlanningDraftToShift(draftId, body),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['demand-import', 'draft', data.draftId] });
+      queryClient.invalidateQueries({ queryKey: ['demand-import', 'planning-preview'] });
+      queryClient.invalidateQueries({ queryKey: ['manual-shift', 'work-hierarchy', data.shiftId] });
+      queryClient.invalidateQueries({ queryKey: ['manual-shift', 'lines', data.shiftId] });
+      queryClient.invalidateQueries({ queryKey: ['manual-shift', 'orders', data.shiftId] });
     },
   });
 }

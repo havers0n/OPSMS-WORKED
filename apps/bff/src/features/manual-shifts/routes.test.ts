@@ -441,6 +441,7 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     deactivateWorker: vi.fn(async () => ({ ...createWorker(), active: false })),
     getTodayShift: vi.fn(async () => todayResponse),
     getShiftByDate: vi.fn(async () => todayResponse),
+    getShiftById: vi.fn(async () => todayResponse),
     createShift: vi.fn(async () => createSession('active')),
     closeShift: vi.fn(async () => createSession('closed')),
     listShiftLines: vi.fn(async () => []),
@@ -634,6 +635,17 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
       buckets: [],
       allocations: []
     })),
+    publishDemandPlanningDraftToShift: vi.fn(async () => ({
+      shiftId: ids.shift,
+      draftId: ids.shift,
+      createdLines: 0,
+      reusedLines: 0,
+      createdOrders: 0,
+      updatedOrders: 0,
+      createdItems: 0,
+      skippedRows: 0,
+      warnings: []
+    })),
     computeDemandImportAppendDiff: vi.fn(async () => ({
       shiftId: ids.shift,
       batchId: ids.shift,
@@ -654,6 +666,18 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
       duplicateOrders: [],
       specialFlowOrders: [],
       requiresReviewOrders: []
+    })),
+    mergeRowsIntoBacklog: vi.fn().mockResolvedValue(undefined),
+    getDemandBacklog: vi.fn(async () => ({ items: [], pagination: { page: 1, limit: 50, total: 0 } })),
+    getDemandBacklogSummary: vi.fn(async () => ({
+      totalItems: 0,
+      totalOpenQuantity: 0,
+      totalAllocatedQuantity: 0,
+      totalSourceBatches: 0,
+      byStatus: [],
+      byDistributionArea: [],
+      oldestItemSeenAt: null,
+      newestItemSeenAt: null
     })),
     ...overrides
   };
@@ -1755,7 +1779,8 @@ describe('manual shifts routes', () => {
     });
     expect(service.getDemandPlanningPreview).toHaveBeenCalledWith({
       tenantId: ids.tenant,
-      batchId: '77777777-7777-4777-8777-777777777777'
+      batchId: '77777777-7777-4777-8777-777777777777',
+      scope: 'all'
     });
 
     await app.close();
@@ -3568,6 +3593,17 @@ describe('demand planning draft routes', () => {
     buckets: [{ id: bucketId, tenantId: ids.tenant, draftId, batchId, distributionArea: 'דרום', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 0, createdAt: '2026-06-25T00:00:00.000+00:00', updatedAt: '2026-06-25T00:00:00.000+00:00' }],
     allocations: []
   };
+  const publishResponse = {
+    shiftId: ids.shift,
+    draftId,
+    createdLines: 1,
+    reusedLines: 0,
+    createdOrders: 2,
+    updatedOrders: 0,
+    createdItems: 3,
+    skippedRows: 1,
+    warnings: ['1 special_flow row(s) were skipped because no explicit publish rule exists for them yet.']
+  };
 
   const baseServiceMock = createServiceMock();
 
@@ -3578,6 +3614,7 @@ describe('demand planning draft routes', () => {
       createDemandPlanningDraft: vi.fn(async () => draftResponse) as unknown as ManualShiftsService['createDemandPlanningDraft'],
       getDemandPlanningDraft: vi.fn(async () => draftResponse) as unknown as ManualShiftsService['getDemandPlanningDraft'],
       putDemandPlanningPlan: vi.fn(async () => draftResponse) as unknown as ManualShiftsService['putDemandPlanningPlan'],
+      publishDemandPlanningDraftToShift: vi.fn(async () => publishResponse) as unknown as ManualShiftsService['publishDemandPlanningDraftToShift'],
       ...overrides
     };
   }
@@ -3633,6 +3670,28 @@ describe('demand planning draft routes', () => {
     await app.close();
   });
 
+  it('POST /api/demand-planning-drafts/:draftId/publish-to-shift returns 200', async () => {
+    const service = createDemandMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/demand-planning-drafts/${draftId}/publish-to-shift`,
+      payload: {
+        targetShiftId: ids.shift
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.payload)).toMatchObject({
+      draftId,
+      shiftId: ids.shift,
+      createdLines: 1
+    });
+
+    await app.close();
+  });
+
   it('returns 401 without auth', async () => {
     const app = await buildTestApp(createDemandMock(), null);
 
@@ -3670,6 +3729,19 @@ describe('demand planning draft routes', () => {
     await app.close();
   });
 
+  it('publish returns 400 for invalid body', async () => {
+    const app = await buildTestApp(createDemandMock());
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/demand-planning-drafts/${draftId}/publish-to-shift`,
+      payload: { targetShiftId: 'not-a-uuid' }
+    });
+
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
   it('service errors map to correct HTTP statuses', async () => {
     const notFoundService = createDemandMock({
       getDemandPlanningDraft: vi.fn(async () => { throw new ApiError(404, 'DEMAND_PLANNING_DRAFT_NOT_FOUND', 'not found'); }) as unknown as ManualShiftsService['getDemandPlanningDraft']
@@ -3684,7 +3756,101 @@ describe('demand planning draft routes', () => {
     expect(response.statusCode).toBe(404);
     await app.close();
   });
+
+  it('publish returns 404 when draft not found', async () => {
+    const svc = createDemandMock({
+      publishDemandPlanningDraftToShift: vi.fn(async () => { throw new ApiError(404, 'DEMAND_PLANNING_DRAFT_NOT_FOUND', 'not found'); }) as unknown as ManualShiftsService['publishDemandPlanningDraftToShift']
+    });
+    const app = await buildTestApp(svc);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/demand-planning-drafts/${draftId}/publish-to-shift`,
+      payload: { targetShiftId: ids.shift }
+    });
+
+    expect(response.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('publish returns 409 when draft already applied', async () => {
+    const svc = createDemandMock({
+      publishDemandPlanningDraftToShift: vi.fn(async () => { throw new ApiError(409, 'DEMAND_PLANNING_DRAFT_ALREADY_APPLIED', 'already applied'); }) as unknown as ManualShiftsService['publishDemandPlanningDraftToShift']
+    });
+    const app = await buildTestApp(svc);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/demand-planning-drafts/${draftId}/publish-to-shift`,
+      payload: { targetShiftId: ids.shift }
+    });
+
+    expect(response.statusCode).toBe(409);
+    await app.close();
+  });
+
+  it('publish returns 422 for invalid body', async () => {
+    const svc = createDemandMock();
+    const app = await buildTestApp(svc);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/demand-planning-drafts/${draftId}/publish-to-shift`,
+      payload: { targetShiftId: 'not-a-uuid' }
+    });
+
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('publish returns 500 without leaking raw error message', async () => {
+    const svc = createDemandMock({
+      publishDemandPlanningDraftToShift: vi.fn(async () => { throw new Error('RAW_PG_ERROR: deadlock detected at character 554'); }) as unknown as ManualShiftsService['publishDemandPlanningDraftToShift']
+    });
+    const app = await buildTestApp(svc);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/demand-planning-drafts/${draftId}/publish-to-shift`,
+      payload: { targetShiftId: ids.shift }
+    });
+
+    expect(response.statusCode).toBe(500);
+    const body = JSON.parse(response.payload);
+    expect(body.message).not.toContain('RAW_PG_ERROR');
+    expect(body.message).not.toContain('deadlock');
+    await app.close();
+  });
+
+  it('publish returns 403 for forbidden', async () => {
+    const svc = createDemandMock({
+      publishDemandPlanningDraftToShift: vi.fn(async () => { throw new ApiError(403, 'FORBIDDEN', 'Forbidden'); }) as unknown as ManualShiftsService['publishDemandPlanningDraftToShift']
+    });
+    const app = await buildTestApp(svc);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/demand-planning-drafts/${draftId}/publish-to-shift`,
+      payload: { targetShiftId: ids.shift }
+    });
+
+    expect(response.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('publish returns 422 for no publishable rows', async () => {
+    const svc = createDemandMock({
+      publishDemandPlanningDraftToShift: vi.fn(async () => { throw new ApiError(422, 'DEMAND_PLANNING_NO_PUBLISHABLE_ROWS', 'no rows'); }) as unknown as ManualShiftsService['publishDemandPlanningDraftToShift']
+    });
+    const app = await buildTestApp(svc);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/demand-planning-drafts/${draftId}/publish-to-shift`,
+      payload: { targetShiftId: ids.shift }
+    });
+
+    expect(response.statusCode).toBe(422);
+    await app.close();
+  });
 });
-
-
-

@@ -230,6 +230,27 @@ function createManualRepoMock(): ManualShiftsRepo {
     insertDemandPlanningAllocations: vi.fn(async () => []),
     listDemandPlanningAllocations: vi.fn(async () => []),
     listRawDemandRowsByIds: vi.fn(async () => []),
+    publishDemandPlanningDraftToShift: vi.fn(async () => ({
+      shiftId: '',
+      draftId: '',
+      createdLines: 0,
+      reusedLines: 0,
+      createdOrders: 0,
+      updatedOrders: 0,
+      createdItems: 0,
+      skippedRows: 0,
+      warnings: []
+    })),
+    findBacklogItemByIdentityKey: vi.fn().mockResolvedValue(null),
+    findBacklogSourceLinkByRawRowId: vi.fn().mockResolvedValue(null),
+    createBacklogItem: vi.fn().mockResolvedValue({ id: 'mock-id' }),
+    updateBacklogItem: vi.fn().mockResolvedValue({}),
+    createBacklogSourceLink: vi.fn().mockResolvedValue({}),
+    listBacklogItems: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+    listBacklogItemAllocationsSum: vi.fn().mockResolvedValue([]),
+    listBacklogSourceBatches: vi.fn().mockResolvedValue([]),
+    getBacklogSummary: vi.fn().mockResolvedValue({ totalItems: 0, byStatus: [], byDistributionArea: [], oldestItemSeenAt: null, newestItemSeenAt: null, totalOpenQuantity: 0, totalAllocatedQuantity: 0 }),
+    countBacklogDistinctBatches: vi.fn().mockResolvedValue(0),
   };
 }
 
