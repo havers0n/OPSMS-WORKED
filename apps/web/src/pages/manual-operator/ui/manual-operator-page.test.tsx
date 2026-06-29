@@ -97,7 +97,7 @@ describe('ManualOperatorPage queue import placement', () => {
 
     expect(screen.getByRole('button', { name: 'תצוגה מקדימה חודשית' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'ייבוא יומי קיים' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'הוסף קו ידנית' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'הוסף הזמנות למשמרת' })).toBeTruthy();
   });
 
   it('empty queue with active shift shows import for platform_admin', async () => {
@@ -232,7 +232,7 @@ describe('ManualOperatorPage queue import placement', () => {
 
     expect(screen.queryByRole('button', { name: 'תצוגה מקדימה חודשית' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'ייבוא יומי קיים' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'הוסף קו ידנית' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'הוסף הזמנות למשמרת' })).toBeTruthy();
   });
 
   it.skip('no shift shows explanatory text', async () => {

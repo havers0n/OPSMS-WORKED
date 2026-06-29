@@ -297,8 +297,8 @@ export function ManualOperatorPage() {
   const resolvedShift = shiftData?.shift ?? null;
   const resolvedLines = shiftData?.lines ?? [];
   const effectiveDate = resolvedShift?.date ?? selectedDate;
-  const isToday = selectedDate === todayDate;
-  const isReadOnly = !isToday || resolvedShift?.status === 'closed';
+  const effectiveToday = effectiveDate === todayDate;
+  const isReadOnly = !effectiveToday || resolvedShift?.status === 'closed';
   const hasExistingWork = resolvedLines.length > 0;
 
   const { data: demandDraftData } = useQuery({
@@ -349,7 +349,14 @@ export function ManualOperatorPage() {
   }, [targetDate, mode, batchId, draftId, location.pathname, location.search]);
 
   function handleCreateShift() {
-    createShift.mutate({ name: generateShiftName(), date: selectedDate });
+    const date = effectiveDate;
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('date', date);
+      next.delete('shiftId');
+      return next;
+    });
+    createShift.mutate({ name: generateShiftName(date), date });
   }
 
   function handleSelectTargetDate(date: string) {
@@ -439,7 +446,7 @@ export function ManualOperatorPage() {
           lines={resolvedLines}
           isLoading={isLoading}
           isReadOnly={isReadOnly}
-          isToday={isToday}
+          isToday={effectiveToday}
           canMonthlyImport={canMonthlyImport}
           hasExistingWork={hasExistingWork}
           isDesktop={isDesktop}
@@ -512,7 +519,7 @@ export function ManualOperatorPage() {
             <Loader2 size={32} className="animate-spin text-gray-400" />
           </div>
         ) : !resolvedShift && !renderSectionWithoutShift ? (
-          <ShiftEmptyState onCreateShift={handleCreateShift} isCreating={createShift.isPending} isToday={isToday} />
+          <ShiftEmptyState onCreateShift={handleCreateShift} isCreating={createShift.isPending} isToday={effectiveToday} />
         ) : isDesktop && section !== 'lines' && section !== 'products' ? (
           <div className="mx-auto max-w-4xl px-4 py-6">
             {sectionContent}
