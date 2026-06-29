@@ -705,6 +705,28 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
       releasedQuantity: 0
     })),
     listAvailableDemandImportBatches: vi.fn(async () => []),
+    getRollingAvailableDemand: vi.fn(async () => ({
+      summary: {
+        totalRows: 0,
+        totalAvailableQuantity: 0,
+        byStatus: {
+          available: 0,
+          fullyConsumed: 0,
+          duplicateConflict: 0,
+          overPublished: 0,
+          requiresReview: 0,
+          excludedNonSo: 0
+        }
+      },
+      rows: [],
+      warnings: [],
+      diagnostics: {
+        totalBatches: 0,
+        totalRawRows: 0,
+        totalFallbackKeys: 0,
+        batchesAnalyzed: []
+      }
+    })),
     ...overrides
   };
 }

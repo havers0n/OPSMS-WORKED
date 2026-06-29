@@ -82,7 +82,8 @@ import {
   demandImportAppendDiffRequestSchema,
   demandBacklogListResponseSchema,
   demandBacklogSummaryResponseSchema,
-  demandBacklogQuerySchema
+  demandBacklogQuerySchema,
+  rollingAvailableDemandResponseSchema
 } from '../../schemas.js';
 import { parseOrThrow } from '../../validation.js';
 import { generatePickerSheetPdf, type PickerSheetPdfParams } from './picker-sheet-pdf.js';
@@ -982,6 +983,18 @@ export function registerManualShiftsRoutes(
       });
 
       return parseOrThrow(demandAvailableDemandResponseSchema, result);
+    });
+  });
+
+  app.get('/api/demand-planning/rolling-available-demand', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-planning/rolling-available-demand', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      const tenantId = requireTenant(auth);
+      const result = await getManualShiftsService(auth).getRollingAvailableDemand({ tenantId });
+
+      return parseOrThrow(rollingAvailableDemandResponseSchema, result);
     });
   });
 

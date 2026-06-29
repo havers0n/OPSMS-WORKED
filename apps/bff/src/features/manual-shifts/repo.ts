@@ -44,7 +44,10 @@ import type {
   DemandBacklogMergeAction,
   DemandPlanningPublishToShiftResponse,
   DemandPlanningPublication,
-  DemandPlanningRevertPublicationResponse
+  DemandPlanningRevertPublicationResponse,
+  RollingResolverBatch,
+  RollingResolverRawRow,
+  RollingResolverPublishedAllocation
 } from '@wos/domain';
 
 export type ProductControlDemandRow = {
@@ -1313,7 +1316,50 @@ export type ManualShiftsRepo = {
   countBacklogDistinctBatches(input: {
     tenantId: string;
   }): Promise<number>;
+
+  listReadyBatches(input: {
+    tenantId: string;
+  }): Promise<RollingResolverBatch[]>;
+
+  listRawDemandRowsForBatches(input: {
+    tenantId: string;
+    batchIds: string[];
+  }): Promise<RollingResolverRawRow[]>;
+
+  listPublishedAllocationsForRolling(input: {
+    tenantId: string;
+  }): Promise<RollingResolverPublishedAllocation[]>;
 };
+
+function mapBatchRowToRollingResolver(row: DemandImportBatchRow): RollingResolverBatch {
+  return {
+    id: row.id,
+    sourceFile: row.source_file,
+    uploadedAt: row.uploaded_at,
+    status: row.status,
+    rowsCount: Number(row.rows_count ?? 0)
+  };
+}
+
+function mapRawDemandRowToRollingResolver(row: RawDemandRowRow): RollingResolverRawRow {
+  return {
+    id: row.id,
+    batchId: row.batch_id,
+    orderNumber: row.order_number,
+    customerName: row.customer_name,
+    sku: row.sku,
+    description: row.description,
+    category: row.category,
+    quantity: row.quantity !== null ? Number(row.quantity) : null,
+    notes: row.notes,
+    distributionArea: row.distribution_area,
+    rawRouteLine: row.raw_route_line,
+    plannedDeliveryDate: row.planned_delivery_date,
+    planningStatus: row.planning_status,
+    routeFlow: row.route_flow,
+    productHandlingFlow: row.product_handling_flow
+  };
+}
 
 export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRepo {
   return {
@@ -3663,6 +3709,82 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
 
       const countResult = data as unknown as { count?: number } | null;
       return countResult?.count ?? 0;
+    },
+
+    async listReadyBatches(input) {
+      const { data, error } = await supabase
+        .from('demand_import_batches')
+        .select(demandImportBatchColumns)
+        .eq('tenant_id', input.tenantId)
+        .eq('status', 'ready')
+        .order('uploaded_at', { ascending: false })
+        .order('id', { ascending: false });
+
+      if (error) throw error;
+
+      return ((data ?? []) as DemandImportBatchRow[]).map(mapBatchRowToRollingResolver);
+    },
+
+    async listRawDemandRowsForBatches(input) {
+      if (input.batchIds.length === 0) return [];
+
+      const { data, error } = await supabase
+        .from('raw_demand_rows')
+        .select(rawDemandRowColumns)
+        .eq('tenant_id', input.tenantId)
+        .in('batch_id', input.batchIds);
+
+      if (error) throw error;
+
+      return ((data ?? []) as RawDemandRowRow[]).map(mapRawDemandRowToRollingResolver);
+    },
+
+    async listPublishedAllocationsForRolling(input) {
+      const { data, error } = await supabase
+        .from('demand_planning_published_allocations')
+        .select(`
+          raw_demand_row_id,
+          published_quantity,
+          publication_id,
+          raw_demand_row:raw_demand_row_id(
+            order_number,
+            sku,
+            customer_name,
+            distribution_area,
+            planned_delivery_date
+          ),
+          publication:publication_id(
+            status
+          )
+        `)
+        .eq('tenant_id', input.tenantId);
+
+      if (error) throw error;
+
+      const raw = (data ?? []) as Array<Record<string, unknown>>;
+
+      return raw
+        .filter(r => {
+          const rowArr = r.raw_demand_row;
+          return Array.isArray(rowArr) && rowArr.length > 0 && rowArr[0] != null;
+        })
+        .map(r => {
+          const rowArr = r.raw_demand_row as Array<Record<string, unknown>>;
+          const pubArr = r.publication as Array<Record<string, unknown>> | null;
+          const row = rowArr[0];
+          return {
+            rawDemandRowId: String(r.raw_demand_row_id ?? ''),
+            publishedQuantity: Number(r.published_quantity ?? 0),
+            publicationStatus: !r.publication_id
+              ? null
+              : (pubArr && pubArr.length > 0 && pubArr[0]?.status === 'reverted' ? 'reverted' as const : 'applied' as const),
+            orderNumber: (row.order_number as string | null) ?? null,
+            sku: (row.sku as string | null) ?? null,
+            customerName: (row.customer_name as string | null) ?? null,
+            distributionArea: (row.distribution_area as string | null) ?? null,
+            plannedDeliveryDate: (row.planned_delivery_date as string | null) ?? null
+          };
+        });
     }
   };
 }

@@ -578,9 +578,23 @@ export function parseDemandImportDataSheetPreview(
     const notes = normalizeTrimmedString(row.notes);
     const distributionArea = normalizeTrimmedString(row.distributionArea);
     const rawRouteLine = normalizeTrimmedString(row.rawRouteLine);
+    const plannedDeliveryDateRaw = row.plannedDeliveryDateRaw;
+    const plannedDeliveryDate = normalizeWorkbookDate(plannedDeliveryDateRaw);
     const noteDateHints = extractNoteDateHints(notes);
     const routeFlow = detectRouteFlow(notes);
     const productHandlingFlow = detectProductHandlingFlow({ sku, description, category, notes });
+
+    const hasPlannedDeliveryDateInput = plannedDeliveryDateRaw instanceof Date || (
+      typeof plannedDeliveryDateRaw === 'string' && plannedDeliveryDateRaw.trim().length > 0
+    );
+    if (hasPlannedDeliveryDateInput && plannedDeliveryDate === null) {
+      issues.push({
+        severity: 'error',
+        code: 'INVALID_PLANNED_DELIVERY_DATE',
+        message: 'Planned delivery date must be a valid supported workbook date.',
+        field: 'plannedDeliveryDate'
+      });
+    }
 
     if (!orderNumber) {
       issues.push({
@@ -656,7 +670,7 @@ export function parseDemandImportDataSheetPreview(
       notes,
       distributionArea,
       rawRouteLine,
-      plannedDeliveryDate: null,
+      plannedDeliveryDate,
       plannedRouteLine: null,
       plannedWorkBucket: null,
       planningStatus,

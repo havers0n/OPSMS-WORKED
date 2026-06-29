@@ -52,9 +52,10 @@ import type {
   DemandBacklogSummaryResponse,
   BacklogMergeRowInput,
   DemandBacklogMergeAction,
-  DemandAvailableDemandSnapshot
+  DemandAvailableDemandSnapshot,
+  RollingAvailableDemandResponse
 } from '@wos/domain';
-import { buildAvailableDemandResponse } from '@wos/domain';
+import { buildAvailableDemandResponse, resolveRollingAvailableDemandV1 } from '@wos/domain';
 import {
   buildProductControlRow,
   buildRawDemandPlanningPreview,
@@ -437,6 +438,10 @@ export type ManualShiftsService = {
   getAvailableDemand(input: {
     tenantId: string;
   }): Promise<DemandAvailableDemandResponse>;
+
+  getRollingAvailableDemand(input: {
+    tenantId: string;
+  }): Promise<RollingAvailableDemandResponse>;
 };
 
 function formatLocalDate(date: Date, timeZone: string) {
@@ -3106,6 +3111,51 @@ export function createManualShiftsServiceFromRepo(
       });
 
       return buildAvailableDemandResponse(snapshot);
+    },
+
+    async getRollingAvailableDemand(input) {
+      const batches = await repo.listReadyBatches({
+        tenantId: input.tenantId
+      });
+
+      if (batches.length === 0) {
+        return {
+          summary: {
+            totalRows: 0,
+            totalAvailableQuantity: 0,
+            byStatus: {
+              available: 0,
+              fullyConsumed: 0,
+              duplicateConflict: 0,
+              overPublished: 0,
+              requiresReview: 0,
+              excludedNonSo: 0
+            }
+          },
+          rows: [],
+          warnings: [],
+          diagnostics: {
+            totalBatches: 0,
+            totalRawRows: 0,
+            totalFallbackKeys: 0,
+            batchesAnalyzed: []
+          }
+        };
+      }
+
+      const batchIds = batches.map(b => b.id);
+
+      const [rows, allocations] = await Promise.all([
+        repo.listRawDemandRowsForBatches({
+          tenantId: input.tenantId,
+          batchIds
+        }),
+        repo.listPublishedAllocationsForRolling({
+          tenantId: input.tenantId
+        })
+      ]);
+
+      return resolveRollingAvailableDemandV1(batches, rows, allocations);
     },
   };
 }

@@ -120,7 +120,8 @@ import {
   demandBacklogSummaryResponseSchema,
   demandBacklogQuerySchema,
   demandBacklogItemResponseSchema,
-  demandBacklogSourceBatchSchema
+  demandBacklogSourceBatchSchema,
+  rollingAvailableDemandResponseSchema
 } from '@wos/domain';
 
 // ── Rack Inspector ──────────────────────────────────────────────────────────
@@ -606,7 +607,27 @@ export const demandPlanningCreateDraftRequestBodySchema = demandPlanningCreateDr
 export const demandPlanningPutPlanRequestBodySchema = demandPlanningPutPlanRequestSchema;
 export const demandPlanningPublishToShiftRequestBodySchema = demandPlanningPublishToShiftRequestSchema;
 export const demandPlanningPublishToShiftResponseBodySchema = demandPlanningPublishToShiftResponseSchema;
+const demandPlanningPublicationSchema = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  batchId: z.string().uuid(),
+  draftId: z.string().uuid(),
+  targetShiftId: z.string().uuid(),
+  status: z.enum(['active', 'reverted']),
+  createdAt: z.string(),
+  revertedAt: z.string().nullable(),
+  revertedBy: z.string().uuid().nullable()
+});
 export const demandPlanningPublicationResponseSchema = demandPlanningPublicationSchema;
+
+const demandPlanningRevertPublicationResponseSchema = z.object({
+  publicationId: z.string().uuid(),
+  draftId: z.string().uuid(),
+  shiftId: z.string().uuid(),
+  revertedOrders: z.number().int().min(0),
+  revertedItems: z.number().int().min(0),
+  releasedQuantity: z.number().min(0)
+});
 export const demandPlanningRevertPublicationResponseBodySchema = demandPlanningRevertPublicationResponseSchema;
 export const demandAvailableDemandResponseSchema = demandAvailableDemandResponseDtoSchema;
 export const manualShiftMonthlyImportPreviewResponseSchema = z.object({
@@ -627,6 +648,7 @@ export const demandImportAppendDiffRequestSchema = z.object({
 
 export { demandBacklogListResponseSchema, demandBacklogSummaryResponseSchema, demandBacklogQuerySchema };
 export { demandBacklogItemResponseSchema, demandBacklogSourceBatchSchema };
+export { rollingAvailableDemandResponseSchema };
 export { pickerSheetPrintDataSchema } from '@wos/domain';
 
 // ── Orders ────────────────────────────────────────────────────────────────────
