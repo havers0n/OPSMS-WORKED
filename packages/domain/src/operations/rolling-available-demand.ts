@@ -675,7 +675,7 @@ export type DemandPlanningPublication = {
   batchId: string;
   draftId: string;
   targetShiftId: string;
-  status: 'active' | 'reverted';
+  status: 'applied' | 'reverted';
   createdAt: string;
   revertedAt: string | null;
   revertedBy: string | null;

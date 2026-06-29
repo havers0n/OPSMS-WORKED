@@ -628,7 +628,7 @@ const demandPlanningPublicationSchema = z.object({
   batchId: z.string().uuid(),
   draftId: z.string().uuid(),
   targetShiftId: z.string().uuid(),
-  status: z.enum(['active', 'reverted']),
+  status: z.enum(['applied', 'reverted']),
   createdAt: z.string(),
   revertedAt: z.string().nullable(),
   revertedBy: z.string().uuid().nullable()

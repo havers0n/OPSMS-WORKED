@@ -269,6 +269,7 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
     publishDemandPlanningDraftToShift: vi.fn(async () => ({
       shiftId: '',
       draftId: '',
+      publicationId: '',
       createdLines: 0,
       reusedLines: 0,
       createdOrders: 0,
