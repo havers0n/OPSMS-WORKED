@@ -713,3 +713,15 @@ export const rollingPublishConflictSchema = z.object({
   reason: z.string()
 });
 export type RollingPublishConflict = z.infer<typeof rollingPublishConflictSchema>;
+
+// ──── Rolling target-scoped request schemas ──────────────────────────────────
+
+export const rollingAvailableDemandQuerySchema = z.object({
+  targetShiftId: z.string().uuid()
+});
+export type RollingAvailableDemandQuery = z.infer<typeof rollingAvailableDemandQuerySchema>;
+
+export const rollingCreateDraftRequestSchema = z.object({
+  targetShiftId: z.string().uuid()
+});
+export type RollingCreateDraftRequest = z.infer<typeof rollingCreateDraftRequestSchema>;

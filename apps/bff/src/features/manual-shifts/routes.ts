@@ -83,7 +83,9 @@ import {
   demandBacklogListResponseSchema,
   demandBacklogSummaryResponseSchema,
   demandBacklogQuerySchema,
-  rollingAvailableDemandResponseSchema
+  rollingAvailableDemandResponseSchema,
+  rollingAvailableDemandQuerySchema,
+  rollingCreateDraftRequestSchema
 } from '../../schemas.js';
 import { parseOrThrow } from '../../validation.js';
 import { generatePickerSheetPdf, type PickerSheetPdfParams } from './picker-sheet-pdf.js';
@@ -1007,10 +1009,12 @@ export function registerManualShiftsRoutes(
       if (!auth) return;
 
       const tenantId = requireTenant(auth);
+      const body = parseOrThrow(rollingCreateDraftRequestSchema, request.body ?? {});
 
       const result = await getManualShiftsService(auth).createRollingDemandPlanningDraft({
         tenantId,
-        createdBy: auth.user.id ?? null
+        createdBy: auth.user.id ?? null,
+        targetShiftId: body.targetShiftId
       });
 
       void reply.code(201);
@@ -1024,7 +1028,12 @@ export function registerManualShiftsRoutes(
       if (!auth) return;
 
       const tenantId = requireTenant(auth);
-      const result = await getManualShiftsService(auth).getRollingAvailableDemand({ tenantId });
+      const query = parseOrThrow(rollingAvailableDemandQuerySchema, request.query);
+
+      const result = await getManualShiftsService(auth).getRollingAvailableDemand({
+        tenantId,
+        targetShiftId: query.targetShiftId
+      });
 
       return parseOrThrow(rollingAvailableDemandResponseSchema, result);
     });

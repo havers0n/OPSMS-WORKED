@@ -1184,6 +1184,8 @@ export type ManualShiftsRepo = {
   createRollingDemandPlanningDraft(input: {
     tenantId: string;
     createdBy: string | null;
+    targetDate: string;
+    targetShiftId: string;
   }): Promise<DemandPlanningDraft>;
   getDemandPlanningDraft(input: {
     tenantId: string;
@@ -3130,6 +3132,8 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
           tenant_id: input.tenantId,
           batch_id: null,
           source_kind: 'rolling',
+          target_date: input.targetDate,
+          target_shift_id: input.targetShiftId,
           created_by: input.createdBy,
           source_scope: 'all'
         })

@@ -3982,6 +3982,8 @@ describe('demand planning draft routes', () => {
     await app.close();
   });
 
+  const validTargetShiftId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
   it('POST /api/demand-planning/rolling-drafts returns 201 and valid draft-with-assignments', async () => {
     const rollingDraftId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
     const rollingBucketId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1';
@@ -4004,7 +4006,8 @@ describe('demand planning draft routes', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/demand-planning/rolling-drafts'
+      url: '/api/demand-planning/rolling-drafts',
+      body: { targetShiftId: validTargetShiftId }
     });
 
     expect(response.statusCode).toBe(201);
@@ -4024,7 +4027,8 @@ describe('demand planning draft routes', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/demand-planning/rolling-drafts'
+      url: '/api/demand-planning/rolling-drafts',
+      body: { targetShiftId: validTargetShiftId }
     });
 
     expect(response.statusCode).toBe(422);
@@ -4048,14 +4052,68 @@ describe('demand planning draft routes', () => {
     });
     const app = await buildTestApp(svc);
 
-    const r1 = await app.inject({ method: 'POST', url: '/api/demand-planning/rolling-drafts' });
-    const r2 = await app.inject({ method: 'POST', url: '/api/demand-planning/rolling-drafts' });
+    const r1 = await app.inject({ method: 'POST', url: '/api/demand-planning/rolling-drafts', body: { targetShiftId: validTargetShiftId } });
+    const r2 = await app.inject({ method: 'POST', url: '/api/demand-planning/rolling-drafts', body: { targetShiftId: validTargetShiftId } });
 
     expect(r1.statusCode).toBe(201);
     expect(r2.statusCode).toBe(201);
     const body1 = JSON.parse(r1.body);
     const body2 = JSON.parse(r2.body);
     expect(body1.draft.id).not.toBe(body2.draft.id);
+    await app.close();
+  });
+
+  it('POST /api/demand-planning/rolling-drafts returns 400 for missing targetShiftId', async () => {
+    const svc = createDemandMock({});
+    const app = await buildTestApp(svc);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/demand-planning/rolling-drafts',
+      body: {}
+    });
+
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('POST /api/demand-planning/rolling-drafts returns 400 for invalid targetShiftId', async () => {
+    const svc = createDemandMock({});
+    const app = await buildTestApp(svc);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/demand-planning/rolling-drafts',
+      body: { targetShiftId: 'not-a-uuid' }
+    });
+
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('GET /api/demand-planning/rolling-available-demand requires targetShiftId query param', async () => {
+    const svc = createDemandMock({});
+    const app = await buildTestApp(svc);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/demand-planning/rolling-available-demand'
+    });
+
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('GET /api/demand-planning/rolling-available-demand returns 400 for invalid targetShiftId', async () => {
+    const svc = createDemandMock({});
+    const app = await buildTestApp(svc);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/demand-planning/rolling-available-demand?targetShiftId=not-a-uuid'
+    });
+
+    expect(response.statusCode).toBe(400);
     await app.close();
   });
 });

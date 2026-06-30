@@ -3,6 +3,8 @@ import {
   resolveRollingAvailableDemandV1,
   computeFallbackKeyV1,
   computeFallbackKeyV1Fingerprint,
+  rollingAvailableDemandQuerySchema,
+  rollingCreateDraftRequestSchema,
   type RollingResolverBatch,
   type RollingResolverRawRow,
   type RollingResolverPublishedAllocation
@@ -651,5 +653,37 @@ describe('PR-1: Rolling Available Demand Resolver', () => {
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0].status).toBe('requires_review');
     expect(result.rows[0].latestBatchId).toBe(newBatch.id);
+  });
+
+  // ─── Target-scoped request schemas ───────────────────────────────────────
+
+  it('rollingAvailableDemandQuerySchema accepts valid targetShiftId', () => {
+    const result = rollingAvailableDemandQuerySchema.parse({
+      targetShiftId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    });
+    expect(result.targetShiftId).toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+  });
+
+  it('rollingAvailableDemandQuerySchema rejects missing targetShiftId', () => {
+    expect(() => rollingAvailableDemandQuerySchema.parse({})).toThrow();
+  });
+
+  it('rollingAvailableDemandQuerySchema rejects invalid UUID', () => {
+    expect(() => rollingAvailableDemandQuerySchema.parse({ targetShiftId: 'not-a-uuid' })).toThrow();
+  });
+
+  it('rollingCreateDraftRequestSchema accepts valid targetShiftId', () => {
+    const result = rollingCreateDraftRequestSchema.parse({
+      targetShiftId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    });
+    expect(result.targetShiftId).toBe('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+  });
+
+  it('rollingCreateDraftRequestSchema rejects missing targetShiftId', () => {
+    expect(() => rollingCreateDraftRequestSchema.parse({})).toThrow();
+  });
+
+  it('rollingCreateDraftRequestSchema rejects invalid UUID', () => {
+    expect(() => rollingCreateDraftRequestSchema.parse({ targetShiftId: '' })).toThrow();
   });
 });
