@@ -443,13 +443,18 @@ describe('demand planning draft repo methods', () => {
     expect(result[0].sku).toBe('SKU-A');
   });
 
-  it('createRollingDemandPlanningDraft inserts with source_kind rolling and null batch_id', async () => {
+  const rollingDraftTargetShiftId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const rollingDraftTargetDate = '2026-07-01';
+
+  it('createRollingDemandPlanningDraft inserts with source_kind rolling, null batch_id, target_date and target_shift_id', async () => {
     const { supabase, tables } = createFakeSupabase();
     const repo = createManualShiftsRepo(supabase as never);
 
     const draft = await repo.createRollingDemandPlanningDraft({
       tenantId: tenantA,
-      createdBy: null
+      createdBy: null,
+      targetDate: rollingDraftTargetDate,
+      targetShiftId: rollingDraftTargetShiftId
     });
 
     expect(draft.tenantId).toBe(tenantA);
@@ -457,9 +462,13 @@ describe('demand planning draft repo methods', () => {
     expect(draft.sourceKind).toBe('rolling');
     expect(draft.status).toBe('draft');
     expect(draft.id).toBeTruthy();
+    expect(draft.targetDate).toBe(rollingDraftTargetDate);
+    expect(draft.targetShiftId).toBe(rollingDraftTargetShiftId);
     expect(tables.demand_planning_drafts).toHaveLength(1);
     expect(tables.demand_planning_drafts[0].source_kind).toBe('rolling');
     expect(tables.demand_planning_drafts[0].batch_id).toBeNull();
+    expect(tables.demand_planning_drafts[0].target_date).toBe(rollingDraftTargetDate);
+    expect(tables.demand_planning_drafts[0].target_shift_id).toBe(rollingDraftTargetShiftId);
   });
 
   it('insertDemandPlanningBuckets accepts null batchId for rolling drafts', async () => {
@@ -468,7 +477,9 @@ describe('demand planning draft repo methods', () => {
 
     const draft = await repo.createRollingDemandPlanningDraft({
       tenantId: tenantA,
-      createdBy: null
+      createdBy: null,
+      targetDate: rollingDraftTargetDate,
+      targetShiftId: rollingDraftTargetShiftId
     });
 
     const buckets = await repo.insertDemandPlanningBuckets({
@@ -497,7 +508,9 @@ describe('demand planning draft repo methods', () => {
 
     const draft = await repo.createRollingDemandPlanningDraft({
       tenantId: tenantA,
-      createdBy: null
+      createdBy: null,
+      targetDate: rollingDraftTargetDate,
+      targetShiftId: rollingDraftTargetShiftId
     });
 
     const buckets = await repo.insertDemandPlanningBuckets({

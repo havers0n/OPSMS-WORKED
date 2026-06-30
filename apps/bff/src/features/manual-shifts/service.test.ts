@@ -822,6 +822,17 @@ describe('manual shifts service', () => {
 
   it('subtracts active published quantities before rolling status and summary calculation', async () => {
     const { repo } = createRepo();
+    // Override findShiftById to return a shift with date matching the planned delivery date
+    vi.mocked(repo.findShiftById).mockResolvedValue({
+      id: ids.shift,
+      tenantId: ids.tenant,
+      date: '2026-07-01',
+      name: 'Morning Shift',
+      status: 'active' as const,
+      createdBy: 'Dispatcher',
+      createdAt: '2026-05-26T05:00:00.000Z',
+      closedAt: null
+    });
     const service = createManualShiftsServiceFromRepo(repo);
     const batchId = '10000000-0000-4000-8000-000000000001';
     const TEST_RAW_DEMAND_ROW_ID = '20000000-0000-4000-8000-000000000001';
@@ -873,7 +884,7 @@ describe('manual shifts service', () => {
       }
     ]);
 
-    const result = await service.getRollingAvailableDemand({ tenantId: ids.tenant });
+    const result = await service.getRollingAvailableDemand({ tenantId: ids.tenant, targetShiftId: ids.shift });
 
     expect(result.rows[0]).toMatchObject({
       latestRawDemandRowId: TEST_RAW_DEMAND_ROW_ID,
@@ -6988,6 +6999,7 @@ describe('demand planning draft — publish to shift', () => {
   const rollingRowId3 = '30000000-0000-4000-8000-300000000003';
   const rollingBatch1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
   const rollingBatch2 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2';
+  const rollingTargetShiftId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa00';
 
   function createRollingDraftRepo() {
     const state: {
@@ -6999,6 +7011,16 @@ describe('demand planning draft — publish to shift', () => {
 
     const repo: ManualShiftsRepo = {
       ...createRepo().repo,
+      findShiftById: vi.fn(async () => ({
+        id: rollingTargetShiftId,
+        tenantId: ids.tenant,
+        date: '2026-07-01',
+        name: 'Test Shift',
+        status: 'active' as const,
+        createdBy: 'test',
+        createdAt: '2026-06-29T12:00:00.000Z',
+        closedAt: null
+      })) as unknown as ManualShiftsRepo['findShiftById'],
       listReadyBatches: vi.fn(async () => [
         { id: rollingBatch1, sourceFile: 'a.xlsx', uploadedAt: '2026-06-29T10:00:00.000Z', status: 'ready' as const, rowsCount: 2 },
         { id: rollingBatch2, sourceFile: 'b.xlsx', uploadedAt: '2026-06-29T11:00:00.000Z', status: 'ready' as const, rowsCount: 1 }
@@ -7075,7 +7097,7 @@ describe('demand planning draft — publish to shift', () => {
     addRow({ id: rollingRowId1, quantity: 10, distribution_area: 'North' });
     addRow({ id: rollingRowId2, quantity: 5, distribution_area: 'South' });
 
-    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null });
+    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null, targetShiftId: rollingTargetShiftId });
 
     expect(result.draft.sourceKind).toBe('rolling');
     expect(result.draft.batchId).toBeNull();
@@ -7091,7 +7113,7 @@ describe('demand planning draft — publish to shift', () => {
     addRow({ id: rollingRowId1, quantity: 10, distribution_area: 'North', order_number: 'SO26090001', planning_status: 'unplanned' });
     addRow({ id: rollingRowId2, quantity: 5, distribution_area: 'North', order_number: 'SO26090001', planning_status: 'unplanned' });
 
-    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null });
+    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null, targetShiftId: rollingTargetShiftId });
 
     // Only the first row is available; the second is duplicate_conflict
     expect(result.allocations).toHaveLength(1);
@@ -7106,7 +7128,7 @@ describe('demand planning draft — publish to shift', () => {
     addRow({ id: rollingRowId2, quantity: 5, distribution_area: 'South', planning_status: 'error' });
     addRow({ id: rollingRowId3, quantity: 3, distribution_area: 'South', order_number: 'NOT_SO' });
 
-    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null });
+    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null, targetShiftId: rollingTargetShiftId });
 
     expect(result.allocations).toHaveLength(1);
     expect(result.allocations[0].rawDemandRowId).toBe(rollingRowId1);
@@ -7122,7 +7144,7 @@ describe('demand planning draft — publish to shift', () => {
       { rawDemandRowId: rollingRowId1, publishedQuantity: 10, publicationStatus: 'applied' as const, orderNumber: 'SO26090001', sku: 'SKU-1', customerName: 'Customer', distributionArea: 'North', plannedDeliveryDate: '2026-07-01' }
     ]);
 
-    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null });
+    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null, targetShiftId: rollingTargetShiftId });
 
     expect(result.allocations).toHaveLength(0);
   });
@@ -7134,7 +7156,7 @@ describe('demand planning draft — publish to shift', () => {
     addRow({ id: rollingRowId1, quantity: 10, distribution_area: 'North' });
     addRow({ id: rollingRowId2, quantity: 5, distribution_area: 'South' });
 
-    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null });
+    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null, targetShiftId: rollingTargetShiftId });
 
     expect(result.allocations[0].allocatedQuantity).toBe(10);
     expect(result.allocations[1].allocatedQuantity).toBe(5);
@@ -7147,7 +7169,7 @@ describe('demand planning draft — publish to shift', () => {
     addRow({ id: rollingRowId1, quantity: 10, distribution_area: 'North', batch_id: rollingBatch1 });
     addRow({ id: rollingRowId2, quantity: 5, distribution_area: 'South', batch_id: rollingBatch2 });
 
-    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null });
+    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null, targetShiftId: rollingTargetShiftId });
 
     expect(result.allocations[0].batchId).toBe(rollingBatch1);
     expect(result.allocations[1].batchId).toBe(rollingBatch2);
@@ -7160,7 +7182,7 @@ describe('demand planning draft — publish to shift', () => {
     addRow({ id: rollingRowId1, quantity: 10, distribution_area: 'North' });
     addRow({ id: rollingRowId2, quantity: 5, distribution_area: 'South' });
 
-    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null });
+    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null, targetShiftId: rollingTargetShiftId });
 
     expect(result.allocations[0].rawDemandRowId).toBe(rollingRowId1);
     expect(result.allocations[1].rawDemandRowId).toBe(rollingRowId2);
@@ -7173,7 +7195,7 @@ describe('demand planning draft — publish to shift', () => {
     addRow({ id: rollingRowId1, quantity: 10, distribution_area: 'North', batch_id: rollingBatch1 });
     addRow({ id: rollingRowId2, quantity: 5, distribution_area: 'South', batch_id: rollingBatch2 });
 
-    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null });
+    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null, targetShiftId: rollingTargetShiftId });
 
     expect(result.allocations).toHaveLength(2);
     const batchIds = result.allocations.map((a) => a.batchId);
@@ -7190,7 +7212,7 @@ describe('demand planning draft — publish to shift', () => {
       { rawDemandRowId: rollingRowId1, publishedQuantity: 4, publicationStatus: 'applied' as const, orderNumber: 'SO26090001', sku: 'SKU-1', customerName: 'Customer', distributionArea: 'North', plannedDeliveryDate: '2026-07-01' }
     ]);
 
-    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null });
+    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null, targetShiftId: rollingTargetShiftId });
 
     expect(result.allocations).toHaveLength(1);
     expect(result.allocations[0].allocatedQuantity).toBe(6);
@@ -7200,7 +7222,7 @@ describe('demand planning draft — publish to shift', () => {
     const { repo } = createRollingDraftRepo();
     const service = createManualShiftsServiceFromRepo(repo);
 
-    await expect(service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null }))
+    await expect(service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null, targetShiftId: rollingTargetShiftId }))
       .rejects.toThrow(/ROLLING_NO_AVAILABLE_DEMAND/);
   });
 
@@ -7243,6 +7265,136 @@ describe('demand planning draft — publish to shift', () => {
       buckets: [{ distributionArea: 'North', planningLineName: 'default', bucketName: 'unassigned' }],
       allocations: [{ rawDemandRowId: rowId1, bucketKey: 'North|default|unassigned', allocatedQuantity: 5 }]
     })).rejects.toThrow(/DEMAND_PLANNING_ROLLING_DRAFT_NOT_SUPPORTED/);
+  });
+
+  // ─── Target-scoped rolling draft tests ─────────────────────────────────
+
+  it('rolling draft creation passes targetDate and targetShiftId to repo', async () => {
+    const { repo, addRow } = createRollingDraftRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    addRow({ id: rollingRowId1, quantity: 10 });
+
+    await service.createRollingDemandPlanningDraft({
+      tenantId: ids.tenant,
+      createdBy: null,
+      targetShiftId: rollingTargetShiftId
+    });
+
+    expect(repo.createRollingDemandPlanningDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetDate: '2026-07-01',
+        targetShiftId: rollingTargetShiftId
+      })
+    );
+  });
+
+  it('rolling availability filters rows by shift date', async () => {
+    const { repo, addRow } = createRollingDraftRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    // Row with matching date
+    addRow({ id: rollingRowId1, quantity: 10, planned_delivery_date: '2026-07-01' });
+    // Row with non-matching date - should be excluded
+    addRow({ id: rollingRowId2, quantity: 5, planned_delivery_date: '2026-07-02' });
+
+    const result = await service.createRollingDemandPlanningDraft({
+      tenantId: ids.tenant,
+      createdBy: null,
+      targetShiftId: rollingTargetShiftId
+    });
+
+    // Only one row should be allocated (the 2026-07-01 one)
+    expect(result.allocations).toHaveLength(1);
+    expect(result.allocations[0].allocatedQuantity).toBe(10);
+  });
+
+  it('null plannedDeliveryDate rows excluded from target-scoped availability', async () => {
+    const { repo, addRow } = createRollingDraftRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    addRow({ id: rollingRowId1, quantity: 10, planned_delivery_date: '2026-07-01' });
+    addRow({ id: rollingRowId2, quantity: 5, planned_delivery_date: null });
+
+    const result = await service.createRollingDemandPlanningDraft({
+      tenantId: ids.tenant,
+      createdBy: null,
+      targetShiftId: rollingTargetShiftId
+    });
+
+    expect(result.allocations).toHaveLength(1);
+    expect(result.allocations[0].rawDemandRowId).toBe(rollingRowId1);
+  });
+
+  it('inactive target shift rejected', async () => {
+    const { repo, addRow } = createRollingDraftRepo();
+    // Override findShiftById to return a closed shift
+    vi.mocked(repo.findShiftById).mockResolvedValue({
+      id: rollingTargetShiftId,
+      tenantId: ids.tenant,
+      date: '2026-07-01',
+      name: 'Closed Shift',
+      status: 'closed' as const,
+      createdBy: 'test',
+      createdAt: '2026-06-29T12:00:00.000Z',
+      closedAt: '2026-06-29T18:00:00.000Z'
+    });
+
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    addRow({ id: rollingRowId1, quantity: 10 });
+
+    await expect(service.createRollingDemandPlanningDraft({
+      tenantId: ids.tenant,
+      createdBy: null,
+      targetShiftId: rollingTargetShiftId
+    })).rejects.toThrow(/SHIFT_NOT_ACTIVE/);
+  });
+
+  it('foreign tenant target shift rejected', async () => {
+    const { repo, addRow } = createRollingDraftRepo();
+    // Override findShiftById to return a shift belonging to other tenant
+    vi.mocked(repo.findShiftById).mockResolvedValue({
+      id: rollingTargetShiftId,
+      tenantId: ids.otherTenant,
+      date: '2026-07-01',
+      name: 'Foreign Shift',
+      status: 'active' as const,
+      createdBy: 'test',
+      createdAt: '2026-06-29T12:00:00.000Z',
+      closedAt: null
+    });
+
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    addRow({ id: rollingRowId1, quantity: 10 });
+
+    await expect(service.createRollingDemandPlanningDraft({
+      tenantId: ids.tenant,
+      createdBy: null,
+      targetShiftId: rollingTargetShiftId
+    })).rejects.toThrow(/SHIFT_NOT_FOUND/);
+  });
+
+  it('stale conflict error shape remains unchanged', async () => {
+    const { repo, state } = createPublishRepo();
+    seedPublishRows(state);
+    (state.drafts[0] as any).sourceKind = 'rolling';
+    (state.drafts[0] as any).batchId = null;
+    (state.drafts[0] as any).targetShiftId = shiftId;
+
+    const pgError = new Error('ROLLING_DEMAND_STALE_OR_UNAVAILABLE') as Error & { code: string; detail: string };
+    pgError.code = 'P0001';
+    pgError.detail = JSON.stringify({ conflicts: [{ sku: 'SKU-1', requestedQty: 10, availableQty: 0 }] });
+    repo.publishDemandPlanningDraftToShift = vi.fn(async () => { throw pgError; }) as unknown as ManualShiftsRepo['publishDemandPlanningDraftToShift'];
+
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    await expect(service.publishDemandPlanningDraftToShift({
+      tenantId: ids.tenant,
+      draftId,
+      targetShiftId: shiftId
+    })).rejects.toThrow(/ROLLING_DEMAND_STALE_OR_UNAVAILABLE/);
   });
 });
 

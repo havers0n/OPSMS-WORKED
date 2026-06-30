@@ -122,6 +122,8 @@ import {
   demandBacklogItemResponseSchema,
   demandBacklogSourceBatchSchema,
   rollingAvailableDemandResponseSchema,
+  rollingAvailableDemandQuerySchema,
+  rollingCreateDraftRequestSchema,
   demandPlanningPublicationSchema
 } from '@wos/domain';
 
@@ -653,7 +655,7 @@ export const demandImportAppendDiffRequestSchema = z.object({
 
 export { demandBacklogListResponseSchema, demandBacklogSummaryResponseSchema, demandBacklogQuerySchema };
 export { demandBacklogItemResponseSchema, demandBacklogSourceBatchSchema };
-export { rollingAvailableDemandResponseSchema };
+export { rollingAvailableDemandResponseSchema, rollingAvailableDemandQuerySchema, rollingCreateDraftRequestSchema };
 export { pickerSheetPrintDataSchema } from '@wos/domain';
 
 // ── Orders ────────────────────────────────────────────────────────────────────

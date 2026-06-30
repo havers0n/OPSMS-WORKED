@@ -398,6 +398,7 @@ export type ManualShiftsService = {
   createRollingDemandPlanningDraft(input: {
     tenantId: string;
     createdBy: string | null;
+    targetShiftId: string;
   }): Promise<DemandPlanningDraftWithAssignments>;
   getDemandPlanningDraft(input: {
     tenantId: string;
@@ -458,6 +459,7 @@ export type ManualShiftsService = {
 
   getRollingAvailableDemand(input: {
     tenantId: string;
+    targetShiftId: string;
   }): Promise<RollingAvailableDemandResponse>;
 };
 
@@ -621,6 +623,59 @@ export function createManualShiftsServiceFromRepo(
     }
 
     return shift;
+  }
+
+  async function resolveActiveTargetShift(tenantId: string, targetShiftId: string) {
+    const shift = await repo.findShiftById(targetShiftId);
+    if (!shift || shift.tenantId !== tenantId) {
+      throw manualShiftImportShiftNotFound(targetShiftId);
+    }
+    if (shift.status !== 'active') {
+      throw manualShiftImportShiftNotActive(targetShiftId);
+    }
+    return { targetShiftId, targetDate: shift.date };
+  }
+
+  async function resolveRollingAvailableDemandForTargetDate(
+    tenantId: string,
+    targetDate: string
+  ): Promise<RollingAvailableDemandResponse> {
+    const batches = await repo.listReadyBatches({ tenantId });
+
+    if (batches.length === 0) {
+      return {
+        summary: {
+          totalRows: 0,
+          totalAvailableQuantity: 0,
+          byStatus: {
+            available: 0,
+            fullyConsumed: 0,
+            duplicateConflict: 0,
+            overPublished: 0,
+            requiresReview: 0,
+            excludedNonSo: 0
+          }
+        },
+        rows: [],
+        warnings: [],
+        diagnostics: {
+          totalBatches: 0,
+          totalRawRows: 0,
+          totalFallbackKeys: 0,
+          batchesAnalyzed: []
+        }
+      };
+    }
+
+    const batchIds = batches.map(b => b.id);
+
+    const [rows, allocations] = await Promise.all([
+      repo.listRawDemandRowsForBatches({ tenantId, batchIds }),
+      repo.listPublishedAllocationsForRolling({ tenantId })
+    ]);
+
+    const filteredRows = rows.filter(r => r.plannedDeliveryDate === targetDate);
+    return resolveRollingAvailableDemandV1(batches, filteredRows, allocations);
   }
 
   async function listScopedRawDemandRows(input: {
@@ -2753,7 +2808,9 @@ export function createManualShiftsServiceFromRepo(
     },
 
     async createRollingDemandPlanningDraft(input) {
-      const rollingDemand = await this.getRollingAvailableDemand({ tenantId: input.tenantId });
+      const { targetShiftId, targetDate } = await resolveActiveTargetShift(input.tenantId, input.targetShiftId);
+
+      const rollingDemand = await resolveRollingAvailableDemandForTargetDate(input.tenantId, targetDate);
 
       const availableRows = rollingDemand.rows.filter(r => r.status === 'available');
 
@@ -2781,7 +2838,9 @@ export function createManualShiftsServiceFromRepo(
 
       const draft = await repo.createRollingDemandPlanningDraft({
         tenantId: input.tenantId,
-        createdBy: input.createdBy
+        createdBy: input.createdBy,
+        targetDate,
+        targetShiftId
       });
 
       // Group by distributionArea, using sentinel for null
@@ -3369,48 +3428,8 @@ export function createManualShiftsServiceFromRepo(
     },
 
     async getRollingAvailableDemand(input) {
-      const batches = await repo.listReadyBatches({
-        tenantId: input.tenantId
-      });
-
-      if (batches.length === 0) {
-        return {
-          summary: {
-            totalRows: 0,
-            totalAvailableQuantity: 0,
-            byStatus: {
-              available: 0,
-              fullyConsumed: 0,
-              duplicateConflict: 0,
-              overPublished: 0,
-              requiresReview: 0,
-              excludedNonSo: 0
-            }
-          },
-          rows: [],
-          warnings: [],
-          diagnostics: {
-            totalBatches: 0,
-            totalRawRows: 0,
-            totalFallbackKeys: 0,
-            batchesAnalyzed: []
-          }
-        };
-      }
-
-      const batchIds = batches.map(b => b.id);
-
-      const [rows, allocations] = await Promise.all([
-        repo.listRawDemandRowsForBatches({
-          tenantId: input.tenantId,
-          batchIds
-        }),
-        repo.listPublishedAllocationsForRolling({
-          tenantId: input.tenantId
-        })
-      ]);
-
-      return resolveRollingAvailableDemandV1(batches, rows, allocations);
+      const { targetDate } = await resolveActiveTargetShift(input.tenantId, input.targetShiftId);
+      return resolveRollingAvailableDemandForTargetDate(input.tenantId, targetDate);
     },
   };
 }
