@@ -343,6 +343,22 @@ export function demandPlanningRollingDraftNotSupported(draftId: string) {
   );
 }
 
+export function demandPlanningRollingDraftInvalidRow(rawDemandRowId: string) {
+  return new ApiError(
+    400,
+    'DEMAND_PLANNING_ROLLING_INVALID_ROW',
+    `Raw demand row ${rawDemandRowId} is not part of this rolling draft and cannot be added via plan.`
+  );
+}
+
+export function demandPlanningRollingRowSetMismatch(allowedCount: number, incomingCount: number) {
+  return new ApiError(
+    400,
+    'DEMAND_PLANNING_ROLLING_ROW_SET_MISMATCH',
+    `Rolling draft plan must include all existing allocation rowIds (${allowedCount}) — received ${incomingCount} unique rowIds.`
+  );
+}
+
 export function demandPlanningTargetDateAmbiguous(draftId: string, dates: string[]) {
   return new ApiError(
     409,
