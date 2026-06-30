@@ -6133,6 +6133,7 @@ describe('demand planning draft — PUT plan', () => {
   const batchId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
   const rowId1 = 'e1000000-0000-4000-8000-000000000001';
   const rowId2 = 'e2000000-0000-4000-8000-000000000002';
+  const rowId3 = 'e3000000-0000-4000-8000-000000000003';
   const draftId = 'draft-001';
 
   function createPlanRepo() {
@@ -6386,7 +6387,7 @@ describe('demand planning draft — PUT plan', () => {
     })).rejects.toThrow(/not found/i);
   });
 
-  it('blocks rolling draft plan with DEMAND_PLANNING_ROLLING_DRAFT_NOT_SUPPORTED', async () => {
+  it('allows rolling draft plan for existing allocation rowIds', async () => {
     const { repo, state } = createPlanRepo();
     const service = createManualShiftsServiceFromRepo(repo);
 
@@ -6397,11 +6398,178 @@ describe('demand planning draft — PUT plan', () => {
     (state.drafts[0] as any).sourceKind = 'rolling';
     (state.drafts[0] as any).batchId = null;
 
+    // Pre-populate an existing allocation to define the allowed row set
+    state.allocations.push({
+      id: 'existing-alloc-1', tenantId: ids.tenant, draftId,
+      batchId, rawDemandRowId: rowId1,
+      bucketId: 'bucket-1', allocatedQuantity: 5,
+      createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
+    });
+
+    state.rows.push({
+      id: rowId1, tenantId: ids.tenant, batchId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      sourceSheet: 'DataSheet', sourceRowNumber: 2, agent: null, orderDate: null,
+      customerName: 'C1', orderNumber: 'O1', sku: 'SKU-1', description: null,
+      category: null, quantity: 10, cost: null, notes: null,
+      distributionArea: 'דרום', rawRouteLine: null, plannedDeliveryDate: null,
+      plannedRouteLine: null, plannedWorkBucket: null,
+      planningStatus: 'unplanned', routeFlow: 'unassigned', productHandlingFlow: 'regular',
+      noteDateHints: [], issues: [], createdAt: '2026-06-25T00:00:00.000Z'
+    });
+
+    const result = await service.putDemandPlanningPlan({
+      tenantId: ids.tenant,
+      draftId,
+      buckets: [{ distributionArea: 'דרום', planningLineName: 'כללי', bucketName: 'bucket-a' }],
+      allocations: [{ rawDemandRowId: rowId1, bucketKey: 'דרום|כללי|bucket-a', allocatedQuantity: 7 }]
+    });
+
+    expect(result.draft.id).toBe(draftId);
+    expect(result.allocations).toHaveLength(1);
+    expect(result.allocations[0].allocatedQuantity).toBe(7);
+  });
+
+  it('rejects rolling draft plan with rawDemandRowId not in existing allocations', async () => {
+    const { repo, state } = createPlanRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    state.drafts.push({
+      id: draftId, tenantId: ids.tenant, batchId, status: 'draft',
+      createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
+    });
+    (state.drafts[0] as any).sourceKind = 'rolling';
+    (state.drafts[0] as any).batchId = null;
+
+    // Pre-populate existing allocation with rowId2
+    state.allocations.push({
+      id: 'existing-alloc-1', tenantId: ids.tenant, draftId,
+      batchId, rawDemandRowId: rowId2,
+      bucketId: 'bucket-1', allocatedQuantity: 3,
+      createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
+    });
+
+    // Try to use rowId1 which is NOT part of existing allocations
+    state.rows.push({
+      id: rowId1, tenantId: ids.tenant, batchId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      sourceSheet: 'DataSheet', sourceRowNumber: 2, agent: null, orderDate: null,
+      customerName: 'C1', orderNumber: 'O1', sku: 'SKU-1', description: null,
+      category: null, quantity: 10, cost: null, notes: null,
+      distributionArea: 'דרום', rawRouteLine: null, plannedDeliveryDate: null,
+      plannedRouteLine: null, plannedWorkBucket: null,
+      planningStatus: 'unplanned', routeFlow: 'unassigned', productHandlingFlow: 'regular',
+      noteDateHints: [], issues: [], createdAt: '2026-06-25T00:00:00.000Z'
+    });
+
     await expect(service.putDemandPlanningPlan({
       tenantId: ids.tenant,
       draftId,
-      buckets: [], allocations: []
-    })).rejects.toThrow(/DEMAND_PLANNING_ROLLING_DRAFT_NOT_SUPPORTED/);
+      buckets: [{ distributionArea: 'דרום', planningLineName: 'כללי', bucketName: 'bucket-a' }],
+      allocations: [{ rawDemandRowId: rowId1, bucketKey: 'דרום|כללי|bucket-a', allocatedQuantity: 5 }]
+    })).rejects.toThrow(/DEMAND_PLANNING_ROLLING_INVALID_ROW/);
+  });
+
+  it('rejects rolling draft plan when existing allocation rowIds are missing from payload', async () => {
+    const { repo, state } = createPlanRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    state.drafts.push({
+      id: draftId, tenantId: ids.tenant, batchId, status: 'draft',
+      createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
+    });
+    (state.drafts[0] as any).sourceKind = 'rolling';
+    (state.drafts[0] as any).batchId = null;
+
+    // Pre-populate TWO existing allocations (rowId1 and rowId2)
+    state.allocations.push(
+      { id: 'existing-alloc-1', tenantId: ids.tenant, draftId, batchId, rawDemandRowId: rowId1, bucketId: 'bucket-1', allocatedQuantity: 5, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' },
+      { id: 'existing-alloc-2', tenantId: ids.tenant, draftId, batchId, rawDemandRowId: rowId2, bucketId: 'bucket-2', allocatedQuantity: 3, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' }
+    );
+    state.rows.push(
+      { id: rowId1, tenantId: ids.tenant, batchId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', sourceSheet: 'DataSheet', sourceRowNumber: 2, agent: null, orderDate: null, customerName: 'C1', orderNumber: 'O1', sku: 'SKU-1', description: null, category: null, quantity: 10, cost: null, notes: null, distributionArea: 'דרום', rawRouteLine: null, plannedDeliveryDate: null, plannedRouteLine: null, plannedWorkBucket: null, planningStatus: 'unplanned', routeFlow: 'unassigned', productHandlingFlow: 'regular', noteDateHints: [], issues: [], createdAt: '2026-06-25T00:00:00.000Z' },
+      { id: rowId2, tenantId: ids.tenant, batchId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', sourceSheet: 'DataSheet', sourceRowNumber: 3, agent: null, orderDate: null, customerName: 'C2', orderNumber: 'O2', sku: 'SKU-2', description: null, category: null, quantity: 5, cost: null, notes: null, distributionArea: 'דרום', rawRouteLine: null, plannedDeliveryDate: null, plannedRouteLine: null, plannedWorkBucket: null, planningStatus: 'unplanned', routeFlow: 'unassigned', productHandlingFlow: 'regular', noteDateHints: [], issues: [], createdAt: '2026-06-25T00:00:00.000Z' }
+    );
+
+    // Send only rowId1 — rowId2 is missing from payload
+    await expect(service.putDemandPlanningPlan({
+      tenantId: ids.tenant,
+      draftId,
+      buckets: [{ distributionArea: 'דרום', planningLineName: 'כללי', bucketName: 'bucket-a' }],
+      allocations: [{ rawDemandRowId: rowId1, bucketKey: 'דרום|כללי|bucket-a', allocatedQuantity: 7 }]
+    })).rejects.toThrow(/DEMAND_PLANNING_ROLLING_ROW_SET_MISMATCH/);
+  });
+
+  it('rejects rolling draft plan with both extra and missing rowIds', async () => {
+    const { repo, state } = createPlanRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    state.drafts.push({
+      id: draftId, tenantId: ids.tenant, batchId, status: 'draft',
+      createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
+    });
+    (state.drafts[0] as any).sourceKind = 'rolling';
+    (state.drafts[0] as any).batchId = null;
+
+    // Existing: rowId1, rowId2
+    state.allocations.push(
+      { id: 'ea-1', tenantId: ids.tenant, draftId, batchId, rawDemandRowId: rowId1, bucketId: 'bucket-1', allocatedQuantity: 5, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' },
+      { id: 'ea-2', tenantId: ids.tenant, draftId, batchId, rawDemandRowId: rowId2, bucketId: 'bucket-2', allocatedQuantity: 3, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' }
+    );
+    state.rows.push(
+      { id: rowId1, tenantId: ids.tenant, batchId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', sourceSheet: 'DataSheet', sourceRowNumber: 2, agent: null, orderDate: null, customerName: 'C1', orderNumber: 'O1', sku: 'SKU-1', description: null, category: null, quantity: 10, cost: null, notes: null, distributionArea: 'דרום', rawRouteLine: null, plannedDeliveryDate: null, plannedRouteLine: null, plannedWorkBucket: null, planningStatus: 'unplanned', routeFlow: 'unassigned', productHandlingFlow: 'regular', noteDateHints: [], issues: [], createdAt: '2026-06-25T00:00:00.000Z' },
+      { id: rowId2, tenantId: ids.tenant, batchId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', sourceSheet: 'DataSheet', sourceRowNumber: 3, agent: null, orderDate: null, customerName: 'C2', orderNumber: 'O2', sku: 'SKU-2', description: null, category: null, quantity: 5, cost: null, notes: null, distributionArea: 'דרום', rawRouteLine: null, plannedDeliveryDate: null, plannedRouteLine: null, plannedWorkBucket: null, planningStatus: 'unplanned', routeFlow: 'unassigned', productHandlingFlow: 'regular', noteDateHints: [], issues: [], createdAt: '2026-06-25T00:00:00.000Z' },
+      { id: rowId3, tenantId: ids.tenant, batchId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', sourceSheet: 'DataSheet', sourceRowNumber: 4, agent: null, orderDate: null, customerName: 'C3', orderNumber: 'O3', sku: 'SKU-3', description: null, category: null, quantity: 7, cost: null, notes: null, distributionArea: 'דרום', rawRouteLine: null, plannedDeliveryDate: null, plannedRouteLine: null, plannedWorkBucket: null, planningStatus: 'unplanned', routeFlow: 'unassigned', productHandlingFlow: 'regular', noteDateHints: [], issues: [], createdAt: '2026-06-25T00:00:00.000Z' }
+    );
+    // Same-size but different set: existing {rowId1, rowId2}, incoming {rowId1, rowId3}
+    // rowId3 is not in allowed set → DEMAND_PLANNING_ROLLING_INVALID_ROW
+    await expect(service.putDemandPlanningPlan({
+      tenantId: ids.tenant,
+      draftId,
+      buckets: [{ distributionArea: 'דרום', planningLineName: 'כללי', bucketName: 'bucket-a' }],
+      allocations: [
+        { rawDemandRowId: rowId1, bucketKey: 'דרום|כללי|bucket-a', allocatedQuantity: 5 },
+        { rawDemandRowId: rowId3, bucketKey: 'דרום|כללי|bucket-a', allocatedQuantity: 3 }
+      ]
+    })).rejects.toThrow(/DEMAND_PLANNING_ROLLING_INVALID_ROW/);
+  });
+
+  it('rejects rolling draft plan with duplicate rawDemandRowId in allocations', async () => {
+    const { repo, state } = createPlanRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    state.drafts.push({
+      id: draftId, tenantId: ids.tenant, batchId, status: 'draft',
+      createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
+    });
+    (state.drafts[0] as any).sourceKind = 'rolling';
+    (state.drafts[0] as any).batchId = null;
+
+    // Existing: rowId1 only
+    state.allocations.push({
+      id: 'ea-1', tenantId: ids.tenant, draftId, batchId, rawDemandRowId: rowId1,
+      bucketId: 'bucket-1', allocatedQuantity: 3,
+      createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z'
+    });
+    state.rows.push({
+      id: rowId1, tenantId: ids.tenant, batchId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      sourceSheet: 'DataSheet', sourceRowNumber: 2, agent: null, orderDate: null,
+      customerName: 'C1', orderNumber: 'O1', sku: 'SKU-1', description: null,
+      category: null, quantity: 10, cost: null, notes: null,
+      distributionArea: 'דרום', rawRouteLine: null, plannedDeliveryDate: null,
+      plannedRouteLine: null, plannedWorkBucket: null,
+      planningStatus: 'unplanned', routeFlow: 'unassigned', productHandlingFlow: 'regular',
+      noteDateHints: [], issues: [], createdAt: '2026-06-25T00:00:00.000Z'
+    });
+
+    // Send rowId1 twice — passes exact-set check (same 1 unique rowId) but duplicate in entries
+    await expect(service.putDemandPlanningPlan({
+      tenantId: ids.tenant,
+      draftId,
+      buckets: [{ distributionArea: 'דרום', planningLineName: 'כללי', bucketName: 'bucket-a' }],
+      allocations: [
+        { rawDemandRowId: rowId1, bucketKey: 'דרום|כללי|bucket-a', allocatedQuantity: 3 },
+        { rawDemandRowId: rowId1, bucketKey: 'דרום|כללי|bucket-a', allocatedQuantity: 4 }
+      ]
+    })).rejects.toThrow(/DEMAND_PLANNING_ROLLING_ROW_SET_MISMATCH/);
   });
 });
 
@@ -7341,19 +7509,19 @@ describe('demand planning draft — publish to shift', () => {
     expect(newOrder!.status).toBe('queued');
   });
 
-  it('blocks rolling draft publish with DEMAND_PLANNING_ROLLING_PUBLISH_NOT_SUPPORTED', async () => {
+  it('allows rolling draft publish with existing allocations', async () => {
     const { repo, state } = createPublishRepo();
     seedPublishRows(state);
     // Override draft to be a rolling draft (cast to any for mock data flexibility)
     (state.drafts[0] as any).sourceKind = 'rolling';
     (state.drafts[0] as any).batchId = null;
-    const service = createManualShiftsServiceFromRepo(repo);
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
 
     await expect(service.publishDemandPlanningDraftToShift({
       tenantId: ids.tenant,
       draftId,
       targetShiftId: shiftId
-    })).rejects.toThrow(/DEMAND_PLANNING_ROLLING_PUBLISH_NOT_SUPPORTED/);
+    })).resolves.toMatchObject({ draftId });
   });
 
   // --- Rolling draft creation tests ---
@@ -7603,33 +7771,40 @@ describe('demand planning draft — publish to shift', () => {
     })).rejects.toThrow(); // Will throw because batch not found in mock - that's expected legacy behavior
   });
 
-  it('rolling publish remains blocked', async () => {
+  it('rolling publish succeeds after plan', async () => {
     const { repo, state } = createPublishRepo();
     seedPublishRows(state);
     (state.drafts[0] as any).sourceKind = 'rolling';
     (state.drafts[0] as any).batchId = null;
-    const service = createManualShiftsServiceFromRepo(repo);
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
 
     await expect(service.publishDemandPlanningDraftToShift({
       tenantId: ids.tenant,
       draftId,
       targetShiftId: shiftId
-    })).rejects.toThrow(/DEMAND_PLANNING_ROLLING_PUBLISH_NOT_SUPPORTED/);
+    })).resolves.toMatchObject({ draftId });
   });
 
-  it('rolling PUT /plan remains blocked', async () => {
+  it('rolling PUT /plan succeeds with exact same rowId set as existing allocations', async () => {
     const { repo, state } = createPublishRepo();
     seedPublishRows(state);
     (state.drafts[0] as any).sourceKind = 'rolling';
     (state.drafts[0] as any).batchId = null;
     const service = createManualShiftsServiceFromRepo(repo);
 
-    await expect(service.putDemandPlanningPlan({
+    const result = await service.putDemandPlanningPlan({
       tenantId: ids.tenant,
       draftId,
       buckets: [{ distributionArea: 'North', planningLineName: 'default', bucketName: 'unassigned' }],
-      allocations: [{ rawDemandRowId: rowId1, bucketKey: 'North|default|unassigned', allocatedQuantity: 5 }]
-    })).rejects.toThrow(/DEMAND_PLANNING_ROLLING_DRAFT_NOT_SUPPORTED/);
+      allocations: [
+        { rawDemandRowId: rowId1, bucketKey: 'North|default|unassigned', allocatedQuantity: 5 },
+        { rawDemandRowId: rowId2, bucketKey: 'North|default|unassigned', allocatedQuantity: 3 },
+        { rawDemandRowId: rowId3, bucketKey: 'North|default|unassigned', allocatedQuantity: 2 }
+      ]
+    });
+
+    expect(result.draft.id).toBe(draftId);
+    expect(result.allocations).toHaveLength(3);
   });
 
   // ─── Target-scoped rolling draft tests ─────────────────────────────────

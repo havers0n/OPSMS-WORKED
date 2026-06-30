@@ -331,7 +331,8 @@ export const demandPlanningDraftWithAssignmentsSchema = z.object({
   allocations: z.array(demandPlanningAllocationSchema),
   publication: demandPlanningPublicationSchema.nullable().optional(),
   canRevert: z.boolean().optional(),
-  revertBlockedReason: z.string().nullable().optional()
+  revertBlockedReason: z.string().nullable().optional(),
+  rows: z.array(rawDemandRowSchema).optional()
 });
 export type DemandPlanningDraftWithAssignments = z.infer<typeof demandPlanningDraftWithAssignmentsSchema>;
 

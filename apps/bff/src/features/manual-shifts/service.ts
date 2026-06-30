@@ -129,6 +129,8 @@ import {
   demandPlanningRollingDraftNotSupported,
   demandPlanningNoRollingAvailableDemand,
   demandPlanningRollingAvailableDemandInvariantViolation,
+  demandPlanningRollingDraftInvalidRow,
+  demandPlanningRollingRowSetMismatch,
   demandPlanningAllocationOverflow,
   demandPlanningRawDemandRowNotFound,
   demandPlanningBucketNotFound,
@@ -2936,7 +2938,20 @@ export function createManualShiftsServiceFromRepo(
         })
       ]);
 
+      // Fetch raw demand row metadata for allocations (needed by Scheme Builder)
+      const allocRowIds = [...new Set(allocations.map((a) => a.rawDemandRowId))];
+      let rows: RawDemandRow[] = [];
+      if (allocRowIds.length > 0) {
+        rows = await repo.listRawDemandRowsByIds({
+          tenantId: input.tenantId,
+          rowIds: allocRowIds
+        });
+      }
+
       const result: DemandPlanningDraftWithAssignments = { draft, buckets, allocations };
+      if (rows.length > 0) {
+        result.rows = rows;
+      }
 
       // Attach publication info for applied drafts
       if (draft.status === 'applied') {
@@ -2974,11 +2989,44 @@ export function createManualShiftsServiceFromRepo(
         throw demandPlanningDraftNotMutable(input.draftId, draft.status);
       }
 
-      if (draft.sourceKind === 'rolling') {
-        throw demandPlanningRollingDraftNotSupported(input.draftId);
+      // Validate rawDemandRowIds belong to this draft
+      const isRolling = draft.sourceKind === 'rolling';
+      let allowedRowIds: Set<string>;
+
+      if (isRolling) {
+        // Rolling drafts: incoming rawDemandRowId set must exactly match existing allocation rowIds
+        const existingAllocations = await repo.listDemandPlanningAllocations({
+          tenantId: input.tenantId,
+          draftId: input.draftId
+        });
+        allowedRowIds = new Set(existingAllocations.map((a) => a.rawDemandRowId));
+
+        if (allowedRowIds.size === 0) {
+          throw demandPlanningRollingDraftNotSupported(input.draftId);
+        }
+
+        const incomingRowIdList = input.allocations.map((a) => a.rawDemandRowId);
+        const incomingRowIds = new Set(incomingRowIdList);
+
+        // Reject duplicate rawDemandRowIds in incoming allocations
+        if (incomingRowIds.size !== incomingRowIdList.length) {
+          throw new ApiError(400, 'DEMAND_PLANNING_ROLLING_ROW_SET_MISMATCH',
+            `Rolling draft plan has ${incomingRowIdList.length} allocation entries but only ${incomingRowIds.size} unique rowIds — duplicates are not allowed.`);
+        }
+
+        // Reject injected rows not in the existing set
+        for (const alloc of input.allocations) {
+          if (!allowedRowIds.has(alloc.rawDemandRowId)) {
+            throw demandPlanningRollingDraftInvalidRow(alloc.rawDemandRowId);
+          }
+        }
+
+        // Reject missing rows that exist in the draft but are not in the incoming set
+        if (allowedRowIds.size !== incomingRowIds.size) {
+          throw demandPlanningRollingRowSetMismatch(allowedRowIds.size, incomingRowIds.size);
+        }
       }
 
-      // Validate rawDemandRowIds belong to this tenant/batch
       const rowIds = [...new Set(input.allocations.map((a) => a.rawDemandRowId))];
       const rows = rowIds.length > 0
         ? await repo.listRawDemandRowsByIds({
@@ -2991,7 +3039,10 @@ export function createManualShiftsServiceFromRepo(
 
       for (const alloc of input.allocations) {
         const row = rowsById.get(alloc.rawDemandRowId);
-        if (!row || row.batchId !== draft.batchId) {
+        if (!row) {
+          throw demandPlanningRawDemandRowNotFound(alloc.rawDemandRowId);
+        }
+        if (!isRolling && row.batchId !== draft.batchId) {
           throw demandPlanningRawDemandRowNotFound(alloc.rawDemandRowId);
         }
       }
@@ -3015,10 +3066,11 @@ export function createManualShiftsServiceFromRepo(
         draftId: input.draftId
       });
 
+      const planBatchId = isRolling ? null : draft.batchId;
       const buckets = await repo.insertDemandPlanningBuckets({
         tenantId: input.tenantId,
         draftId: input.draftId,
-        batchId: draft.batchId!,
+        batchId: planBatchId,
         buckets: input.buckets.map((b, i) => ({
           distributionArea: b.distributionArea,
           planningLineName: b.planningLineName,
@@ -3078,8 +3130,13 @@ export function createManualShiftsServiceFromRepo(
       const allocations = await repo.insertDemandPlanningAllocations({
         tenantId: input.tenantId,
         draftId: input.draftId,
-        batchId: draft.batchId!,
-        allocations: allocationInputs
+        batchId: planBatchId ?? '',
+        allocations: isRolling
+          ? allocationInputs.map((a) => ({
+              ...a,
+              batchId: rowsById.get(a.rawDemandRowId)?.batchId ?? planBatchId ?? ''
+            }))
+          : allocationInputs
       });
 
       return { draft, buckets, allocations };
