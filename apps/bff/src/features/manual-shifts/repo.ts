@@ -1369,6 +1369,30 @@ export type ManualShiftsRepo = {
     tenantId: string;
   }): Promise<number>;
 
+  listBacklogOrderAggregationRows(input: {
+    tenantId: string;
+  }): Promise<Array<{
+    backlogItemId: string;
+    backlogItemOrderNumber: string | null;
+    backlogItemCustomerName: string | null;
+    backlogItemSku: string | null;
+    backlogItemDistributionArea: string | null;
+    backlogItemTotalQuantity: number;
+    backlogItemFirstSeenAt: string;
+    backlogItemLastSeenAt: string;
+    backlogItemStatus: string;
+    rawDemandRowId: string;
+    rawRowPlannedDeliveryDate: string | null;
+    rawRowRouteLine: string | null;
+    rawRowPlanningStatus: string;
+    rawRowRouteFlow: string;
+    rawRowProductHandlingFlow: string;
+    rawRowQuantity: number | null;
+    sourceLinkBatchId: string;
+    batchSourceFile: string;
+    publishedQuantity: number;
+  }>>;
+
   listReadyBatches(input: {
     tenantId: string;
   }): Promise<RollingResolverBatch[]>;
@@ -3904,6 +3928,125 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
           distributionArea: (row.distribution_area as string | null) ?? null,
           plannedDeliveryDate: (row.planned_delivery_date as string | null) ?? null
         }];
+      });
+    },
+
+    async listBacklogOrderAggregationRows(input) {
+      const { data: backlogItems, error: biError } = await supabase
+        .from('demand_backlog_items')
+        .select(demandBacklogItemColumns)
+        .eq('tenant_id', input.tenantId)
+        .order('last_seen_at', { ascending: false })
+        .order('id', { ascending: false });
+
+      if (biError) throw biError;
+      if (!backlogItems || backlogItems.length === 0) return [];
+
+      const backlogItemIds = (backlogItems as DemandBacklogItemRow[]).map(r => r.id);
+
+      const { data: sourceLinks, error: slError } = await supabase
+        .from('demand_backlog_item_sources')
+        .select('backlog_item_id, raw_demand_row_id, batch_id')
+        .eq('tenant_id', input.tenantId)
+        .in('backlog_item_id', backlogItemIds);
+
+      if (slError) throw slError;
+      if (!sourceLinks || sourceLinks.length === 0) return [];
+
+      const rawDemandRowIds = [...new Set((sourceLinks as Array<{ raw_demand_row_id: string }>).map(r => r.raw_demand_row_id))];
+      const batchIds = [...new Set((sourceLinks as Array<{ batch_id: string }>).map(r => r.batch_id))];
+
+      const { data: rawRows, error: rrError } = await supabase
+        .from('raw_demand_rows')
+        .select('id, customer_name, order_number, sku, distribution_area, planned_delivery_date, raw_route_line, planning_status, route_flow, product_handling_flow, quantity')
+        .eq('tenant_id', input.tenantId)
+        .in('id', rawDemandRowIds);
+
+      if (rrError) throw rrError;
+
+      const { data: batches, error: bError } = await supabase
+        .from('demand_import_batches')
+        .select('id, source_file')
+        .eq('tenant_id', input.tenantId)
+        .in('id', batchIds);
+
+      if (bError) throw bError;
+
+      const { data: allocations, error: aError } = await supabase
+        .from('demand_planning_published_allocations')
+        .select('raw_demand_row_id, published_quantity, publication_id')
+        .eq('tenant_id', input.tenantId)
+        .in('raw_demand_row_id', rawDemandRowIds);
+
+      if (aError) throw aError;
+
+      const { data: publications, error: pError } = await supabase
+        .from('demand_planning_publications')
+        .select('id, status, reverted_at')
+        .eq('tenant_id', input.tenantId);
+
+      if (pError) throw pError;
+
+      const publicationStatusById = new Map<string, string>();
+      for (const pub of (publications ?? []) as Array<{ id: string; status: string; reverted_at: string | null }>) {
+        if (pub.status === 'applied' && pub.reverted_at == null) {
+          publicationStatusById.set(pub.id, 'applied');
+        }
+      }
+
+      const publishedQtyByRawRowId = new Map<string, number>();
+      for (const alloc of (allocations ?? []) as Array<{ raw_demand_row_id: string; published_quantity: number; publication_id: string | null }>) {
+        const isApplied = !alloc.publication_id || publicationStatusById.has(alloc.publication_id);
+        if (isApplied) {
+          publishedQtyByRawRowId.set(
+            alloc.raw_demand_row_id,
+            (publishedQtyByRawRowId.get(alloc.raw_demand_row_id) ?? 0) + Number(alloc.published_quantity ?? 0)
+          );
+        }
+      }
+
+      const batchMap = new Map<string, string>();
+      for (const b of (batches ?? []) as Array<{ id: string; source_file: string }>) {
+        batchMap.set(b.id, b.source_file);
+      }
+
+      const rawRowMap = new Map<string, Record<string, unknown>>();
+      for (const rr of (rawRows ?? []) as Array<Record<string, unknown>>) {
+        rawRowMap.set(String(rr.id), rr);
+      }
+
+      const backlogItemMap = new Map<string, DemandBacklogItemRow>();
+      for (const bi of (backlogItems ?? []) as DemandBacklogItemRow[]) {
+        backlogItemMap.set(bi.id, bi);
+      }
+
+      return (sourceLinks as Array<Record<string, unknown>>).map(sl => {
+        const bi = backlogItemMap.get(String(sl.backlog_item_id));
+        const rr = rawRowMap.get(String(sl.raw_demand_row_id));
+        const publishedQty = publishedQtyByRawRowId.get(String(sl.raw_demand_row_id)) ?? 0;
+        const batchFile = batchMap.get(String(sl.batch_id)) ?? '';
+
+        return {
+          backlogItemId: bi?.id ?? '',
+          backlogItemOrderNumber: (bi?.order_number as string | null) ?? null,
+          backlogItemCustomerName: (bi?.customer_name as string | null) ?? null,
+          backlogItemSku: (bi?.sku as string | null) ?? null,
+          backlogItemDistributionArea: (bi?.distribution_area as string | null) ?? null,
+          backlogItemTotalQuantity: Number(bi?.total_quantity ?? 0),
+          backlogItemFirstSeenAt: String(bi?.first_seen_at ?? ''),
+          backlogItemLastSeenAt: String(bi?.last_seen_at ?? ''),
+          backlogItemStatus: String(bi?.status ?? ''),
+          rawDemandRowId: String(sl.raw_demand_row_id ?? ''),
+          rawRowPlannedDeliveryDate: (rr?.planned_delivery_date as string | null) ?? null,
+          rawRowRouteLine: (rr?.raw_route_line as string | null) ?? null,
+          rawRowPlanningStatus: String(rr?.planning_status ?? ''),
+          rawRowRouteFlow: String(rr?.route_flow ?? ''),
+          rawRowProductHandlingFlow: String(rr?.product_handling_flow ?? ''),
+          rawRowQuantity: (rr?.quantity as number | null) ?? null,
+          sourceLinkBatchId: String(sl.batch_id ?? ''),
+          batchSourceFile: batchFile,
+          publishedQuantity: publishedQty
+        };
       });
     }
   };

@@ -800,6 +800,7 @@ function createRepo() {
     listReadyBatches: vi.fn().mockResolvedValue([]),
     listRawDemandRowsForBatches: vi.fn().mockResolvedValue([]),
     listPublishedAllocationsForRolling: vi.fn().mockResolvedValue([]),
+    listBacklogOrderAggregationRows: vi.fn().mockResolvedValue([]),
   };
 
   return { repo, state };
@@ -5451,6 +5452,369 @@ describe('getProductControl', () => {
   });
 });
 
+// ──── Backlog Order Explorer ────────────────────────────────────────────────
+
+describe('demand backlog order explorer', () => {
+  const tIds = {
+    orderNumber: 'SO001',
+    customerName: 'Client A',
+    sku: 'SKU-100',
+    distributionArea: 'North',
+    distributionLine: 'Line-1',
+    plannedDeliveryDate: '2026-07-15',
+    backlogItemId: '55000000-0000-4000-8000-000000000001',
+    backlogItemId2: '55000000-0000-4000-8000-000000000002',
+    batchId: '66000000-0000-4000-8000-000000000001',
+    rawRowId1: '77000000-0000-4000-8000-000000000001',
+    rawRowId2: '77000000-0000-4000-8000-000000000002',
+    rawRowId3: '77000000-0000-4000-8000-000000000003'
+  };
+
+  it('returns empty list when no backlog data exists', async () => {
+    const repo = createRepo().repo;
+    vi.mocked(repo.listBacklogOrderAggregationRows).mockResolvedValue([]);
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    const result = await service.getDemandBacklogOrders({ tenantId: ids.tenant, page: 1, limit: 50 });
+
+    expect(result.items).toHaveLength(0);
+    expect(result.pagination.total).toBe(0);
+  });
+
+  it('returns fully available order', async () => {
+    const repo = createRepo().repo;
+    vi.mocked(repo.listBacklogOrderAggregationRows).mockResolvedValue([{
+      backlogItemId: tIds.backlogItemId,
+      backlogItemOrderNumber: tIds.orderNumber,
+      backlogItemCustomerName: tIds.customerName,
+      backlogItemSku: tIds.sku,
+      backlogItemDistributionArea: tIds.distributionArea,
+      backlogItemTotalQuantity: 100,
+      backlogItemFirstSeenAt: '2026-06-01T00:00:00.000Z',
+      backlogItemLastSeenAt: '2026-06-30T00:00:00.000Z',
+      backlogItemStatus: 'active',
+      rawDemandRowId: tIds.rawRowId1,
+      rawRowPlannedDeliveryDate: tIds.plannedDeliveryDate,
+      rawRowRouteLine: tIds.distributionLine,
+      rawRowPlanningStatus: 'unplanned',
+      rawRowRouteFlow: 'unassigned',
+      rawRowProductHandlingFlow: 'regular',
+      rawRowQuantity: 100,
+      sourceLinkBatchId: tIds.batchId,
+      batchSourceFile: 'test.xlsx',
+      publishedQuantity: 0
+    }]);
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    const result = await service.getDemandBacklogOrders({ tenantId: ids.tenant, page: 1, limit: 50 });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].orderNumber).toBe(tIds.orderNumber);
+    expect(result.items[0].totalQuantity).toBe(100);
+    expect(result.items[0].publishedQuantity).toBe(0);
+    expect(result.items[0].availableQuantity).toBe(100);
+    expect(result.items[0].status).toBe('available');
+  });
+
+  it('returns partially published order', async () => {
+    const repo = createRepo().repo;
+    vi.mocked(repo.listBacklogOrderAggregationRows).mockResolvedValue([{
+      backlogItemId: tIds.backlogItemId,
+      backlogItemOrderNumber: tIds.orderNumber,
+      backlogItemCustomerName: tIds.customerName,
+      backlogItemSku: tIds.sku,
+      backlogItemDistributionArea: tIds.distributionArea,
+      backlogItemTotalQuantity: 100,
+      backlogItemFirstSeenAt: '2026-06-01T00:00:00.000Z',
+      backlogItemLastSeenAt: '2026-06-30T00:00:00.000Z',
+      backlogItemStatus: 'active',
+      rawDemandRowId: tIds.rawRowId1,
+      rawRowPlannedDeliveryDate: tIds.plannedDeliveryDate,
+      rawRowRouteLine: tIds.distributionLine,
+      rawRowPlanningStatus: 'unplanned',
+      rawRowRouteFlow: 'unassigned',
+      rawRowProductHandlingFlow: 'regular',
+      rawRowQuantity: 100,
+      sourceLinkBatchId: tIds.batchId,
+      batchSourceFile: 'test.xlsx',
+      publishedQuantity: 30
+    }]);
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    const result = await service.getDemandBacklogOrders({ tenantId: ids.tenant, page: 1, limit: 50 });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].totalQuantity).toBe(100);
+    expect(result.items[0].publishedQuantity).toBe(30);
+    expect(result.items[0].availableQuantity).toBe(70);
+    expect(result.items[0].status).toBe('partially_published');
+  });
+
+  it('returns fully published order', async () => {
+    const repo = createRepo().repo;
+    vi.mocked(repo.listBacklogOrderAggregationRows).mockResolvedValue([{
+      backlogItemId: tIds.backlogItemId,
+      backlogItemOrderNumber: tIds.orderNumber,
+      backlogItemCustomerName: tIds.customerName,
+      backlogItemSku: tIds.sku,
+      backlogItemDistributionArea: tIds.distributionArea,
+      backlogItemTotalQuantity: 100,
+      backlogItemFirstSeenAt: '2026-06-01T00:00:00.000Z',
+      backlogItemLastSeenAt: '2026-06-30T00:00:00.000Z',
+      backlogItemStatus: 'active',
+      rawDemandRowId: tIds.rawRowId1,
+      rawRowPlannedDeliveryDate: tIds.plannedDeliveryDate,
+      rawRowRouteLine: tIds.distributionLine,
+      rawRowPlanningStatus: 'unplanned',
+      rawRowRouteFlow: 'unassigned',
+      rawRowProductHandlingFlow: 'regular',
+      rawRowQuantity: 100,
+      sourceLinkBatchId: tIds.batchId,
+      batchSourceFile: 'test.xlsx',
+      publishedQuantity: 100
+    }]);
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    const result = await service.getDemandBacklogOrders({ tenantId: ids.tenant, page: 1, limit: 50 });
+
+    expect(result.items[0].totalQuantity).toBe(100);
+    expect(result.items[0].publishedQuantity).toBe(100);
+    expect(result.items[0].availableQuantity).toBe(0);
+    expect(result.items[0].status).toBe('fully_published');
+  });
+
+  it('returns over-published order', async () => {
+    const repo = createRepo().repo;
+    vi.mocked(repo.listBacklogOrderAggregationRows).mockResolvedValue([{
+      backlogItemId: tIds.backlogItemId,
+      backlogItemOrderNumber: tIds.orderNumber,
+      backlogItemCustomerName: tIds.customerName,
+      backlogItemSku: tIds.sku,
+      backlogItemDistributionArea: tIds.distributionArea,
+      backlogItemTotalQuantity: 100,
+      backlogItemFirstSeenAt: '2026-06-01T00:00:00.000Z',
+      backlogItemLastSeenAt: '2026-06-30T00:00:00.000Z',
+      backlogItemStatus: 'active',
+      rawDemandRowId: tIds.rawRowId1,
+      rawRowPlannedDeliveryDate: tIds.plannedDeliveryDate,
+      rawRowRouteLine: tIds.distributionLine,
+      rawRowPlanningStatus: 'unplanned',
+      rawRowRouteFlow: 'unassigned',
+      rawRowProductHandlingFlow: 'regular',
+      rawRowQuantity: 100,
+      sourceLinkBatchId: tIds.batchId,
+      batchSourceFile: 'test.xlsx',
+      publishedQuantity: 120
+    }]);
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    const result = await service.getDemandBacklogOrders({ tenantId: ids.tenant, page: 1, limit: 50 });
+
+    expect(result.items[0].totalQuantity).toBe(100);
+    expect(result.items[0].publishedQuantity).toBe(120);
+    expect(result.items[0].availableQuantity).toBe(0);
+    expect(result.items[0].status).toBe('over_published');
+  });
+
+  it('returns review_needed when plannedDeliveryDate is missing', async () => {
+    const repo = createRepo().repo;
+    vi.mocked(repo.listBacklogOrderAggregationRows).mockResolvedValue([{
+      backlogItemId: tIds.backlogItemId,
+      backlogItemOrderNumber: tIds.orderNumber,
+      backlogItemCustomerName: tIds.customerName,
+      backlogItemSku: tIds.sku,
+      backlogItemDistributionArea: tIds.distributionArea,
+      backlogItemTotalQuantity: 100,
+      backlogItemFirstSeenAt: '2026-06-01T00:00:00.000Z',
+      backlogItemLastSeenAt: '2026-06-30T00:00:00.000Z',
+      backlogItemStatus: 'active',
+      rawDemandRowId: tIds.rawRowId1,
+      rawRowPlannedDeliveryDate: null,
+      rawRowRouteLine: tIds.distributionLine,
+      rawRowPlanningStatus: 'unplanned',
+      rawRowRouteFlow: 'unassigned',
+      rawRowProductHandlingFlow: 'regular',
+      rawRowQuantity: 100,
+      sourceLinkBatchId: tIds.batchId,
+      batchSourceFile: 'test.xlsx',
+      publishedQuantity: 0
+    }]);
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    const result = await service.getDemandBacklogOrders({ tenantId: ids.tenant, page: 1, limit: 50 });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].status).toBe('review_needed');
+  });
+
+  it('filters by status after computation', async () => {
+    const repo = createRepo().repo;
+    vi.mocked(repo.listBacklogOrderAggregationRows).mockResolvedValue([{
+      backlogItemId: tIds.backlogItemId,
+      backlogItemOrderNumber: tIds.orderNumber,
+      backlogItemCustomerName: tIds.customerName,
+      backlogItemSku: tIds.sku,
+      backlogItemDistributionArea: tIds.distributionArea,
+      backlogItemTotalQuantity: 100,
+      backlogItemFirstSeenAt: '2026-06-01T00:00:00.000Z',
+      backlogItemLastSeenAt: '2026-06-30T00:00:00.000Z',
+      backlogItemStatus: 'active',
+      rawDemandRowId: tIds.rawRowId1,
+      rawRowPlannedDeliveryDate: tIds.plannedDeliveryDate,
+      rawRowRouteLine: tIds.distributionLine,
+      rawRowPlanningStatus: 'unplanned',
+      rawRowRouteFlow: 'regular',
+      rawRowProductHandlingFlow: 'regular',
+      rawRowQuantity: 100,
+      sourceLinkBatchId: tIds.batchId,
+      batchSourceFile: 'test.xlsx',
+      publishedQuantity: 30
+    }, {
+      backlogItemId: tIds.backlogItemId2,
+      backlogItemOrderNumber: 'SO002',
+      backlogItemCustomerName: tIds.customerName,
+      backlogItemSku: tIds.sku,
+      backlogItemDistributionArea: tIds.distributionArea,
+      backlogItemTotalQuantity: 100,
+      backlogItemFirstSeenAt: '2026-06-01T00:00:00.000Z',
+      backlogItemLastSeenAt: '2026-06-30T00:00:00.000Z',
+      backlogItemStatus: 'active',
+      rawDemandRowId: tIds.rawRowId2,
+      rawRowPlannedDeliveryDate: tIds.plannedDeliveryDate,
+      rawRowRouteLine: tIds.distributionLine,
+      rawRowPlanningStatus: 'unplanned',
+      rawRowRouteFlow: 'regular',
+      rawRowProductHandlingFlow: 'regular',
+      rawRowQuantity: 100,
+      sourceLinkBatchId: tIds.batchId,
+      batchSourceFile: 'test.xlsx',
+      publishedQuantity: 100
+    }]);
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    const result = await service.getDemandBacklogOrders({
+      tenantId: ids.tenant,
+      status: 'partially_published',
+      page: 1,
+      limit: 50
+    });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].status).toBe('partially_published');
+  });
+
+  it('pagination works correctly', async () => {
+    const repo = createRepo().repo;
+    const rows: Array<Record<string, unknown>> = [];
+    for (let i = 0; i < 25; i++) {
+      rows.push({
+        backlogItemId: `item-${i}`,
+        backlogItemOrderNumber: `SO-${String(i).padStart(3, '0')}`,
+        backlogItemCustomerName: tIds.customerName,
+        backlogItemSku: tIds.sku,
+        backlogItemDistributionArea: tIds.distributionArea,
+        backlogItemTotalQuantity: 100,
+        backlogItemFirstSeenAt: '2026-06-01T00:00:00.000Z',
+        backlogItemLastSeenAt: '2026-06-30T00:00:00.000Z',
+        backlogItemStatus: 'active',
+        rawDemandRowId: `row-${i}`,
+        rawRowPlannedDeliveryDate: tIds.plannedDeliveryDate,
+        rawRowRouteLine: tIds.distributionLine,
+        rawRowPlanningStatus: 'unplanned',
+        rawRowRouteFlow: 'unassigned',
+        rawRowProductHandlingFlow: 'regular',
+        rawRowQuantity: 100,
+        sourceLinkBatchId: tIds.batchId,
+        batchSourceFile: 'test.xlsx',
+        publishedQuantity: 0
+      });
+    }
+    vi.mocked(repo.listBacklogOrderAggregationRows).mockResolvedValue(rows as any);
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    const page1 = await service.getDemandBacklogOrders({ tenantId: ids.tenant, page: 1, limit: 10 });
+    expect(page1.items).toHaveLength(10);
+    expect(page1.pagination.page).toBe(1);
+    expect(page1.pagination.limit).toBe(10);
+    expect(page1.pagination.total).toBe(25);
+    expect(page1.pagination.totalPages).toBe(3);
+
+    const page3 = await service.getDemandBacklogOrders({ tenantId: ids.tenant, page: 3, limit: 10 });
+    expect(page3.items).toHaveLength(5);
+  });
+
+  it('deduplicates totalQuantity when same backlog item appears on multiple source rows', async () => {
+    const repo = createRepo().repo;
+    vi.mocked(repo.listBacklogOrderAggregationRows).mockResolvedValue([{
+      backlogItemId: tIds.backlogItemId,
+      backlogItemOrderNumber: tIds.orderNumber,
+      backlogItemCustomerName: tIds.customerName,
+      backlogItemSku: tIds.sku,
+      backlogItemDistributionArea: tIds.distributionArea,
+      backlogItemTotalQuantity: 50,
+      backlogItemFirstSeenAt: '2026-06-01T00:00:00.000Z',
+      backlogItemLastSeenAt: '2026-06-30T00:00:00.000Z',
+      backlogItemStatus: 'active',
+      rawDemandRowId: tIds.rawRowId1,
+      rawRowPlannedDeliveryDate: tIds.plannedDeliveryDate,
+      rawRowRouteLine: tIds.distributionLine,
+      rawRowPlanningStatus: 'unplanned',
+      rawRowRouteFlow: 'unassigned',
+      rawRowProductHandlingFlow: 'regular',
+      rawRowQuantity: 100,
+      sourceLinkBatchId: tIds.batchId,
+      batchSourceFile: 'test.xlsx',
+      publishedQuantity: 0
+    }, {
+      backlogItemId: tIds.backlogItemId,
+      backlogItemOrderNumber: tIds.orderNumber,
+      backlogItemCustomerName: tIds.customerName,
+      backlogItemSku: tIds.sku,
+      backlogItemDistributionArea: tIds.distributionArea,
+      backlogItemTotalQuantity: 50,
+      backlogItemFirstSeenAt: '2026-06-01T00:00:00.000Z',
+      backlogItemLastSeenAt: '2026-06-30T00:00:00.000Z',
+      backlogItemStatus: 'active',
+      rawDemandRowId: tIds.rawRowId2,
+      rawRowPlannedDeliveryDate: tIds.plannedDeliveryDate,
+      rawRowRouteLine: tIds.distributionLine,
+      rawRowPlanningStatus: 'unplanned',
+      rawRowRouteFlow: 'unassigned',
+      rawRowProductHandlingFlow: 'regular',
+      rawRowQuantity: 100,
+      sourceLinkBatchId: tIds.batchId,
+      batchSourceFile: 'test.xlsx',
+      publishedQuantity: 0
+    }, {
+      backlogItemId: tIds.backlogItemId,
+      backlogItemOrderNumber: tIds.orderNumber,
+      backlogItemCustomerName: tIds.customerName,
+      backlogItemSku: tIds.sku,
+      backlogItemDistributionArea: tIds.distributionArea,
+      backlogItemTotalQuantity: 50,
+      backlogItemFirstSeenAt: '2026-06-01T00:00:00.000Z',
+      backlogItemLastSeenAt: '2026-06-30T00:00:00.000Z',
+      backlogItemStatus: 'active',
+      rawDemandRowId: tIds.rawRowId3,
+      rawRowPlannedDeliveryDate: tIds.plannedDeliveryDate,
+      rawRowRouteLine: tIds.distributionLine,
+      rawRowPlanningStatus: 'unplanned',
+      rawRowRouteFlow: 'unassigned',
+      rawRowProductHandlingFlow: 'regular',
+      rawRowQuantity: 100,
+      sourceLinkBatchId: tIds.batchId,
+      batchSourceFile: 'test.xlsx',
+      publishedQuantity: 0
+    }]);
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    const result = await service.getDemandBacklogOrders({ tenantId: ids.tenant, page: 1, limit: 50 });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].totalQuantity).toBe(50);
+  });
+});
+
 function makeBondedRow(overrides: {
   sku: string | null;
   availableQty: number;
@@ -7063,6 +7427,7 @@ describe('demand planning draft — publish to shift', () => {
         });
       }) as unknown as ManualShiftsRepo['insertDemandPlanningAllocations'],
       listDemandPlanningAllocations: vi.fn(async () => []) as unknown as ManualShiftsRepo['listDemandPlanningAllocations'],
+      listBacklogOrderAggregationRows: vi.fn(async () => []) as unknown as ManualShiftsRepo['listBacklogOrderAggregationRows'],
     };
 
     function addRow(overrides: Record<string, unknown>) {

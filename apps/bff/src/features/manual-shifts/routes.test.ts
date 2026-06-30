@@ -680,6 +680,10 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
       oldestItemSeenAt: null,
       newestItemSeenAt: null
     })),
+    getDemandBacklogOrders: vi.fn(async () => ({
+      items: [],
+      pagination: { page: 1, limit: 50, total: 0, totalPages: 0 }
+    })),
     getAvailableDemand: vi.fn(async () => ({
       summary: {
         ordersCount: 0,
@@ -4114,6 +4118,99 @@ describe('demand planning draft routes', () => {
     });
 
     expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
+  // ──── Backlog Order Explorer ────────────────────────────────────────────────
+
+  it('GET /api/demand-planning/backlog-orders returns 200', async () => {
+    const service = createDemandMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/demand-planning/backlog-orders'
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.payload);
+    expect(body).toHaveProperty('items');
+    expect(body).toHaveProperty('pagination');
+    expect(body.pagination).toHaveProperty('page');
+    expect(body.pagination).toHaveProperty('limit');
+    expect(body.pagination).toHaveProperty('total');
+    expect(body.pagination).toHaveProperty('totalPages');
+
+    await app.close();
+  });
+
+  it('GET /api/demand-planning/backlog-orders returns 400 for invalid status', async () => {
+    const service = createDemandMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/demand-planning/backlog-orders?status=invalid'
+    });
+
+    expect(response.statusCode).toBe(400);
+
+    await app.close();
+  });
+
+  it('GET /api/demand-planning/backlog-orders returns 400 for negative limit', async () => {
+    const service = createDemandMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/demand-planning/backlog-orders?limit=-1'
+    });
+
+    expect(response.statusCode).toBe(400);
+
+    await app.close();
+  });
+
+  it('GET /api/demand-planning/backlog-orders returns 400 for limit over 200', async () => {
+    const service = createDemandMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/demand-planning/backlog-orders?limit=201'
+    });
+
+    expect(response.statusCode).toBe(400);
+
+    await app.close();
+  });
+
+  it('GET /api/demand-planning/backlog-orders returns 400 for non-uuid sourceBatchId', async () => {
+    const service = createDemandMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/demand-planning/backlog-orders?sourceBatchId=not-a-uuid'
+    });
+
+    expect(response.statusCode).toBe(400);
+
+    await app.close();
+  });
+
+  it('GET /api/demand-planning/backlog-orders parses filters correctly', async () => {
+    const service = createDemandMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/demand-planning/backlog-orders?dateFrom=2026-06-01&dateTo=2026-06-30&status=available&q=SO-001&sku=SKU-1&customer=Client&distributionArea=North&distributionLine=Line1&page=2&limit=25'
+    });
+
+    expect(response.statusCode).toBe(200);
+
     await app.close();
   });
 });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import {
   normalizeDemandBacklogKey,
   computeBacklogMergeAction,
@@ -6,6 +7,10 @@ import {
   computeOpenQuantity,
   buildAvailableDemandResponse,
   demandBacklogItemSchema,
+  demandBacklogOrderItemSchema,
+  demandBacklogOrderQuerySchema,
+  demandBacklogOrderListResponseSchema,
+  computeBacklogOrderStatus,
   type BacklogMergeRowInput,
   type DemandBacklogItem
 } from './demand-backlog';
@@ -408,5 +413,180 @@ describe('buildAvailableDemandResponse', () => {
     expect(response.canPlan).toBe(false);
     expect(response.summary.rowsCount).toBe(0);
     expect(response.summary.totalQuantity).toBe(0);
+  });
+});
+
+// ──── Backlog Order Schema Validation ────────────────────────────────────────
+
+describe('demandBacklogOrderQuerySchema', () => {
+  it('accepts valid minimal query', () => {
+    const result = demandBacklogOrderQuerySchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.page).toBe(1);
+      expect(result.data.limit).toBe(50);
+    }
+  });
+
+  it('accepts valid full query', () => {
+    const result = demandBacklogOrderQuerySchema.safeParse({
+      dateFrom: '2026-06-01',
+      dateTo: '2026-06-30',
+      status: 'available',
+      q: 'SO-001',
+      sku: 'SKU-100',
+      customer: 'לקוח',
+      distributionArea: 'דרום',
+      distributionLine: 'קו 1',
+      sourceBatchId: '00000000-0000-4000-a000-000000000020',
+      page: 2,
+      limit: 25
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects invalid status', () => {
+    const result = demandBacklogOrderQuerySchema.safeParse({ status: 'invalid' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects negative page', () => {
+    const result = demandBacklogOrderQuerySchema.safeParse({ page: 0 });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects limit over 200', () => {
+    const result = demandBacklogOrderQuerySchema.safeParse({ limit: 201 });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects non-uuid sourceBatchId', () => {
+    const result = demandBacklogOrderQuerySchema.safeParse({ sourceBatchId: 'not-a-uuid' });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('demandBacklogOrderItemSchema', () => {
+  function makeOrderItem(overrides: Partial<z.input<typeof demandBacklogOrderItemSchema>> = {}) {
+    return {
+      orderNumber: 'SO-001',
+      customerName: 'לקוח א',
+      plannedDeliveryDate: '2026-06-15',
+      distributionArea: 'דרום',
+      distributionLine: 'קו 1',
+      rowCount: 3,
+      skuCount: 2,
+      totalQuantity: 100,
+      publishedQuantity: 40,
+      availableQuantity: 60,
+      status: 'partially_published' as const,
+      firstSeenAt: '2026-06-01T00:00:00.000Z',
+      lastSeenAt: '2026-06-28T00:00:00.000Z',
+      latestBatchId: '00000000-0000-4000-a000-000000000020',
+      latestBatchName: 'datasheet-v3.xlsx',
+      ...overrides
+    };
+  }
+
+  it('accepts valid item', () => {
+    const result = demandBacklogOrderItemSchema.safeParse(makeOrderItem());
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects invalid status', () => {
+    const result = demandBacklogOrderItemSchema.safeParse(makeOrderItem({ status: 'invalid' as any }));
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects negative totalQuantity', () => {
+    const result = demandBacklogOrderItemSchema.safeParse(makeOrderItem({ totalQuantity: -1 }));
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects non-datetime firstSeenAt', () => {
+    const result = demandBacklogOrderItemSchema.safeParse(makeOrderItem({ firstSeenAt: 'not-a-date' }));
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('demandBacklogOrderListResponseSchema', () => {
+  it('accepts valid response', () => {
+    const result = demandBacklogOrderListResponseSchema.safeParse({
+      items: [{
+        orderNumber: 'SO-001',
+        customerName: 'לקוח א',
+        plannedDeliveryDate: '2026-06-15',
+        distributionArea: 'דרום',
+        distributionLine: 'קו 1',
+        rowCount: 3,
+        skuCount: 2,
+        totalQuantity: 100,
+        publishedQuantity: 40,
+        availableQuantity: 60,
+        status: 'partially_published',
+        firstSeenAt: '2026-06-01T00:00:00.000Z',
+        lastSeenAt: '2026-06-28T00:00:00.000Z',
+        latestBatchId: '00000000-0000-4000-a000-000000000020',
+        latestBatchName: 'datasheet-v3.xlsx'
+      }],
+      pagination: { page: 1, limit: 50, total: 1, totalPages: 1 }
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects missing pagination', () => {
+    const result = demandBacklogOrderListResponseSchema.safeParse({
+      items: []
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+// ──── computeBacklogOrderStatus ─────────────────────────────────────────────
+
+describe('computeBacklogOrderStatus', () => {
+  it('returns available when total > 0 and published = 0', () => {
+    expect(computeBacklogOrderStatus(100, 0, false, false, false, false)).toBe('available');
+  });
+
+  it('returns partially_published when 0 < published < total', () => {
+    expect(computeBacklogOrderStatus(100, 40, false, false, false, false)).toBe('partially_published');
+  });
+
+  it('returns fully_published when published >= total', () => {
+    expect(computeBacklogOrderStatus(100, 100, false, false, false, false)).toBe('fully_published');
+    expect(computeBacklogOrderStatus(100, 120, false, false, false, false)).toBe('over_published');
+  });
+
+  it('returns over_published when published > total (highest priority)', () => {
+    expect(computeBacklogOrderStatus(100, 150, true, false, false, false)).toBe('over_published');
+  });
+
+  it('returns review_needed when null delivery date (takes priority over available)', () => {
+    expect(computeBacklogOrderStatus(100, 0, true, false, false, false)).toBe('review_needed');
+  });
+
+  it('returns review_needed when null order number', () => {
+    expect(computeBacklogOrderStatus(100, 0, false, true, false, false)).toBe('review_needed');
+  });
+
+  it('returns review_needed when has review status', () => {
+    expect(computeBacklogOrderStatus(100, 0, false, false, true, false)).toBe('review_needed');
+  });
+
+  it('returns review_needed even when published > 0 (takes priority over partially)', () => {
+    expect(computeBacklogOrderStatus(100, 30, true, false, false, false)).toBe('review_needed');
+  });
+
+  it('returns excluded when isExcluded and no review issues or over-publish', () => {
+    expect(computeBacklogOrderStatus(100, 0, false, false, false, true)).toBe('excluded');
+  });
+
+  it('returns review_needed over excluded (higher priority)', () => {
+    expect(computeBacklogOrderStatus(100, 0, true, false, false, true)).toBe('review_needed');
+  });
+
+  it('returns fully_published when no other condition met and published >= total', () => {
+    expect(computeBacklogOrderStatus(100, 100, false, false, false, false)).toBe('fully_published');
   });
 });

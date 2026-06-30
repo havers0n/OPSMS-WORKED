@@ -447,3 +447,81 @@ export const demandBacklogQuerySchema = z.object({
   limit: z.number().int().min(1).max(200).optional().default(50)
 });
 export type DemandBacklogQuery = z.infer<typeof demandBacklogQuerySchema>;
+
+// ──── Backlog Order Explorer (order-level aggregation) ──────────────────────
+
+export const demandBacklogOrderStatusSchema = z.enum([
+  'available',
+  'partially_published',
+  'fully_published',
+  'review_needed',
+  'excluded',
+  'over_published'
+]);
+export type DemandBacklogOrderStatus = z.infer<typeof demandBacklogOrderStatusSchema>;
+
+export const demandBacklogOrderQuerySchema = z.object({
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  status: demandBacklogOrderStatusSchema.optional(),
+  q: z.string().optional(),
+  sku: z.string().optional(),
+  customer: z.string().optional(),
+  distributionArea: z.string().optional(),
+  distributionLine: z.string().optional(),
+  sourceBatchId: z.string().uuid().optional(),
+  page: z.coerce.number().int().min(1).optional().default(1),
+  limit: z.coerce.number().int().min(1).max(200).optional().default(50)
+});
+export type DemandBacklogOrderQuery = z.infer<typeof demandBacklogOrderQuerySchema>;
+
+export const demandBacklogOrderItemSchema = z.object({
+  orderNumber: z.string().nullable(),
+  customerName: z.string().nullable(),
+  plannedDeliveryDate: z.string().nullable(),
+  distributionArea: z.string().nullable(),
+  distributionLine: z.string().nullable(),
+  rowCount: z.number().int().min(0),
+  skuCount: z.number().int().min(0),
+  totalQuantity: z.number().min(0),
+  publishedQuantity: z.number().min(0),
+  availableQuantity: z.number().min(0),
+  status: demandBacklogOrderStatusSchema,
+  firstSeenAt: z.string().datetime({ offset: true }),
+  lastSeenAt: z.string().datetime({ offset: true }),
+  latestBatchId: z.string().uuid(),
+  latestBatchName: z.string().min(1)
+});
+export type DemandBacklogOrderItem = z.infer<typeof demandBacklogOrderItemSchema>;
+
+export const demandBacklogOrderListResponseSchema = z.object({
+  items: z.array(demandBacklogOrderItemSchema),
+  pagination: z.object({
+    page: z.number().int().min(1),
+    limit: z.number().int().min(1).max(200),
+    total: z.number().int().min(0),
+    totalPages: z.number().int().min(0)
+  })
+});
+export type DemandBacklogOrderListResponse = z.infer<typeof demandBacklogOrderListResponseSchema>;
+
+// ──── Status computation helper for order-level items ───────────────────────
+
+export function computeBacklogOrderStatus(
+  totalQuantity: number,
+  publishedQuantity: number,
+  hasNullDeliveryDate: boolean,
+  hasNullOrderNumber: boolean,
+  hasReviewStatus: boolean,
+  isExcluded: boolean
+): DemandBacklogOrderStatus {
+  const isOverPublished = publishedQuantity > totalQuantity;
+  const needsReview = hasNullDeliveryDate || hasNullOrderNumber || hasReviewStatus;
+
+  if (isOverPublished) return 'over_published';
+  if (needsReview) return 'review_needed';
+  if (isExcluded) return 'excluded';
+  if (totalQuantity > 0 && publishedQuantity === 0) return 'available';
+  if (publishedQuantity > 0 && publishedQuantity < totalQuantity) return 'partially_published';
+  return 'fully_published';
+}

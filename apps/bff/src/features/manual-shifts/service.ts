@@ -53,9 +53,11 @@ import type {
   BacklogMergeRowInput,
   DemandBacklogMergeAction,
   DemandAvailableDemandSnapshot,
-  RollingAvailableDemandResponse
+  RollingAvailableDemandResponse,
+  DemandBacklogOrderStatus,
+  DemandBacklogOrderListResponse
 } from '@wos/domain';
-import { buildAvailableDemandResponse, resolveRollingAvailableDemandV1 } from '@wos/domain';
+import { buildAvailableDemandResponse, resolveRollingAvailableDemandV1, computeBacklogOrderStatus } from '@wos/domain';
 import {
   buildProductControlRow,
   buildRawDemandPlanningPreview,
@@ -452,6 +454,21 @@ export type ManualShiftsService = {
     search?: string;
     sourceBatchId?: string;
   }): Promise<DemandBacklogSummaryResponse>;
+
+  getDemandBacklogOrders(input: {
+    tenantId: string;
+    dateFrom?: string;
+    dateTo?: string;
+    status?: DemandBacklogOrderStatus;
+    q?: string;
+    sku?: string;
+    customer?: string;
+    distributionArea?: string;
+    distributionLine?: string;
+    sourceBatchId?: string;
+    page: number;
+    limit: number;
+  }): Promise<DemandBacklogOrderListResponse>;
 
   getAvailableDemand(input: {
     tenantId: string;
@@ -3430,6 +3447,221 @@ export function createManualShiftsServiceFromRepo(
     async getRollingAvailableDemand(input) {
       const { targetDate } = await resolveActiveTargetShift(input.tenantId, input.targetShiftId);
       return resolveRollingAvailableDemandForTargetDate(input.tenantId, targetDate);
+    },
+
+    async getDemandBacklogOrders(input) {
+      let rawData = await repo.listBacklogOrderAggregationRows({
+        tenantId: input.tenantId
+      });
+
+      // apply filters to raw data
+      if (input.q) {
+        const q = input.q.toLowerCase();
+        rawData = rawData.filter(row =>
+          (row.backlogItemOrderNumber ?? '').toLowerCase().includes(q) ||
+          (row.backlogItemCustomerName ?? '').toLowerCase().includes(q)
+        );
+      }
+      if (input.sku) {
+        rawData = rawData.filter(row =>
+          (row.backlogItemSku ?? '').toLowerCase().includes(input.sku!.toLowerCase())
+        );
+      }
+      if (input.customer) {
+        rawData = rawData.filter(row =>
+          (row.backlogItemCustomerName ?? '').toLowerCase().includes(input.customer!.toLowerCase())
+        );
+      }
+      if (input.distributionArea) {
+        rawData = rawData.filter(row =>
+          (row.backlogItemDistributionArea ?? '').toLowerCase() === input.distributionArea!.toLowerCase()
+        );
+      }
+      if (input.distributionLine) {
+        rawData = rawData.filter(row =>
+          (row.rawRowRouteLine ?? '').toLowerCase().includes(input.distributionLine!.toLowerCase())
+        );
+      }
+      if (input.dateFrom) {
+        rawData = rawData.filter(row =>
+          row.rawRowPlannedDeliveryDate !== null && row.rawRowPlannedDeliveryDate >= input.dateFrom!
+        );
+      }
+      if (input.dateTo) {
+        rawData = rawData.filter(row =>
+          row.rawRowPlannedDeliveryDate !== null && row.rawRowPlannedDeliveryDate <= input.dateTo!
+        );
+      }
+      if (input.sourceBatchId) {
+        rawData = rawData.filter(row => row.sourceLinkBatchId === input.sourceBatchId);
+      }
+
+      if (rawData.length === 0) {
+        return {
+          items: [],
+          pagination: { page: input.page, limit: input.limit, total: 0, totalPages: 0 }
+        };
+      }
+
+      // aggregate raw data into order groups
+      const groupKeySep = '\x00';
+      const groups = new Map<string, {
+        orderNumber: string | null;
+        customerName: string | null;
+        plannedDeliveryDate: string | null;
+        distributionArea: string | null;
+        distributionLine: string | null;
+        backlogItemIds: Set<string>;
+        skuSet: Set<string>;
+        totalQuantity: number;
+        publishedQuantity: number;
+        firstSeenAt: string;
+        lastSeenAt: string;
+        latestBatchId: string;
+        latestBatchName: string;
+        hasNullDeliveryDate: boolean;
+        hasNullOrderNumber: boolean;
+        hasReviewStatus: boolean;
+        isExcluded: boolean;
+      }>;
+
+      for (const row of rawData) {
+        const key = [
+          row.backlogItemOrderNumber ?? '',
+          row.backlogItemCustomerName ?? '',
+          row.backlogItemDistributionArea ?? '',
+          row.rawRowRouteLine ?? '',
+          row.rawRowPlannedDeliveryDate ?? ''
+        ].join(groupKeySep);
+
+        let group = groups.get(key);
+        if (!group) {
+          group = {
+            orderNumber: row.backlogItemOrderNumber,
+            customerName: row.backlogItemCustomerName,
+            plannedDeliveryDate: row.rawRowPlannedDeliveryDate,
+            distributionArea: row.backlogItemDistributionArea,
+            distributionLine: row.rawRowRouteLine,
+            backlogItemIds: new Set(),
+            skuSet: new Set(),
+            totalQuantity: 0,
+            publishedQuantity: 0,
+            firstSeenAt: row.backlogItemFirstSeenAt,
+            lastSeenAt: row.backlogItemLastSeenAt,
+            latestBatchId: row.sourceLinkBatchId,
+            latestBatchName: row.batchSourceFile,
+            hasNullDeliveryDate: false,
+            hasNullOrderNumber: false,
+            hasReviewStatus: false,
+            isExcluded: false
+          };
+          groups.set(key, group);
+        }
+
+        group.backlogItemIds.add(row.backlogItemId);
+        if (row.backlogItemSku) group.skuSet.add(row.backlogItemSku);
+        // totalQuantity is per backlog item; only add once per backlog item per group
+        // (source links can map to the same backlog item)
+        // We handle this by using a Set and recomputing below
+        group.publishedQuantity += row.publishedQuantity;
+        if (row.backlogItemFirstSeenAt < group.firstSeenAt) group.firstSeenAt = row.backlogItemFirstSeenAt;
+        if (row.backlogItemLastSeenAt > group.lastSeenAt) group.lastSeenAt = row.backlogItemLastSeenAt;
+        if (row.sourceLinkBatchId > group.latestBatchId) {
+          group.latestBatchId = row.sourceLinkBatchId;
+          group.latestBatchName = row.batchSourceFile;
+        }
+        if (!row.rawRowPlannedDeliveryDate) group.hasNullDeliveryDate = true;
+        if (!row.backlogItemOrderNumber) group.hasNullOrderNumber = true;
+
+        const reviewStatuses = ['error', 'excluded'];
+        if (reviewStatuses.includes(row.rawRowPlanningStatus)) group.hasReviewStatus = true;
+        const nonOrdinaryFlows = ['ashlama', 'chita', 'return', 'credit'];
+        if (nonOrdinaryFlows.includes(row.rawRowRouteFlow)) group.hasReviewStatus = true;
+        if (row.rawRowProductHandlingFlow !== 'regular') group.hasReviewStatus = true;
+        if (row.rawRowQuantity === null || row.rawRowQuantity < 0) group.hasReviewStatus = true;
+
+        const specialFlows = ['special_flow'];
+        if (specialFlows.includes(row.rawRowPlanningStatus)) group.isExcluded = true;
+        const nonSoPatterns = ['תעודה קיימת', 'איסוף בלבד'];
+        if (row.backlogItemOrderNumber && (nonSoPatterns.includes(row.backlogItemOrderNumber.trim()) || !/^SO[0-9]+$/.test(row.backlogItemOrderNumber.trim()))) {
+          group.isExcluded = true;
+        }
+      }
+
+      // Compute totalQuantity per backlog item (deduplicated)
+      // Re-accumulate per backlog item ID to avoid double-counting from multiple source links
+      const backlogItemTotals = new Map<string, number>();
+      for (const row of rawData) {
+        backlogItemTotals.set(row.backlogItemId, row.backlogItemTotalQuantity);
+      }
+
+      for (const group of groups.values()) {
+        let totalQty = 0;
+        for (const biId of group.backlogItemIds) {
+          totalQty += backlogItemTotals.get(biId) ?? 0;
+        }
+        group.totalQuantity = totalQty;
+      }
+
+      // compute status and build items
+      const allItems: DemandBacklogOrderListResponse['items'] = [];
+      for (const group of groups.values()) {
+        const availableQuantity = Math.max(group.totalQuantity - group.publishedQuantity, 0);
+        const status = computeBacklogOrderStatus(
+          group.totalQuantity,
+          group.publishedQuantity,
+          group.hasNullDeliveryDate,
+          group.hasNullOrderNumber,
+          group.hasReviewStatus,
+          group.isExcluded
+        );
+
+        allItems.push({
+          orderNumber: group.orderNumber,
+          customerName: group.customerName,
+          plannedDeliveryDate: group.plannedDeliveryDate,
+          distributionArea: group.distributionArea,
+          distributionLine: group.distributionLine,
+          rowCount: group.backlogItemIds.size,
+          skuCount: group.skuSet.size,
+          totalQuantity: group.totalQuantity,
+          publishedQuantity: group.publishedQuantity,
+          availableQuantity,
+          status,
+          firstSeenAt: group.firstSeenAt,
+          lastSeenAt: group.lastSeenAt,
+          latestBatchId: group.latestBatchId,
+          latestBatchName: group.latestBatchName
+        });
+      }
+
+      // sort by lastSeenAt desc, then orderNumber asc
+      allItems.sort((a, b) => {
+        const dateCmp = b.lastSeenAt.localeCompare(a.lastSeenAt);
+        if (dateCmp !== 0) return dateCmp;
+        return (a.orderNumber ?? '').localeCompare(b.orderNumber ?? '');
+      });
+
+      // apply status filter (after computation, before pagination)
+      let filtered = allItems;
+      if (input.status) {
+        filtered = allItems.filter(item => item.status === input.status);
+      }
+
+      const total = filtered.length;
+      const totalPages = Math.max(1, Math.ceil(total / input.limit));
+      const from = (input.page - 1) * input.limit;
+      const paged = filtered.slice(from, from + input.limit);
+
+      return {
+        items: paged,
+        pagination: {
+          page: input.page,
+          limit: input.limit,
+          total,
+          totalPages
+        }
+      };
     },
   };
 }
