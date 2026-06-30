@@ -7381,6 +7381,12 @@ describe('demand planning draft — publish to shift', () => {
     seedPublishRows(state);
     (state.drafts[0] as any).sourceKind = 'rolling';
     (state.drafts[0] as any).batchId = null;
+    (state.drafts[0] as any).targetShiftId = shiftId;
+
+    const pgError = new Error('ROLLING_DEMAND_STALE_OR_UNAVAILABLE') as Error & { code: string; detail: string };
+    pgError.code = 'P0001';
+    pgError.detail = JSON.stringify({ conflicts: [{ sku: 'SKU-1', requestedQty: 10, availableQty: 0 }] });
+    repo.publishDemandPlanningDraftToShift = vi.fn(async () => { throw pgError; }) as unknown as ManualShiftsRepo['publishDemandPlanningDraftToShift'];
 
     const service = createManualShiftsServiceFromRepo(repo);
 
@@ -7388,7 +7394,7 @@ describe('demand planning draft — publish to shift', () => {
       tenantId: ids.tenant,
       draftId,
       targetShiftId: shiftId
-    })).rejects.toThrow(/DEMAND_PLANNING_ROLLING_PUBLISH_NOT_SUPPORTED/);
+    })).rejects.toThrow(/ROLLING_DEMAND_STALE_OR_UNAVAILABLE/);
   });
 });
 
