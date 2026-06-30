@@ -86,6 +86,7 @@ export const rawDemandRowStagingSchema = z.object({
   notes: z.string().nullable(),
   distributionArea: z.string().nullable(),
   rawRouteLine: z.string().nullable(),
+  plannedDeliveryDateRaw: z.string().nullable().optional(),
   plannedDeliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   plannedRouteLine: z.string().nullable(),
   plannedWorkBucket: z.string().nullable(),
@@ -410,6 +411,32 @@ export const parseDemandImportDataSheetPreviewInputSchema = z.object({
 });
 export type ParseDemandImportDataSheetPreviewInput = z.infer<typeof parseDemandImportDataSheetPreviewInputSchema>;
 
+export const demandBacklogRepairRequestSchema = z.object({
+  batchId: z.string().uuid().optional(),
+  dryRun: z.boolean().default(true)
+});
+export type DemandBacklogRepairRequest = z.infer<typeof demandBacklogRepairRequestSchema>;
+
+export const demandBacklogRepairSkippedReasonSchema = z.object({
+  reason: z.string().min(1),
+  count: z.number().int().min(0)
+});
+
+export const demandBacklogRepairResponseSchema = z.object({
+  dryRun: z.boolean(),
+  rawRowsScanned: z.number().int().min(0),
+  datesRecovered: z.number().int().min(0),
+  dateRecoveryRequiresReimport: z.number().int().min(0),
+  backlogItemsCreated: z.number().int().min(0),
+  backlogItemsUpdated: z.number().int().min(0),
+  backlogItemsUnchanged: z.number().int().min(0),
+  sourceLinksCreated: z.number().int().min(0),
+  sourceLinksUnchanged: z.number().int().min(0),
+  rowsMarkedRequiresReview: z.number().int().min(0),
+  skippedReasons: z.array(demandBacklogRepairSkippedReasonSchema)
+});
+export type DemandBacklogRepairResponse = z.infer<typeof demandBacklogRepairResponseSchema>;
+
 function normalizeTrimmedString(value: string | number | null | undefined): string | null {
   if (value === null || value === undefined) {
     return null;
@@ -594,6 +621,9 @@ export function parseDemandImportDataSheetPreview(
     const rawRouteLine = normalizeTrimmedString(row.rawRouteLine);
     const plannedDeliveryDateRaw = row.plannedDeliveryDateRaw;
     const plannedDeliveryDate = normalizeWorkbookDate(plannedDeliveryDateRaw);
+    const plannedDeliveryDateRawDiagnostic = plannedDeliveryDateRaw instanceof Date
+      ? plannedDeliveryDateRaw.toISOString()
+      : normalizeTrimmedString(plannedDeliveryDateRaw);
     const noteDateHints = extractNoteDateHints(notes);
     const routeFlow = detectRouteFlow(notes);
     const productHandlingFlow = detectProductHandlingFlow({ sku, description, category, notes });
@@ -606,6 +636,13 @@ export function parseDemandImportDataSheetPreview(
         severity: 'error',
         code: 'INVALID_PLANNED_DELIVERY_DATE',
         message: 'Planned delivery date must be a valid supported workbook date.',
+        field: 'plannedDeliveryDate'
+      });
+    } else if (!hasPlannedDeliveryDateInput) {
+      issues.push({
+        severity: 'warning',
+        code: 'MISSING_PLANNED_DELIVERY_DATE',
+        message: 'Missing planned delivery date; row requires backlog review and is unavailable to target-date rolling.',
         field: 'plannedDeliveryDate'
       });
     }
@@ -642,6 +679,13 @@ export function parseDemandImportDataSheetPreview(
         severity: 'error',
         code: 'MISSING_QUANTITY',
         message: 'Quantity is required for DataSheet staging.',
+        field: 'quantity'
+      });
+    } else if (quantity < 0) {
+      issues.push({
+        severity: 'error',
+        code: 'NEGATIVE_QUANTITY',
+        message: 'Negative quantity rows are staged but cannot enter demand backlog.',
         field: 'quantity'
       });
     } else if (quantity === 0) {
@@ -684,6 +728,7 @@ export function parseDemandImportDataSheetPreview(
       notes,
       distributionArea,
       rawRouteLine,
+      plannedDeliveryDateRaw: plannedDeliveryDateRawDiagnostic,
       plannedDeliveryDate,
       plannedRouteLine: null,
       plannedWorkBucket: null,

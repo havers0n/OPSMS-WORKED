@@ -106,11 +106,13 @@ Storage preset domain in product context:
 - `POST /api/manual-shifts/import/monthly-apply`
 - `POST /api/demand-imports/datasheet/preview`
 - `POST /api/demand-imports/datasheet`
+- `POST /api/demand-imports/datasheet/repair` with `{ "dryRun": boolean, "batchId"?: uuid }`
 - `GET /api/demand-imports/:batchId/planning-preview`
 - `GET /api/demand-imports/:batchId/planning-preview?scope=remaining`
 - `POST /api/demand-imports/:batchId/planning-drafts` with `{ "scope": "all" | "remaining" }`
 - Month-sheet import remains the routed/apply flow for distributed sheets such as `יוני 26` and `מאי 26`.
-- `DataSheet` is a staging-only flow: blank `תאריך הפצה` and blank `קו הפצה` are accepted, rows are stored as raw demand by `איזור הפצה`, and no `manual_shift_*` apply happens in this flow.
+- `DataSheet` uses `תאריך הפצה` as the authoritative planned-delivery date. Batch, raw-row, backlog-item, and source-link writes are one database transaction; row-level data issues remain staged rather than failing the transaction. Identity-valid rows without a usable date are linked as `requires_review` and remain unavailable to target-date rolling.
+- The repair endpoint is tenant-scoped and optionally batch-scoped. Dry-run returns the same classification counters without persistent writes. Date recovery uses only the stored authoritative raw delivery-date diagnostic; legacy rows without it report `dateRecoveryRequiresReimport` and are never inferred from order dates, notes, upload dates, or shifts.
 
 - `GET /api/demand-imports/:batchId/planning-preview` is read-only: it reads staged `raw_demand_rows`, groups normal rows by `distributionArea` and `orderNumber + customerName`, and keeps `special_flow` and `error` rows visible without applying anything to `manual_shift_*`.
 - `scope=remaining` subtracts quantities recorded in `demand_planning_published_allocations` by applied publish transactions. A remaining-scoped draft is a new draft; an applied draft is never reopened. Publish locks source rows and returns `DEMAND_PLANNING_DEMAND_ALREADY_CONSUMED` (409) if another draft already consumed the requested quantity.

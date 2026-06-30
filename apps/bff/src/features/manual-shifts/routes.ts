@@ -46,6 +46,8 @@ import {
   manualShiftImportPreviewResponseSchema,
   demandImportAvailableBatchesResponseSchema,
   demandImportDataSheetCreateResponseSchema,
+  demandBacklogRepairRequestSchema,
+  demandBacklogRepairResponseSchema,
   demandImportDataSheetPreviewResponseSchema,
   rawDemandPlanningPreviewResponseSchema,
   manualShiftMonthlyImportPreviewResponseSchema,
@@ -811,6 +813,19 @@ export function registerManualShiftsRoutes(
 
       void reply.code(201);
       return parseOrThrow(demandImportDataSheetCreateResponseSchema, result);
+    });
+  });
+
+  app.post('/api/demand-imports/datasheet/repair', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-imports/datasheet/repair', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+      const tenantId = requireTenant(auth);
+      const body = parseOrThrow(demandBacklogRepairRequestSchema, request.body ?? {});
+      const service = getManualShiftsService(auth);
+      if (!service.repairDemandBacklog) throw new ApiError(501, 'REPAIR_NOT_CONFIGURED', 'Demand backlog repair is not configured.');
+      const result = await service.repairDemandBacklog({ tenantId, ...body });
+      return parseOrThrow(demandBacklogRepairResponseSchema, result);
     });
   });
 

@@ -45,6 +45,7 @@ import type {
   DemandPlanningPublishToShiftResponse,
   DemandPlanningPublication,
   DemandPlanningRevertPublicationResponse,
+  DemandBacklogRepairResponse,
   RollingResolverBatch,
   RollingResolverRawRow,
   RollingResolverPublishedAllocation
@@ -311,6 +312,7 @@ type RawDemandRowRow = {
   notes: string | null;
   distribution_area: string | null;
   raw_route_line: string | null;
+  planned_delivery_date_raw: string | null;
   planned_delivery_date: string | null;
   planned_route_line: string | null;
   planned_work_bucket: string | null;
@@ -339,11 +341,11 @@ const itemColumns =
 const demandImportBatchColumns =
   'id,tenant_id,source_file,source_sheet,uploaded_by,uploaded_at,status,rows_count,raw_rows_count,warning_rows_count,error_rows_count,special_flow_rows_count,distribution_areas_count,distinct_orders_count,distinct_sku_count';
 const rawDemandRowColumns =
-  'id,tenant_id,batch_id,source_sheet,source_row_number,agent,order_date,customer_name,order_number,sku,description,category,quantity,cost,notes,distribution_area,raw_route_line,planned_delivery_date,planned_route_line,planned_work_bucket,planning_status,route_flow,product_handling_flow,note_date_hints,issues,created_at';
+  'id,tenant_id,batch_id,source_sheet,source_row_number,agent,order_date,customer_name,order_number,sku,description,category,quantity,cost,notes,distribution_area,raw_route_line,planned_delivery_date_raw,planned_delivery_date,planned_route_line,planned_work_bucket,planning_status,route_flow,product_handling_flow,note_date_hints,issues,created_at';
 const demandBacklogItemColumns =
   'id,tenant_id,identity_key,status,total_quantity,order_number,customer_name,sku,description,category,distribution_area,product_handling_flow,route_flow,first_seen_at,last_seen_at,last_quantity_changed_at,created_at,updated_at';
 const demandBacklogSourceColumns =
-  'id,tenant_id,backlog_item_id,raw_demand_row_id,batch_id,merge_action,previous_quantity,new_quantity,quantity_delta,created_at';
+  'id,tenant_id,backlog_item_id,raw_demand_row_id,batch_id,merge_action,previous_quantity,new_quantity,quantity_delta,quantity_at_import,created_at';
 const lineEventColumns =
   'id,tenant_id,shift_id,line_id,event_type,actor_name,actor_profile_id,payload,created_at';
 const eventColumns =
@@ -457,6 +459,7 @@ function mapRawDemandRow(row: RawDemandRowRow): RawDemandRow {
     notes: row.notes,
     distributionArea: row.distribution_area,
     rawRouteLine: row.raw_route_line,
+    plannedDeliveryDateRaw: row.planned_delivery_date_raw,
     plannedDeliveryDate: row.planned_delivery_date,
     plannedRouteLine: row.planned_route_line,
     plannedWorkBucket: row.planned_work_bucket,
@@ -618,6 +621,7 @@ type DemandBacklogSourceRowRaw = {
   previous_quantity: number | null;
   new_quantity: number | null;
   quantity_delta: number | null;
+  quantity_at_import: number | null;
   created_at: string;
 };
 
@@ -1048,6 +1052,13 @@ export type ManualShiftsRepo = {
     shiftId: string;
     preview: DailyManualShiftImportPreview;
   }): Promise<ApplyDailyManualShiftImportResponse>;
+  applyDemandDataSheetImport?(input: {
+    tenantId: string; sourceFile: string; sourceSheet: string; uploadedBy: string | null;
+    summary: Record<string, number>; rows: RawDemandRowStaging[];
+  }): Promise<{ batchId: string; repair: DemandBacklogRepairResponse }>;
+  repairDemandBacklog?(input: {
+    tenantId: string; batchId?: string; dryRun: boolean;
+  }): Promise<DemandBacklogRepairResponse>;
   createDemandImportBatch(input: {
     tenantId: string;
     sourceFile: string;
@@ -1388,8 +1399,14 @@ export type ManualShiftsRepo = {
     rawRowRouteFlow: string;
     rawRowProductHandlingFlow: string;
     rawRowQuantity: number | null;
+    rawRowDescription?: string | null;
+    rawRowCategory?: string | null;
+    rawRowNotes?: string | null;
     sourceLinkBatchId: string;
     batchSourceFile: string;
+    batchUploadedAt?: string;
+    batchStatus?: string;
+    batchRowsCount?: number;
     publishedQuantity: number;
   }>>;
 
@@ -2303,6 +2320,35 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       };
     },
 
+    async applyDemandDataSheetImport(input) {
+      const rows = input.rows.map((row) => ({
+        source_row_number: row.sourceRowNumber, agent: row.agent, order_date: row.orderDate,
+        customer_name: row.customerName, order_number: row.orderNumber, sku: row.sku,
+        description: row.description, category: row.category, quantity: row.quantity, cost: row.cost,
+        notes: row.notes, distribution_area: row.distributionArea, raw_route_line: row.rawRouteLine,
+        planned_delivery_date_raw: row.plannedDeliveryDateRaw ?? null,
+        planned_delivery_date: row.plannedDeliveryDate, planned_route_line: row.plannedRouteLine,
+        planned_work_bucket: row.plannedWorkBucket, planning_status: row.planningStatus,
+        route_flow: row.routeFlow, product_handling_flow: row.productHandlingFlow,
+        note_date_hints: row.noteDateHints, issues: row.issues
+      }));
+      const { data, error } = await supabase.rpc('apply_demand_datasheet_import', {
+        p_tenant_id: input.tenantId, p_source_file: input.sourceFile,
+        p_source_sheet: input.sourceSheet, p_uploaded_by: input.uploadedBy,
+        p_summary: input.summary, p_rows: rows
+      });
+      if (error) throw error;
+      return data as { batchId: string; repair: DemandBacklogRepairResponse };
+    },
+
+    async repairDemandBacklog(input) {
+      const { data, error } = await supabase.rpc('repair_demand_backlog', {
+        p_tenant_id: input.tenantId, p_batch_id: input.batchId ?? null, p_dry_run: input.dryRun
+      });
+      if (error) throw error;
+      return data as DemandBacklogRepairResponse;
+    },
+
     async createDemandImportBatch(input) {
       const { data, error } = await supabase
         .from('demand_import_batches')
@@ -2352,6 +2398,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
           notes: row.notes,
           distribution_area: row.distributionArea,
           raw_route_line: row.rawRouteLine,
+          planned_delivery_date_raw: row.plannedDeliveryDateRaw ?? null,
           planned_delivery_date: row.plannedDeliveryDate,
           planned_route_line: row.plannedRouteLine,
           planned_work_bucket: row.plannedWorkBucket,
@@ -3457,7 +3504,8 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
           merge_action: input.mergeAction,
           previous_quantity: input.previousQuantity,
           new_quantity: input.newQuantity,
-          quantity_delta: input.quantityDelta
+          quantity_delta: input.quantityDelta,
+          quantity_at_import: input.newQuantity
         })
         .select(demandBacklogSourceColumns)
         .single();
@@ -3570,6 +3618,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
           previous_quantity,
           new_quantity,
           quantity_delta,
+          quantity_at_import,
           created_at
         `)
         .eq('tenant_id', input.tenantId)
@@ -3584,6 +3633,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         previous_quantity: number | null;
         new_quantity: number | null;
         quantity_delta: number | null;
+        quantity_at_import: number | null;
         created_at: string;
       }>;
 
@@ -3610,7 +3660,9 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
           sourceFile: batch?.source_file ?? '',
           uploadedAt: batch?.uploaded_at ?? sr.created_at,
           mergeAction: sr.merge_action,
-          quantityAtImport: sr.new_quantity !== null ? Number(sr.new_quantity) : 0,
+          quantityAtImport: sr.quantity_at_import != null
+            ? Number(sr.quantity_at_import)
+            : (sr.new_quantity !== null ? Number(sr.new_quantity) : 0),
           previousQuantity: sr.previous_quantity !== null ? Number(sr.previous_quantity) : null,
           newQuantity: sr.new_quantity !== null ? Number(sr.new_quantity) : null,
           quantityDelta: sr.quantity_delta !== null ? Number(sr.quantity_delta) : null
@@ -3958,7 +4010,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
 
       const { data: rawRows, error: rrError } = await supabase
         .from('raw_demand_rows')
-        .select('id, customer_name, order_number, sku, distribution_area, planned_delivery_date, raw_route_line, planning_status, route_flow, product_handling_flow, quantity')
+        .select('id, customer_name, order_number, sku, description, category, notes, distribution_area, planned_delivery_date, raw_route_line, planning_status, route_flow, product_handling_flow, quantity')
         .eq('tenant_id', input.tenantId)
         .in('id', rawDemandRowIds);
 
@@ -3966,7 +4018,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
 
       const { data: batches, error: bError } = await supabase
         .from('demand_import_batches')
-        .select('id, source_file')
+        .select('id, source_file, uploaded_at, status, rows_count')
         .eq('tenant_id', input.tenantId)
         .in('id', batchIds);
 
@@ -4005,9 +4057,9 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         }
       }
 
-      const batchMap = new Map<string, string>();
-      for (const b of (batches ?? []) as Array<{ id: string; source_file: string }>) {
-        batchMap.set(b.id, b.source_file);
+      const batchMap = new Map<string, { sourceFile: string; uploadedAt: string; status: string; rowsCount: number }>();
+      for (const b of (batches ?? []) as Array<{ id: string; source_file: string; uploaded_at: string; status: string; rows_count: number }>) {
+        batchMap.set(b.id, { sourceFile: b.source_file, uploadedAt: b.uploaded_at, status: b.status, rowsCount: Number(b.rows_count) });
       }
 
       const rawRowMap = new Map<string, Record<string, unknown>>();
@@ -4024,7 +4076,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         const bi = backlogItemMap.get(String(sl.backlog_item_id));
         const rr = rawRowMap.get(String(sl.raw_demand_row_id));
         const publishedQty = publishedQtyByRawRowId.get(String(sl.raw_demand_row_id)) ?? 0;
-        const batchFile = batchMap.get(String(sl.batch_id)) ?? '';
+        const batch = batchMap.get(String(sl.batch_id));
 
         return {
           backlogItemId: bi?.id ?? '',
@@ -4043,8 +4095,14 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
           rawRowRouteFlow: String(rr?.route_flow ?? ''),
           rawRowProductHandlingFlow: String(rr?.product_handling_flow ?? ''),
           rawRowQuantity: (rr?.quantity as number | null) ?? null,
+          rawRowDescription: (rr?.description as string | null) ?? null,
+          rawRowCategory: (rr?.category as string | null) ?? null,
+          rawRowNotes: (rr?.notes as string | null) ?? null,
           sourceLinkBatchId: String(sl.batch_id ?? ''),
-          batchSourceFile: batchFile,
+          batchSourceFile: batch?.sourceFile ?? '',
+          batchUploadedAt: batch?.uploadedAt ?? '',
+          batchStatus: batch?.status ?? '',
+          batchRowsCount: batch?.rowsCount ?? 0,
           publishedQuantity: publishedQty
         };
       });
