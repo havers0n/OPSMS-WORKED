@@ -83,6 +83,8 @@ import {
   demandBacklogListResponseSchema,
   demandBacklogSummaryResponseSchema,
   demandBacklogQuerySchema,
+  demandBacklogOrderQuerySchema,
+  demandBacklogOrderListResponseSchema,
   rollingAvailableDemandResponseSchema,
   rollingAvailableDemandQuerySchema,
   rollingCreateDraftRequestSchema
@@ -1080,6 +1082,35 @@ export function registerManualShiftsRoutes(
       });
 
       return parseOrThrow(demandBacklogSummaryResponseSchema, result);
+    });
+  });
+
+  // --- Backlog Order Explorer (global, not targetShift-scoped) ---
+
+  app.get('/api/demand-planning/backlog-orders', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-planning/backlog-orders', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      const tenantId = requireTenant(auth);
+      const query = parseOrThrow(demandBacklogOrderQuerySchema, request.query);
+
+      const result = await getManualShiftsService(auth).getDemandBacklogOrders({
+        tenantId,
+        dateFrom: query.dateFrom,
+        dateTo: query.dateTo,
+        status: query.status,
+        q: query.q,
+        sku: query.sku,
+        customer: query.customer,
+        distributionArea: query.distributionArea,
+        distributionLine: query.distributionLine,
+        sourceBatchId: query.sourceBatchId,
+        page: query.page,
+        limit: query.limit
+      });
+
+      return parseOrThrow(demandBacklogOrderListResponseSchema, result);
     });
   });
 

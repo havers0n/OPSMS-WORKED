@@ -271,6 +271,7 @@ function createManualRepoMock(): ManualShiftsRepo {
     listReadyBatches: vi.fn().mockResolvedValue([]),
     listRawDemandRowsForBatches: vi.fn().mockResolvedValue([]),
     listPublishedAllocationsForRolling: vi.fn().mockResolvedValue([]),
+    listBacklogOrderAggregationRows: vi.fn().mockResolvedValue([]),
   };
 }
 

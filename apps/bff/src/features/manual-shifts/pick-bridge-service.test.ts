@@ -365,6 +365,7 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
     listReadyBatches: vi.fn(async () => []),
     listRawDemandRowsForBatches: vi.fn(async () => []),
     listPublishedAllocationsForRolling: vi.fn(async () => []),
+    listBacklogOrderAggregationRows: vi.fn(async () => []),
   };
 }
 
