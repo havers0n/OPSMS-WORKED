@@ -27,6 +27,7 @@ import { AppendCurrentShiftFlow } from './append-current-shift-flow';
 import { DemandTargetDateSelector } from './demand-target-date-selector';
 import { LinesLanding } from './lines-landing';
 import { PlanForDateFlow } from './plan-for-date-flow';
+import { DemandBacklogPanel } from './demand-backlog-panel';
 import { PrintingHomePage } from '../printing/routes/PrintingHomePage';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { saveDemandLastContext } from '@/entities/demand/lib/last-context';
@@ -132,6 +133,9 @@ function ManualOperatorSectionContent({
   }
 
   if (section === 'lines') {
+    if (mode === 'demand' && intent === 'backlog') {
+      return <DemandBacklogPanel />;
+    }
     const isPlanForDateIntent = mode === 'demand' && intent === 'plan-for-date';
     const isPlanForDatePreStep = intent === 'plan-for-date' && !batchId && !draftId;
     const isAppendCurrentShift = mode === 'demand' && intent === 'append-current-shift';
@@ -217,7 +221,7 @@ function ManualOperatorSectionContent({
       );
     }
 
-    if (intent && intent !== 'plan-for-date' && intent !== 'append-current-shift') {
+    if (intent && intent !== 'plan-for-date' && intent !== 'append-current-shift' && intent !== 'backlog') {
       return (
         <div className="mx-auto max-w-lg py-20 text-center" dir="rtl">
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">

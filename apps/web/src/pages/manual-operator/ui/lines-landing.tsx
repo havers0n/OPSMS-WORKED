@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { CalendarPlus, FilePlus, Pencil } from 'lucide-react';
+import { CalendarPlus, FilePlus, ListFilter, Pencil } from 'lucide-react';
 
 export function LinesLanding() {
   const navigate = useNavigate();
@@ -13,6 +13,15 @@ export function LinesLanding() {
         </div>
 
         <div className="space-y-3">
+          <button
+            type="button"
+            onClick={() => navigate('/operator/manual/lines?mode=demand&intent=backlog')}
+            className="w-full flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-right hover:border-emerald-400 hover:bg-emerald-100 transition-colors"
+            data-testid="lines-landing-demand-backlog"
+          >
+            <ListFilter size={20} className="text-emerald-600 shrink-0" />
+            <div><p className="font-semibold text-emerald-900">מאגר ביקוש</p><p className="text-xs text-emerald-700">צפייה ובקרה בהזמנות הביקוש הגלובליות</p></div>
+          </button>
           <button
             type="button"
             onClick={() => navigate('/operator/manual/lines?intent=plan-for-date')}
