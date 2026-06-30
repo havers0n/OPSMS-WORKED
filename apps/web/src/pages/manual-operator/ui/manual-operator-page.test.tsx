@@ -53,7 +53,10 @@ function renderPage(queryClient: QueryClient) {
 async function selectMobileDate(date: string) {
   fireEvent.click(screen.getByRole('button', { name: 'בחר תאריך' }));
   await waitFor(() => {
-    expect(screen.getByRole('button', { name: date })).toBeTruthy();
+    const target = screen.queryByRole('button', { name: date });
+    if (target) return target;
+    const prev = screen.queryByRole('button', { name: 'חודש קודם' });
+    if (prev) fireEvent.click(prev);
   });
   fireEvent.click(screen.getByRole('button', { name: date }));
 }

@@ -9,7 +9,9 @@ import {
 
 // ──── Identity key ──────────────────────────────────────────────────────────
 
-const IDENTITY_KEY_SEP = '\x00';
+// PostgreSQL text cannot store NUL bytes. Unit Separator is stable, invisible,
+// and accepted by both PostgreSQL and JavaScript strings.
+const IDENTITY_KEY_SEP = '\x1f';
 
 export function normalizeDemandBacklogKey(
   orderNumber: string | null,

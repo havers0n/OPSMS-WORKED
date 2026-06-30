@@ -803,6 +803,25 @@ function createRepo() {
     listBacklogOrderAggregationRows: vi.fn().mockResolvedValue([]),
   };
 
+  repo.applyDemandDataSheetImport = vi.fn(async (input) => {
+    const batch = await repo.createDemandImportBatch({
+      tenantId: input.tenantId, sourceFile: input.sourceFile, sourceSheet: input.sourceSheet,
+      uploadedBy: input.uploadedBy, status: 'draft',
+      rowsCount: input.summary.rowsCount, rawRowsCount: input.summary.rawRowsCount,
+      warningRowsCount: input.summary.warningRowsCount, errorRowsCount: input.summary.errorRowsCount,
+      specialFlowRowsCount: input.summary.specialFlowRowsCount,
+      distributionAreasCount: input.summary.distributionAreasCount,
+      distinctOrdersCount: input.summary.distinctOrdersCount, distinctSkuCount: input.summary.distinctSkuCount
+    });
+    await repo.insertRawDemandRows({ tenantId: input.tenantId, batchId: batch.id, sourceSheet: input.sourceSheet, rows: input.rows });
+    await repo.updateDemandImportBatchStatus({ tenantId: input.tenantId, batchId: batch.id, status: 'ready' });
+    return { batchId: batch.id, repair: {
+      dryRun: false, rawRowsScanned: input.rows.length, datesRecovered: 0,
+      dateRecoveryRequiresReimport: input.rows.filter((row: { plannedDeliveryDate: string | null }) => !row.plannedDeliveryDate).length,
+      backlogItemsCreated: 0, backlogItemsUpdated: 0, backlogItemsUnchanged: 0,
+      sourceLinksCreated: 0, sourceLinksUnchanged: 0, rowsMarkedRequiresReview: 0, skippedReasons: []
+    } };
+  });
   return { repo, state };
 }
 
@@ -884,6 +903,18 @@ describe('manual shifts service', () => {
         plannedDeliveryDate: '2026-07-01'
       }
     ]);
+    vi.mocked(repo.listBacklogOrderAggregationRows).mockResolvedValue([{
+      backlogItemId: '30000000-0000-4000-8000-000000000001',
+      backlogItemOrderNumber: 'SO26090001', backlogItemCustomerName: 'Customer', backlogItemSku: '463071',
+      backlogItemDistributionArea: 'North', backlogItemTotalQuantity: 10,
+      backlogItemFirstSeenAt: '2026-06-29T10:00:00.000Z', backlogItemLastSeenAt: '2026-06-29T10:00:00.000Z',
+      backlogItemStatus: 'open', rawDemandRowId: TEST_RAW_DEMAND_ROW_ID,
+      rawRowPlannedDeliveryDate: '2026-07-01', rawRowRouteLine: null,
+      rawRowPlanningStatus: 'unplanned', rawRowRouteFlow: 'unassigned', rawRowProductHandlingFlow: 'regular',
+      rawRowQuantity: 10, rawRowDescription: null, rawRowCategory: null, rawRowNotes: null,
+      sourceLinkBatchId: batchId, batchSourceFile: 'demand.xlsx', batchUploadedAt: '2026-06-29T10:00:00.000Z',
+      batchStatus: 'ready', batchRowsCount: 1, publishedQuantity: 10
+    }]);
 
     const result = await service.getRollingAvailableDemand({ tenantId: ids.tenant, targetShiftId: ids.shift });
 
@@ -1708,6 +1739,8 @@ describe('manual shift workers service', () => {
               !k.startsWith('close') && !k.startsWith('patch') &&
               !k.startsWith('list') &&
               k !== 'applyDailyImport' &&
+              k !== 'applyDemandDataSheetImport' &&
+              k !== 'repairDemandBacklog' &&
               k !== 'countMonthlyImportShiftRows' &&
               k !== 'applyMonthlyImport' &&
               k !== 'checkMonthlyReplaceSafety' &&
@@ -4227,8 +4260,7 @@ describe('DataSheet demand staging', () => {
 
     expect(result.batch.sourceSheet).toBe('DataSheet');
     expect(result.batch.status).toBe('ready');
-    expect(repo.createDemandImportBatch).toHaveBeenCalledWith(expect.not.objectContaining({ shiftId: expect.anything() }));
-    expect(repo.insertRawDemandRows).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repo.applyDemandDataSheetImport).toHaveBeenCalledWith(expect.objectContaining({
       rows: [
         expect.objectContaining({
           plannedDeliveryDate: null,
@@ -7595,7 +7627,25 @@ describe('demand planning draft — publish to shift', () => {
         });
       }) as unknown as ManualShiftsRepo['insertDemandPlanningAllocations'],
       listDemandPlanningAllocations: vi.fn(async () => []) as unknown as ManualShiftsRepo['listDemandPlanningAllocations'],
-      listBacklogOrderAggregationRows: vi.fn(async () => []) as unknown as ManualShiftsRepo['listBacklogOrderAggregationRows'],
+      listBacklogOrderAggregationRows: vi.fn(async () => state.rows.map((r) => ({
+        backlogItemId: `backlog-${String(r.id)}`,
+        backlogItemOrderNumber: r.order_number as string | null,
+        backlogItemCustomerName: r.customer_name as string | null,
+        backlogItemSku: r.sku as string | null,
+        backlogItemDistributionArea: r.distribution_area as string | null,
+        backlogItemTotalQuantity: Number(r.quantity ?? 0),
+        backlogItemFirstSeenAt: '2026-06-29T10:00:00.000Z',
+        backlogItemLastSeenAt: '2026-06-29T10:00:00.000Z', backlogItemStatus: 'open',
+        rawDemandRowId: r.id as string, rawRowPlannedDeliveryDate: r.planned_delivery_date as string | null,
+        rawRowRouteLine: r.raw_route_line as string | null, rawRowPlanningStatus: r.planning_status as string,
+        rawRowRouteFlow: r.route_flow as string, rawRowProductHandlingFlow: r.product_handling_flow as string,
+        rawRowQuantity: r.quantity as number | null, rawRowDescription: r.description as string | null,
+        rawRowCategory: r.category as string | null, rawRowNotes: r.notes as string | null,
+        sourceLinkBatchId: r.batch_id as string,
+        batchSourceFile: r.batch_id === rollingBatch2 ? 'b.xlsx' : 'a.xlsx',
+        batchUploadedAt: r.batch_id === rollingBatch2 ? '2026-06-29T11:00:00.000Z' : '2026-06-29T10:00:00.000Z',
+        batchStatus: 'ready', batchRowsCount: r.batch_id === rollingBatch2 ? 1 : 2, publishedQuantity: 0
+      }))) as unknown as ManualShiftsRepo['listBacklogOrderAggregationRows'],
     };
 
     function addRow(overrides: Record<string, unknown>) {

@@ -38,7 +38,7 @@ describe('demand import DataSheet parser', () => {
 
     expect(result.rowsCount).toBe(1);
     expect(result.rawRowsCount).toBe(1);
-    expect(result.warningRowsCount).toBe(0);
+    expect(result.warningRowsCount).toBe(1);
     expect(result.errorRowsCount).toBe(0);
     expect(result.specialFlowRowsCount).toBe(0);
     expect(result.rows[0]).toMatchObject({
@@ -47,6 +47,7 @@ describe('demand import DataSheet parser', () => {
       planningStatus: 'unplanned',
       routeFlow: 'unassigned',
       plannedDeliveryDate: null,
+      plannedDeliveryDateRaw: null,
       plannedRouteLine: null,
       plannedWorkBucket: null
     });
@@ -174,8 +175,30 @@ describe('demand import DataSheet parser', () => {
     expect(result.errorRowsCount).toBe(0);
     expect(result.rows[0]).toMatchObject({
       plannedDeliveryDate: '2026-06-25',
+      plannedDeliveryDateRaw: '25.06.26',
       planningStatus: 'unplanned'
     });
+  });
+
+  it('preserves an authoritative Excel date diagnostic while normalizing it', () => {
+    const result = parseDemandImportDataSheetPreview({
+      sourceFile: 'datasheet.xlsx',
+      sourceSheet: 'DataSheet',
+      rows: [buildRow({ plannedDeliveryDateRaw: new Date(Date.UTC(2026, 5, 25)) })]
+    });
+    expect(result.rows[0]).toMatchObject({
+      plannedDeliveryDate: '2026-06-25',
+      plannedDeliveryDateRaw: '2026-06-25T00:00:00.000Z'
+    });
+  });
+
+  it('stages negative quantities with an explicit error', () => {
+    const result = parseDemandImportDataSheetPreview({
+      sourceFile: 'datasheet.xlsx', sourceSheet: 'DataSheet',
+      rows: [buildRow({ quantity: -1, plannedDeliveryDateRaw: '25/06/2026' })]
+    });
+    expect(result.rows[0].planningStatus).toBe('error');
+    expect(result.rows[0].issues).toContainEqual(expect.objectContaining({ code: 'NEGATIVE_QUANTITY' }));
   });
 
   it('rejects a non-empty invalid planned delivery date', () => {

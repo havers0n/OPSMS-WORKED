@@ -509,6 +509,12 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     applyDailyImport: vi.fn(async () => applyResponse),
     previewDemandImportDataSheet: vi.fn(async () => dataSheetPreview),
     createDemandImportDataSheet: vi.fn(async () => dataSheetCreateResponse),
+    repairDemandBacklog: vi.fn(async (input) => ({
+      dryRun: input.dryRun, rawRowsScanned: 3, datesRecovered: 0,
+      dateRecoveryRequiresReimport: 2, backlogItemsCreated: 2, backlogItemsUpdated: 0,
+      backlogItemsUnchanged: 0, sourceLinksCreated: 2, sourceLinksUnchanged: 0,
+      rowsMarkedRequiresReview: 2, skippedReasons: [{ reason: 'missing_sku', count: 1 }]
+    })),
     getDemandPlanningPreview: vi.fn(async () => planningPreview),
     applyMonthlyImport: vi.fn(async (input: Parameters<ManualShiftsService['applyMonthlyImport']>[0]) => ({
       shiftId: input.shiftId,
@@ -1790,6 +1796,21 @@ describe('manual shifts routes', () => {
       uploadedBy: ids.user
     }));
 
+    await app.close();
+  });
+
+  it('dry-runs tenant-scoped DataSheet backlog repair', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const response = await app.inject({
+      method: 'POST', url: '/api/demand-imports/datasheet/repair',
+      payload: { dryRun: true, batchId: '77777777-7777-4777-8777-777777777777' }
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ dryRun: true, rawRowsScanned: 3, dateRecoveryRequiresReimport: 2 });
+    expect(service.repairDemandBacklog).toHaveBeenCalledWith({
+      tenantId: ids.tenant, dryRun: true, batchId: '77777777-7777-4777-8777-777777777777'
+    });
     await app.close();
   });
 

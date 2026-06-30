@@ -40,6 +40,10 @@ import type {
   DemandPlanningDraftWithAssignments,
   DemandPlanningPublishToShiftResponse,
   DemandPlanningRevertPublicationResponse,
+  DemandBacklogRepairResponse,
+  RollingResolverBatch,
+  RollingResolverRawRow,
+  RollingResolverPublishedAllocation,
   DemandImportAppendDiffResponse,
   DemandImportAppendExistingLine,
   DemandImportAvailableBatchCard,
@@ -336,6 +340,7 @@ export type ManualShiftsService = {
     preview: DemandImportDataSheetPreview;
     uploadedBy: string | null;
   }): Promise<DemandImportDataSheetCreateResponse>;
+  repairDemandBacklog?(input: { tenantId: string; batchId?: string; dryRun: boolean }): Promise<DemandBacklogRepairResponse>;
   getDemandPlanningPreview(input: {
     tenantId: string;
     batchId: string;
@@ -659,7 +664,18 @@ export function createManualShiftsServiceFromRepo(
     tenantId: string,
     targetDate: string
   ): Promise<RollingAvailableDemandResponse> {
-    const batches = await repo.listReadyBatches({ tenantId });
+    const linkedRows = await repo.listBacklogOrderAggregationRows({ tenantId });
+    const matchingRows = linkedRows.filter(row => row.rawRowPlannedDeliveryDate === targetDate);
+    const batchMap = new Map<string, RollingResolverBatch>();
+    for (const row of matchingRows) {
+      if ((row.batchStatus ?? 'ready') !== 'ready') continue;
+      batchMap.set(row.sourceLinkBatchId, {
+        id: row.sourceLinkBatchId, sourceFile: row.batchSourceFile,
+        uploadedAt: row.batchUploadedAt ?? row.backlogItemFirstSeenAt,
+        status: row.batchStatus ?? 'ready', rowsCount: row.batchRowsCount ?? 0
+      });
+    }
+    const batches = [...batchMap.values()];
 
     if (batches.length === 0) {
       return {
@@ -686,15 +702,25 @@ export function createManualShiftsServiceFromRepo(
       };
     }
 
-    const batchIds = batches.map(b => b.id);
-
-    const [rows, allocations] = await Promise.all([
-      repo.listRawDemandRowsForBatches({ tenantId, batchIds }),
-      repo.listPublishedAllocationsForRolling({ tenantId })
-    ]);
-
-    const filteredRows = rows.filter(r => r.plannedDeliveryDate === targetDate);
-    return resolveRollingAvailableDemandV1(batches, filteredRows, allocations);
+    const readyBatchIds = new Set(batches.map(batch => batch.id));
+    const rows: RollingResolverRawRow[] = matchingRows
+      .filter(row => readyBatchIds.has(row.sourceLinkBatchId))
+      .map(row => ({
+        id: row.rawDemandRowId, batchId: row.sourceLinkBatchId,
+        orderNumber: row.backlogItemOrderNumber, customerName: row.backlogItemCustomerName,
+        sku: row.backlogItemSku, description: row.rawRowDescription ?? null, category: row.rawRowCategory ?? null,
+        quantity: row.rawRowQuantity, notes: row.rawRowNotes ?? null,
+        distributionArea: row.backlogItemDistributionArea, rawRouteLine: row.rawRowRouteLine,
+        plannedDeliveryDate: row.rawRowPlannedDeliveryDate, planningStatus: row.rawRowPlanningStatus,
+        routeFlow: row.rawRowRouteFlow, productHandlingFlow: row.rawRowProductHandlingFlow
+      }));
+    const allocations: RollingResolverPublishedAllocation[] = matchingRows.map(row => ({
+      rawDemandRowId: row.rawDemandRowId, publishedQuantity: row.publishedQuantity,
+      publicationStatus: 'applied', orderNumber: row.backlogItemOrderNumber, sku: row.backlogItemSku,
+      customerName: row.backlogItemCustomerName, distributionArea: row.backlogItemDistributionArea,
+      plannedDeliveryDate: row.rawRowPlannedDeliveryDate
+    }));
+    return resolveRollingAvailableDemandV1(batches, rows, allocations);
   }
 
   async function listScopedRawDemandRows(input: {
@@ -1592,65 +1618,39 @@ export function createManualShiftsServiceFromRepo(
     },
 
     async createDemandImportDataSheet(input) {
-      // Create batch as 'draft' first — it must not be visible as 'ready'
-      // until raw rows are fully persisted (TOCTOU prevention for rolling
-      // availability reads).
-      const batch = await repo.createDemandImportBatch({
+      if (!repo.applyDemandDataSheetImport) {
+        throw new Error('Transactional DataSheet apply is not configured.');
+      }
+      const applied = await repo.applyDemandDataSheetImport({
         tenantId: input.tenantId,
         sourceFile: input.sourceFile,
         sourceSheet: input.preview.sourceSheet,
         uploadedBy: input.uploadedBy,
-        status: 'draft',
-        rowsCount: input.preview.rowsCount,
-        rawRowsCount: input.preview.rawRowsCount,
-        warningRowsCount: input.preview.warningRowsCount,
-        errorRowsCount: input.preview.errorRowsCount,
-        specialFlowRowsCount: input.preview.specialFlowRowsCount,
-        distributionAreasCount: input.preview.distributionAreasCount,
-        distinctOrdersCount: input.preview.distinctOrdersCount,
-        distinctSkuCount: input.preview.distinctSkuCount
-      });
-
-      await repo.insertRawDemandRows({
-        tenantId: input.tenantId,
-        batchId: batch.id,
-        sourceSheet: input.preview.sourceSheet,
+        summary: {
+          rowsCount: input.preview.rowsCount, rawRowsCount: input.preview.rawRowsCount,
+          warningRowsCount: input.preview.warningRowsCount, errorRowsCount: input.preview.errorRowsCount,
+          specialFlowRowsCount: input.preview.specialFlowRowsCount,
+          distributionAreasCount: input.preview.distributionAreasCount,
+          distinctOrdersCount: input.preview.distinctOrdersCount, distinctSkuCount: input.preview.distinctSkuCount
+        },
         rows: input.preview.rows
       });
 
-      // Now that raw rows are fully persisted, mark the batch ready
-      await repo.updateDemandImportBatchStatus({
-        tenantId: input.tenantId,
-        batchId: batch.id,
-        status: 'ready'
-      });
-
-      const [persistedBatch, distributionAreaSummary, allRows, sampleRows] = await Promise.all([
+      const [persistedBatch, distributionAreaSummary, sampleRows] = await Promise.all([
         repo.getDemandImportBatch({
           tenantId: input.tenantId,
-          batchId: batch.id
+          batchId: applied.batchId
         }),
         repo.listDemandBatchDistributionAreaSummary({
           tenantId: input.tenantId,
-          batchId: batch.id
+          batchId: applied.batchId
         }),
         repo.listRawDemandRowsByBatch({
           tenantId: input.tenantId,
-          batchId: batch.id
-        }),
-        repo.listRawDemandRowsByBatch({
-          tenantId: input.tenantId,
-          batchId: batch.id,
+          batchId: applied.batchId,
           limit: 20
         })
       ]);
-
-      // Merge non-error rows into global backlog (using persisted rows with IDs)
-      await this.mergeRowsIntoBacklog({
-        tenantId: input.tenantId,
-        batchId: batch.id,
-        rows: allRows
-      });
 
       return {
         batch: persistedBatch,
@@ -1672,6 +1672,7 @@ export function createManualShiftsServiceFromRepo(
             notes: row.notes,
             distributionArea: row.distributionArea,
             rawRouteLine: row.rawRouteLine,
+            plannedDeliveryDateRaw: row.plannedDeliveryDateRaw ?? null,
             plannedDeliveryDate: row.plannedDeliveryDate,
             plannedRouteLine: row.plannedRouteLine,
             plannedWorkBucket: row.plannedWorkBucket,
@@ -1683,6 +1684,11 @@ export function createManualShiftsServiceFromRepo(
           }))
         }
       };
+    },
+
+    async repairDemandBacklog(input) {
+      if (!repo.repairDemandBacklog) throw new Error('Demand backlog repair is not configured.');
+      return repo.repairDemandBacklog(input);
     },
 
     async getDemandPlanningPreview(input) {

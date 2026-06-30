@@ -91,6 +91,8 @@ import {
   demandImportBatchSchema,
   demandImportDataSheetCreateResponseSchema as demandImportDataSheetCreateDtoSchema,
   demandImportDataSheetPreviewSchema,
+  demandBacklogRepairRequestSchema as demandBacklogRepairRequestDtoSchema,
+  demandBacklogRepairResponseSchema as demandBacklogRepairResponseDtoSchema,
   rawDemandPlanningPreviewSchema as rawDemandPlanningPreviewDtoSchema,
   demandPlanningDraftSchema,
   demandPlanningBucketSchema,
@@ -621,6 +623,8 @@ export const demandImportAvailableBatchesResponseSchema = z.object({
   batches: z.array(demandImportAvailableBatchesDtoSchema)
 });
 export const demandImportDataSheetCreateResponseSchema = demandImportDataSheetCreateDtoSchema;
+export const demandBacklogRepairRequestSchema = demandBacklogRepairRequestDtoSchema;
+export const demandBacklogRepairResponseSchema = demandBacklogRepairResponseDtoSchema;
 export const rawDemandPlanningPreviewResponseSchema = rawDemandPlanningPreviewDtoSchema;
 export const demandImportBatchResponseSchema = demandImportBatchSchema;
 export const demandPlanningDraftWithAssignmentsResponseSchema = demandPlanningDraftWithAssignmentsSchema;
