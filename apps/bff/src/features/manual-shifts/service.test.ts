@@ -4207,28 +4207,16 @@ describe('DataSheet demand staging', () => {
     const { repo } = createRepo();
     const service = createManualShiftsServiceFromRepo(repo);
 
-    const preview = {
+    const result = await service.createDemandImportDataSheet({
+      tenantId: ids.tenant,
       sourceFile: 'datasheet.xlsx',
-      sourceSheet: 'DataSheet' as const,
-      rowsCount: 1,
-      rawRowsCount: 1,
-      warningRowsCount: 0,
-      errorRowsCount: 0,
-      specialFlowRowsCount: 0,
-      distributionAreasCount: 1,
-      distinctOrdersCount: 1,
-      distinctSkuCount: 1,
-      distributionAreaSummary: [],
-      productHandlingSummary: [],
-      specialFlowSummary: [],
-      sampleRows: [],
-      issues: [],
+      uploadedBy: ids.actor,
+      sourceSheet: 'DataSheet',
       rows: [
         {
-          sourceSheet: 'DataSheet' as const,
           sourceRowNumber: 2,
           agent: 'agent',
-          orderDate: '2026-06-24',
+          orderDateRaw: '2026-06-24',
           customerName: 'לקוח א',
           orderNumber: 'SO-1',
           sku: 'SKU-1',
@@ -4236,26 +4224,12 @@ describe('DataSheet demand staging', () => {
           category: 'cat',
           quantity: 3,
           cost: 10,
-          notes: null,
-          distributionArea: 'דרום',
           rawRouteLine: null,
-          plannedDeliveryDate: null,
-          plannedRouteLine: null,
-          plannedWorkBucket: null,
-          planningStatus: 'unplanned' as const,
-          routeFlow: 'unassigned' as const,
-          productHandlingFlow: 'regular' as const,
-          noteDateHints: [],
-          issues: []
+          plannedDeliveryDateRaw: null,
+          notes: null,
+          distributionArea: 'דרום'
         }
       ]
-    };
-
-    const result = await service.createDemandImportDataSheet({
-      tenantId: ids.tenant,
-      sourceFile: 'datasheet.xlsx',
-      preview,
-      uploadedBy: ids.actor
     });
 
     expect(result.batch.sourceSheet).toBe('DataSheet');
