@@ -478,6 +478,8 @@ type DemandPlanningDraftRow = {
   source_kind: string;
   status: string;
   source_scope?: string;
+  target_date: string | null;
+  target_shift_id: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -491,6 +493,8 @@ function mapDemandPlanningDraftRow(row: DemandPlanningDraftRow): DemandPlanningD
     sourceKind: (row.source_kind ?? 'batch') as DemandPlanningDraft['sourceKind'],
     status: row.status as DemandPlanningDraft['status'],
     sourceScope: (row.source_scope ?? 'all') as DemandPlanningDraft['sourceScope'],
+    targetDate: row.target_date,
+    targetShiftId: row.target_shift_id,
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -556,9 +560,10 @@ function mapDemandPlanningAllocationRow(row: DemandPlanningAllocationRow): Deman
 type DemandPlanningPublicationRow = {
   id: string;
   tenant_id: string;
-  batch_id: string;
+  batch_id: string | null;
   draft_id: string;
   target_shift_id: string;
+  source_kind: string;
   status: string;
   created_at: string;
   reverted_at: string | null;
@@ -572,6 +577,7 @@ function mapDemandPlanningPublicationRow(row: DemandPlanningPublicationRow): Dem
     batchId: row.batch_id,
     draftId: row.draft_id,
     targetShiftId: row.target_shift_id,
+    sourceKind: (row.source_kind ?? 'batch') as DemandPlanningPublication['sourceKind'],
     status: row.status as DemandPlanningPublication['status'],
     createdAt: row.created_at,
     revertedAt: row.reverted_at,
@@ -1172,6 +1178,8 @@ export type ManualShiftsRepo = {
     batchId: string;
     createdBy: string | null;
     sourceScope?: 'all' | 'remaining';
+    targetDate?: string | null;
+    targetShiftId?: string | null;
   }): Promise<DemandPlanningDraft>;
   createRollingDemandPlanningDraft(input: {
     tenantId: string;
@@ -2392,18 +2400,34 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
 
       if (rowsError) throw rowsError;
 
+      // Exclude allocations linked to reverted publications (revert-aware consumption)
       const { data: allocations, error: allocError } = await supabase
         .from('demand_planning_published_allocations')
-        .select('raw_demand_row_id, published_quantity')
+        .select(`
+          raw_demand_row_id,
+          published_quantity,
+          publication:demand_planning_publications!left(status)
+        `)
         .in('batch_id', batchIds);
 
       if (allocError) throw allocError;
 
+      // Filter out allocations from reverted publications before computing remaining quantities
+      const activeAllocations = (allocations ?? [])
+        .filter((row: any) => {
+          if (!row.publication) return true; // legacy allocations without publication link
+          return row.publication.status === 'applied';
+        })
+        .map((row: any) => ({
+          raw_demand_row_id: String(row.raw_demand_row_id),
+          published_quantity: Number(row.published_quantity)
+        }));
+
       const publishedQtyByRowId = new Map<string, number>();
-      for (const alloc of (allocations ?? []) as Array<{ raw_demand_row_id: string; published_quantity: number }>) {
+      for (const alloc of activeAllocations) {
         publishedQtyByRowId.set(
           alloc.raw_demand_row_id,
-          (publishedQtyByRowId.get(alloc.raw_demand_row_id) ?? 0) + Number(alloc.published_quantity)
+          (publishedQtyByRowId.get(alloc.raw_demand_row_id) ?? 0) + alloc.published_quantity
         );
       }
 
@@ -3087,7 +3111,9 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
           batch_id: input.batchId,
           source_kind: 'batch',
           created_by: input.createdBy,
-          source_scope: input.sourceScope ?? 'all'
+          source_scope: input.sourceScope ?? 'all',
+          target_date: input.targetDate ?? null,
+          target_shift_id: input.targetShiftId ?? null
         })
         .select()
         .single();

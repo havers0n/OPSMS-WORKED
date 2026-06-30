@@ -477,7 +477,7 @@ begin
   end if;
 
   -- ============================================================
-  -- Test 7: Mixed null/non-null dates — success with warning
+  -- Test 7: Mixed null/non-null dates — hard rejection (PR-4A)
   -- ============================================================
   execute 'reset role';
   delete from public.demand_planning_allocations where draft_id = draft_a;
@@ -490,23 +490,23 @@ begin
     (tenant_a, draft_a, batch_a, row_a, bucket_a, 10),   -- date 2026-06-25 (matches shift)
     (tenant_a, draft_a, batch_a, row_g, bucket_a, 4);    -- null date
 
-  result := public.manual_shift_publish_demand_planning_draft(
-    tenant_a, draft_a, p_target_shift_id := shift_a
-  );
-
-  -- Should have succeeded
-  if result->>'createdOrders' is null then
-    raise exception 'DP-PUB-19 FAIL: publish with mixed dates should succeed.';
-  end if;
-
-  -- Should have a warning about mixed null dates
-  if (result->'warnings')::text not like '%null%' then
-    raise exception 'DP-PUB-20 FAIL: expected warning about null planned delivery dates, got %.', result->'warnings';
-  end if;
+  begin
+    result := public.manual_shift_publish_demand_planning_draft(
+      tenant_a, draft_a, p_target_shift_id := shift_a
+    );
+    raise exception 'DP-PUB-19 FAIL: null planned_delivery_date should block publish.';
+  exception
+    when raise_exception then
+      if sqlerrm = 'DEMAND_PLANNING_NULL_DELIVERY_DATE' then
+        null; -- expected
+      else
+        raise;
+      end if;
+  end;
 
   select status into v_status from public.demand_planning_drafts where id = draft_a;
-  if v_status <> 'applied' then
-    raise exception 'DP-PUB-21 FAIL: draft should be applied after mixed-date publish.';
+  if v_status <> 'draft' then
+    raise exception 'DP-PUB-20 FAIL: draft should remain draft after DEMAND_PLANNING_NULL_DELIVERY_DATE rejection.';
   end if;
 
   -- Clean up

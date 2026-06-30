@@ -74,26 +74,36 @@ export function DemandTargetDateSelector({
     );
   }
 
+  const isActive = targetShift.status === 'active';
+
   return (
     <div className="flex items-center gap-2" dir="rtl">
       <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
         תאריך עבודה: {formatDisplayDate(targetDate)}
       </span>
-      <span className="rounded border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
-        משמרת פעילה נמצאה
-      </span>
+      {isActive ? (
+        <span className="rounded border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+          משמרת פעילה נמצאה
+        </span>
+      ) : (
+        <span className="rounded border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+          משמרת סגורה
+        </span>
+      )}
       {targetShift.name && (
         <span className="text-xs text-gray-500 truncate max-w-[120px]">
           {targetShift.name}
         </span>
       )}
-      <button
-        type="button"
-        onClick={() => onNavigateToAppend(targetShift.id)}
-        className="rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
-      >
-        הוסף לקווים קיימים
-      </button>
+      {isActive && (
+        <button
+          type="button"
+          onClick={() => onNavigateToAppend(targetShift.id)}
+          className="rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
+        >
+          הוסף לקווים קיימים
+        </button>
+      )}
     </div>
   );
 }

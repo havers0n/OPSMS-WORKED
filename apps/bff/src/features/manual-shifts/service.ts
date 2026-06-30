@@ -392,6 +392,8 @@ export type ManualShiftsService = {
     batchId: string;
     createdBy: string | null;
     sourceScope?: 'all' | 'remaining';
+    targetDate?: string | null;
+    targetShiftId?: string | null;
   }): Promise<DemandPlanningDraftWithAssignments>;
   createRollingDemandPlanningDraft(input: {
     tenantId: string;
@@ -2716,7 +2718,9 @@ export function createManualShiftsServiceFromRepo(
         tenantId: input.tenantId,
         batchId: input.batchId,
         createdBy: input.createdBy,
-        sourceScope: input.sourceScope
+        sourceScope: input.sourceScope,
+        targetDate: input.targetDate,
+        targetShiftId: input.targetShiftId
       });
 
       // Create initial bucket per area (one default "unassigned" bucket per area)
@@ -3034,6 +3038,12 @@ export function createManualShiftsServiceFromRepo(
         throw manualShiftImportShiftNotActive(input.targetShiftId);
       }
 
+      // If draft has a binding targetShiftId, it must match the publish target
+      if (draft.targetShiftId && draft.targetShiftId !== input.targetShiftId) {
+        throw new ApiError(409, 'DEMAND_PLANNING_TARGET_MISMATCH',
+          `Draft ${input.draftId} is bound to shift ${draft.targetShiftId}, but publish target is ${input.targetShiftId}.`);
+      }
+
       try {
         return await repo.publishDemandPlanningDraftToShift({
           tenantId: input.tenantId,
@@ -3060,6 +3070,9 @@ export function createManualShiftsServiceFromRepo(
               throw demandPlanningNoPublishableRows(input.draftId);
             case 'DEMAND_PLANNING_DEMAND_ALREADY_CONSUMED':
               throw new ApiError(409, 'DEMAND_PLANNING_DEMAND_ALREADY_CONSUMED', 'Raw demand quantity was already published by another draft.');
+            case 'DEMAND_PLANNING_NULL_DELIVERY_DATE':
+              throw new ApiError(422, 'DEMAND_PLANNING_NULL_DELIVERY_DATE',
+                'One or more publishable rows have a null planned delivery date. All rows require a planned delivery date before publishing.');
             case 'ROLLING_DEMAND_STALE_OR_UNAVAILABLE': {
               let conflicts: unknown[] = [];
               try {

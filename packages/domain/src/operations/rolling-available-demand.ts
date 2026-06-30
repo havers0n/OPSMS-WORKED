@@ -669,17 +669,19 @@ export type DemandImportAvailableBatchCard = {
 
 // ──── Demand Planning Publication types ─────────────────────────────────────────
 
-export type DemandPlanningPublication = {
-  id: string;
-  tenantId: string;
-  batchId: string;
-  draftId: string;
-  targetShiftId: string;
-  status: 'applied' | 'reverted';
-  createdAt: string;
-  revertedAt: string | null;
-  revertedBy: string | null;
-};
+export const demandPlanningPublicationSchema = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  batchId: z.string().uuid().nullable(),
+  draftId: z.string().uuid(),
+  targetShiftId: z.string().uuid(),
+  sourceKind: z.enum(['batch', 'rolling']).default('batch'),
+  status: z.enum(['applied', 'reverted']),
+  createdAt: z.string(),
+  revertedAt: z.string().nullable(),
+  revertedBy: z.string().uuid().nullable()
+});
+export type DemandPlanningPublication = z.infer<typeof demandPlanningPublicationSchema>;
 
 export type DemandPlanningRevertPublicationResponse = {
   publicationId: string;

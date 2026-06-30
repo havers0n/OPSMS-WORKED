@@ -7,7 +7,6 @@ declare
   batch_a uuid;
   row_a uuid;
   shift_one uuid;
-  shift_two uuid;
   draft_one uuid;
   draft_two uuid;
   draft_three uuid;
@@ -37,14 +36,8 @@ begin
   insert into public.manual_shift_sessions (
     tenant_id, date, name, status, created_by_profile_id, created_by_name
   ) values
-    (tenant_a, date '2026-07-01', 'First target', 'active', user_a, 'tester')
+    (tenant_a, date '2026-07-01', 'Remaining ledger shift', 'active', user_a, 'tester')
   returning id into shift_one;
-
-  insert into public.manual_shift_sessions (
-    tenant_id, date, name, status, created_by_profile_id, created_by_name
-  ) values
-    (tenant_a, date '2026-07-02', 'Second target', 'active', user_a, 'tester')
-  returning id into shift_two;
 
   insert into public.demand_import_batches (
     tenant_id, source_file, source_sheet, status, rows_count, raw_rows_count,
@@ -58,7 +51,7 @@ begin
     planning_status, route_flow, product_handling_flow
   ) values (
     tenant_a, batch_a, 'DataSheet', 2, 'Customer', 'ORDER-1', 'SKU-1', 10,
-    'south', null, 'unplanned', 'unassigned', 'regular'
+    'south', date '2026-07-01', 'unplanned', 'unassigned', 'regular'
   ) returning id into row_a;
 
   insert into public.demand_planning_drafts (tenant_id, batch_id, source_scope)
@@ -93,7 +86,7 @@ begin
     tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity
   ) values (tenant_a, draft_two, batch_a, row_a, bucket_two, 6);
 
-  result := public.manual_shift_publish_demand_planning_draft(tenant_a, draft_two, shift_two);
+  result := public.manual_shift_publish_demand_planning_draft(tenant_a, draft_two, shift_one);
   select sum(published_quantity) into published_total
   from public.demand_planning_published_allocations
   where raw_demand_row_id = row_a;
@@ -112,7 +105,7 @@ begin
   ) values (tenant_a, draft_three, batch_a, row_a, bucket_three, 1);
 
   begin
-    result := public.manual_shift_publish_demand_planning_draft(tenant_a, draft_three, shift_two);
+    result := public.manual_shift_publish_demand_planning_draft(tenant_a, draft_three, shift_one);
     raise exception 'DP-REM-4 FAIL: over-publish should have been blocked.';
   exception
     when raise_exception then
@@ -126,7 +119,7 @@ begin
   end if;
 
   begin
-    result := public.manual_shift_publish_demand_planning_draft(tenant_a, draft_one, shift_two);
+    result := public.manual_shift_publish_demand_planning_draft(tenant_a, draft_one, shift_one);
     raise exception 'DP-REM-6 FAIL: applied draft should remain immutable.';
   exception
     when raise_exception then
