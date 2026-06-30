@@ -19,18 +19,20 @@ type DemandImportDataSheetPreviewResponse = {
   preview: DemandImportDataSheetPreview;
 };
 
-async function previewDataSheetDemandImport(file: File): Promise<DemandImportDataSheetPreviewResponse> {
+async function previewDataSheetDemandImport(file: File, targetShiftId?: string | null): Promise<DemandImportDataSheetPreviewResponse> {
   const formData = new FormData();
   formData.append('file', file);
+  if (targetShiftId) formData.append('targetShiftId', targetShiftId);
   return bffRequest<DemandImportDataSheetPreviewResponse>('/api/demand-imports/datasheet/preview', {
     method: 'POST',
     body: formData
   });
 }
 
-async function createDataSheetDemandImport(file: File): Promise<DemandImportDataSheetCreateResponse> {
+async function createDataSheetDemandImport(file: File, targetShiftId?: string | null): Promise<DemandImportDataSheetCreateResponse> {
   const formData = new FormData();
   formData.append('file', file);
+  if (targetShiftId) formData.append('targetShiftId', targetShiftId);
   return bffRequest<DemandImportDataSheetCreateResponse>('/api/demand-imports/datasheet', {
     method: 'POST',
     body: formData
@@ -48,15 +50,17 @@ async function createDemandPlanningDraft(input: CreateDemandPlanningDraftInput):
   });
 }
 
+type DataSheetImportInput = { file: File; targetShiftId?: string | null };
+
 export function usePreviewDataSheetDemandImport() {
   return useMutation({
-    mutationFn: previewDataSheetDemandImport
+    mutationFn: ({ file, targetShiftId }: DataSheetImportInput) => previewDataSheetDemandImport(file, targetShiftId)
   });
 }
 
 export function useCreateDataSheetDemandImport() {
   return useMutation({
-    mutationFn: createDataSheetDemandImport
+    mutationFn: ({ file, targetShiftId }: DataSheetImportInput) => createDataSheetDemandImport(file, targetShiftId)
   });
 }
 

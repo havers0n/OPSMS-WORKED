@@ -3,6 +3,7 @@ import type {
   BindableUser,
   DailyManualShiftImportPreview,
   DemandImportDataSheetCreateResponse,
+  DemandImportDataSheetParsedRow,
   DemandImportDataSheetPreview,
   ManualShiftMonthlyApplyPlan,
   ManualShiftMonthlyApplyResponse,
@@ -61,7 +62,7 @@ import type {
   DemandBacklogOrderStatus,
   DemandBacklogOrderListResponse
 } from '@wos/domain';
-import { buildAvailableDemandResponse, resolveRollingAvailableDemandV1, computeBacklogOrderStatus } from '@wos/domain';
+import { buildAvailableDemandResponse, parseDemandImportDataSheetPreview, resolveRollingAvailableDemandV1, computeBacklogOrderStatus } from '@wos/domain';
 import {
   buildProductControlRow,
   buildRawDemandPlanningPreview,
@@ -332,13 +333,19 @@ export type ManualShiftsService = {
     actor: ActorContext;
   }): Promise<ApplyDailyManualShiftImportResponse>;
   previewDemandImportDataSheet(input: {
-    preview: DemandImportDataSheetPreview;
+    tenantId: string;
+    sourceFile: string;
+    sourceSheet: 'DataSheet';
+    rows: DemandImportDataSheetParsedRow[];
+    targetShiftId?: string | null;
   }): Promise<DemandImportDataSheetPreview>;
   createDemandImportDataSheet(input: {
     tenantId: string;
     sourceFile: string;
-    preview: DemandImportDataSheetPreview;
+    sourceSheet: 'DataSheet';
+    rows: DemandImportDataSheetParsedRow[];
     uploadedBy: string | null;
+    targetShiftId?: string | null;
   }): Promise<DemandImportDataSheetCreateResponse>;
   repairDemandBacklog?(input: { tenantId: string; batchId?: string; dryRun: boolean }): Promise<DemandBacklogRepairResponse>;
   getDemandPlanningPreview(input: {
@@ -1614,26 +1621,47 @@ export function createManualShiftsServiceFromRepo(
     },
 
     async previewDemandImportDataSheet(input) {
-      return input.preview;
+      let targetDate: string | null | undefined;
+      if (input.targetShiftId) {
+        const resolved = await resolveActiveTargetShift(input.tenantId, input.targetShiftId);
+        targetDate = resolved.targetDate;
+      }
+      return parseDemandImportDataSheetPreview({
+        sourceFile: input.sourceFile,
+        sourceSheet: input.sourceSheet,
+        rows: input.rows,
+        targetDate
+      });
     },
 
     async createDemandImportDataSheet(input) {
       if (!repo.applyDemandDataSheetImport) {
         throw new Error('Transactional DataSheet apply is not configured.');
       }
+      let targetDate: string | null | undefined;
+      if (input.targetShiftId) {
+        const resolved = await resolveActiveTargetShift(input.tenantId, input.targetShiftId);
+        targetDate = resolved.targetDate;
+      }
+      const preview = parseDemandImportDataSheetPreview({
+        sourceFile: input.sourceFile,
+        sourceSheet: input.sourceSheet,
+        rows: input.rows,
+        targetDate
+      });
       const applied = await repo.applyDemandDataSheetImport({
         tenantId: input.tenantId,
         sourceFile: input.sourceFile,
-        sourceSheet: input.preview.sourceSheet,
+        sourceSheet: preview.sourceSheet,
         uploadedBy: input.uploadedBy,
         summary: {
-          rowsCount: input.preview.rowsCount, rawRowsCount: input.preview.rawRowsCount,
-          warningRowsCount: input.preview.warningRowsCount, errorRowsCount: input.preview.errorRowsCount,
-          specialFlowRowsCount: input.preview.specialFlowRowsCount,
-          distributionAreasCount: input.preview.distributionAreasCount,
-          distinctOrdersCount: input.preview.distinctOrdersCount, distinctSkuCount: input.preview.distinctSkuCount
+          rowsCount: preview.rowsCount, rawRowsCount: preview.rawRowsCount,
+          warningRowsCount: preview.warningRowsCount, errorRowsCount: preview.errorRowsCount,
+          specialFlowRowsCount: preview.specialFlowRowsCount,
+          distributionAreasCount: preview.distributionAreasCount,
+          distinctOrdersCount: preview.distinctOrdersCount, distinctSkuCount: preview.distinctSkuCount
         },
-        rows: input.preview.rows
+        rows: preview.rows
       });
 
       const [persistedBatch, distributionAreaSummary, sampleRows] = await Promise.all([
@@ -1655,7 +1683,7 @@ export function createManualShiftsServiceFromRepo(
       return {
         batch: persistedBatch,
         preview: {
-          ...input.preview,
+          ...preview,
           distributionAreaSummary,
           sampleRows: sampleRows.map((row) => ({
             sourceSheet: row.sourceSheet,
