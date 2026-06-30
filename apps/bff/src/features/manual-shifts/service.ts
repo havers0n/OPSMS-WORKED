@@ -123,6 +123,7 @@ import {
   demandPlanningDraftNotMutable,
   demandPlanningDraftAlreadyApplied,
   demandPlanningRollingPublishNotSupported,
+  demandPlanningRollingDemandStaleOrUnavailable,
   demandPlanningRollingDraftNotSupported,
   demandPlanningNoRollingAvailableDemand,
   demandPlanningRollingAvailableDemandInvariantViolation,
@@ -1515,12 +1516,15 @@ export function createManualShiftsServiceFromRepo(
     },
 
     async createDemandImportDataSheet(input) {
+      // Create batch as 'draft' first — it must not be visible as 'ready'
+      // until raw rows are fully persisted (TOCTOU prevention for rolling
+      // availability reads).
       const batch = await repo.createDemandImportBatch({
         tenantId: input.tenantId,
         sourceFile: input.sourceFile,
         sourceSheet: input.preview.sourceSheet,
         uploadedBy: input.uploadedBy,
-        status: 'ready',
+        status: 'draft',
         rowsCount: input.preview.rowsCount,
         rawRowsCount: input.preview.rawRowsCount,
         warningRowsCount: input.preview.warningRowsCount,
@@ -1536,6 +1540,13 @@ export function createManualShiftsServiceFromRepo(
         batchId: batch.id,
         sourceSheet: input.preview.sourceSheet,
         rows: input.preview.rows
+      });
+
+      // Now that raw rows are fully persisted, mark the batch ready
+      await repo.updateDemandImportBatchStatus({
+        tenantId: input.tenantId,
+        batchId: batch.id,
+        status: 'ready'
       });
 
       const [persistedBatch, distributionAreaSummary, allRows, sampleRows] = await Promise.all([
@@ -3007,10 +3018,6 @@ export function createManualShiftsServiceFromRepo(
         throw demandPlanningDraftNotFound(input.draftId);
       }
 
-      if (draft.sourceKind === 'rolling') {
-        throw demandPlanningRollingPublishNotSupported(input.draftId);
-      }
-
       if (draft.status === 'applied') {
         throw demandPlanningDraftAlreadyApplied(input.draftId);
       }
@@ -3053,6 +3060,16 @@ export function createManualShiftsServiceFromRepo(
               throw demandPlanningNoPublishableRows(input.draftId);
             case 'DEMAND_PLANNING_DEMAND_ALREADY_CONSUMED':
               throw new ApiError(409, 'DEMAND_PLANNING_DEMAND_ALREADY_CONSUMED', 'Raw demand quantity was already published by another draft.');
+            case 'ROLLING_DEMAND_STALE_OR_UNAVAILABLE': {
+              let conflicts: unknown[] = [];
+              try {
+                const detail = JSON.parse(pgError.detail ?? '{}');
+                conflicts = detail.conflicts ?? [];
+              } catch {
+                // ignore parse errors
+              }
+              throw demandPlanningRollingDemandStaleOrUnavailable(conflicts);
+            }
             case 'DEMAND_PLANNING_DRAFT_SOURCE_MISMATCH':
               throw new ApiError(422, 'DEMAND_PLANNING_DRAFT_SOURCE_MISMATCH', 'Draft allocations must belong to the draft source batch.');
             case 'FORBIDDEN':

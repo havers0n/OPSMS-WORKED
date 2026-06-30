@@ -173,6 +173,7 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
     applyDailyImport: vi.fn(async () => ({ shiftId: ids.shift, linesCreated: 0, ordersCreated: 0 })),
     createDemandImportBatch: vi.fn(async () => { throw new Error('not used'); }),
     insertRawDemandRows: vi.fn(async () => undefined),
+    updateDemandImportBatchStatus: vi.fn(async () => null),
     getDemandImportBatch: vi.fn(async () => { throw new Error('not used'); }),
     listRawDemandRowsByBatch: vi.fn(async () => []),
     listDemandBatchDistributionAreaSummary: vi.fn(async () => []),

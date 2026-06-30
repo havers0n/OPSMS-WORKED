@@ -318,6 +318,15 @@ export function demandPlanningRollingAvailableDemandInvariantViolation(detail: s
   );
 }
 
+export function demandPlanningRollingDemandStaleOrUnavailable(conflicts: unknown[]) {
+  return new ApiError(
+    409,
+    'ROLLING_DEMAND_STALE_OR_UNAVAILABLE',
+    'Rolling demand is stale or has insufficient quantity.',
+    { conflicts }
+  );
+}
+
 export function demandPlanningRollingPublishNotSupported(draftId: string) {
   return new ApiError(
     422,
