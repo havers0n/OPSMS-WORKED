@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { CalendarPlus, FilePlus, ListFilter, Pencil } from 'lucide-react';
+import { CalendarPlus, ListFilter, WandSparkles } from 'lucide-react';
 
 export function LinesLanding() {
   const navigate = useNavigate();
@@ -15,50 +15,37 @@ export function LinesLanding() {
         <div className="space-y-3">
           <button
             type="button"
+            onClick={() => navigate('/operator/manual/lines?intent=plan-for-date')}
+            className="w-full flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-right hover:border-blue-400 hover:bg-blue-100 transition-colors"
+            data-testid="lines-landing-plan-for-date"
+          >
+            <WandSparkles size={20} className="text-blue-600 shrink-0" />
+            <div>
+              <p className="font-semibold text-blue-900">בנה קווים מביקוש זמין</p>
+              <p className="text-xs text-blue-700">יוצר טיוטה מכל ההזמנות הזמינות ופותח את בונה הקווים</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
             onClick={() => navigate('/operator/manual/lines?mode=demand&intent=backlog')}
             className="w-full flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-right hover:border-emerald-400 hover:bg-emerald-100 transition-colors"
             data-testid="lines-landing-demand-backlog"
           >
             <ListFilter size={20} className="text-emerald-600 shrink-0" />
-            <div><p className="font-semibold text-emerald-900">מאגר ביקוש</p><p className="text-xs text-emerald-700">צפייה ובקרה בהזמנות הביקוש הגלובליות</p></div>
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/operator/manual/lines?intent=plan-for-date')}
-            className="w-full flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-right hover:border-blue-400 hover:bg-blue-100 transition-colors"
-            data-testid="lines-landing-plan-for-date"
-          >
-            <CalendarPlus size={20} className="text-blue-600 shrink-0" />
-            <div>
-              <p className="font-semibold text-blue-900">תכנן עבודה לתאריך</p>
-              <p className="text-xs text-blue-700">צור משמרת חדשה לתאריך ותכנן את קווי העבודה</p>
-            </div>
+            <div><p className="font-semibold text-emerald-900">מאגר ביקוש</p><p className="text-xs text-emerald-700">צפייה ובקרה בהזמנות הזמינות, סטטוסים ועדכונים</p></div>
           </button>
 
           <button
             type="button"
-            disabled
-            onClick={() => navigate('/operator/manual/work')}
-            className="w-full flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 text-right opacity-50 cursor-not-allowed"
-            data-testid="lines-landing-append-shift"
+            onClick={() => navigate('/operator/manual/lines?intent=plan-from-batch')}
+            className="w-full flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 text-right hover:border-gray-400 hover:bg-gray-50 transition-colors"
+            data-testid="lines-landing-plan-from-batch"
           >
-            <FilePlus size={20} className="text-gray-400 shrink-0" />
+            <CalendarPlus size={20} className="text-gray-500 shrink-0" />
             <div>
-              <p className="font-semibold text-gray-700">הוסף הזמנות למשמרת קיימת</p>
-              <p className="text-xs text-gray-500">יש להגיע ממסך העבודה</p>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            disabled
-            className="w-full flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 text-right opacity-50 cursor-not-allowed"
-            data-testid="lines-landing-edit-shift"
-          >
-            <Pencil size={20} className="text-gray-400 shrink-0" />
-            <div>
-              <p className="font-semibold text-gray-700">ערוך משמרת קיימת</p>
-              <p className="text-xs text-gray-500">פעולה זו תהיה זמינה בקרוב</p>
+              <p className="font-semibold text-gray-800">תכנון ידני מאצווה</p>
+              <p className="text-xs text-gray-500">אפשרות מתקדמת לבחירת קובץ/אצווה ידנית</p>
             </div>
           </button>
         </div>

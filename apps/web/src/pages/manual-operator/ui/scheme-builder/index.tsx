@@ -10,6 +10,7 @@ import { BffRequestError } from '@/shared/api/bff/client';
 import { useSchemeBuilderStore } from './scheme-store';
 import { adaptWorkHierarchyToSource, adaptOrderItemsToSource } from './source-data-adapter';
 import { adaptDemandPlanningPreviewToSource } from './demand-source-adapter';
+import { auditAndAdaptRollingDraft, buildRollingPlanAllocations } from './rolling-source-adapter';
 import type { DemandPlanningPublishToShiftResponse } from '@wos/domain';
 import type { SourceOrderItem, OrderBadgeStatus, PlanningLine, WorkGroup, ItemAllocation, SchemeBuilderCapabilities, DemandPlanningDraftUiMode, DemandPlanningPublishUiMode } from './scheme-types';
 import { AreaOverview } from './area-overview';
@@ -31,7 +32,7 @@ interface ShiftModeProps {
 
 interface DemandModeProps {
   mode: 'demand';
-  batchId: string;
+  batchId?: string | null;
   draftId: string;
   targetDate?: string | null;
   targetShiftId?: string | null;
@@ -75,11 +76,12 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   const canRevert = draftPublication?.status === 'applied' && (draftWithAssignments?.canRevert ?? false);
   const revertBlockedReason = draftWithAssignments?.revertBlockedReason ?? null;
   const sourceScope = isPublishedDraft ? 'all' as const : (draftWithAssignments?.draft?.sourceScope ?? 'all') as 'all' | 'remaining';
+  const isRollingDraft = isDemandMode && (draftWithAssignments?.draft?.sourceKind === 'rolling' || (!batchId && !!draftId));
   const {
     data: planningPreview, isLoading: previewLoading, error: previewError
   } = useQuery({
     ...demandPlanningPreviewQueryOptions(batchId ?? '', sourceScope),
-    enabled: isDemandMode && !!batchId && !!draftWithAssignments,
+    enabled: isDemandMode && !isRollingDraft && !!batchId && !!draftWithAssignments,
   });
 
   const { data: remainingPreview } = useQuery({
@@ -136,6 +138,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   const revertPublication = useRevertDemandPlanningPublication();
   const [publishResult, setPublishResult] = useState<DemandPlanningPublishToShiftResponse | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [planBuildError, setPlanBuildError] = useState<string | null>(null);
 
   const [drawerOrderId, setDrawerOrderId] = useState<string | null>(null);
   const [assignItemIds, setAssignItemIds] = useState<string[]>([]);
@@ -169,10 +172,22 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   }, [rawItems]);
 
   /* ---------- Demand-mode data ---------- */
+  const rollingDraftAuditResult = useMemo(() => {
+    if (!isRollingDraft || !draftWithAssignments) return { data: null, error: null };
+    try {
+      return { data: auditAndAdaptRollingDraft(draftWithAssignments), error: null };
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error : new Error('טיוטת הביקוש אינה תקינה.') };
+    }
+  }, [isRollingDraft, draftWithAssignments]);
+  const rollingDraftAudit = rollingDraftAuditResult.data;
+
   const demandSource = useMemo(() => {
-    if (!isDemandMode || !planningPreview || !batchId) return null;
+    if (!isDemandMode) return null;
+    if (isRollingDraft && rollingDraftAudit) return rollingDraftAudit.source;
+    if (!planningPreview || !batchId) return null;
     return adaptDemandPlanningPreviewToSource(planningPreview, batchId);
-  }, [isDemandMode, planningPreview, batchId]);
+  }, [isDemandMode, isRollingDraft, planningPreview, batchId, rollingDraftAudit]);
 
   /* Hydrate draft into store when data arrives */
   const lastDraftKey = useMemo(() => {
@@ -202,13 +217,26 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
       createdAt: new Date(b.createdAt).getTime(),
     }));
 
+    if (rollingDraftAudit) {
+      const bucketIds = new Set(workGroups.map((group) => group.id));
+      for (const [areaName, unassignedId] of rollingDraftAudit.syntheticUnassignedByArea) {
+        if (bucketIds.has(unassignedId)) continue;
+        planningLines.push({ id: `${unassignedId}:line`, areaName, name: 'default', sortOrder: planningLines.length, createdAt: 0 });
+        workGroups.push({ id: unassignedId, planningLineId: `${unassignedId}:line`, areaName, name: 'unassigned', createdAt: 0 });
+      }
+    }
+
     const itemAllocations: ItemAllocation[] = allocations.map((a) => ({
       id: a.id,
       itemRowId: a.rawDemandRowId,
       workGroupId: a.bucketId,
       qty: a.allocatedQuantity,
       createdAt: new Date(a.createdAt).getTime(),
-    }));
+    })).filter((allocation) => {
+      if (!rollingDraftAudit) return true;
+      const bucket = buckets.find((candidate) => candidate.id === allocation.workGroupId);
+      return bucket?.bucketName !== 'unassigned';
+    });
 
     hydrateFromDraft({ planningLines, workGroups, itemAllocations });
 
@@ -226,7 +254,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
         sourceSheet: planningPreview?.batch.sourceSheet,
       });
     }
-  }, [isDemandMode, lastDraftKey]);
+  }, [isDemandMode, lastDraftKey, rollingDraftAudit]);
 
   /* Cleanup when leaving demand mode */
   useEffect(() => {
@@ -323,14 +351,14 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
         allocateItemQty({
           itemRowId: alloc.itemRowId,
           workGroupId,
-          qty: alloc.qty,
+          qty: isRollingDraft ? (rollingDraftAudit?.allocationQuantityByRowId.get(alloc.itemRowId) ?? alloc.qty) : alloc.qty,
           totalQty: item.quantity,
         });
       }
       setQuantityModalState(null);
       setAssignItemIds([]);
     },
-    [allocateItemQty, drawerItems, capabilities.canAssignOrders],
+    [allocateItemQty, drawerItems, capabilities.canAssignOrders, isRollingDraft, rollingDraftAudit],
   );
 
   const handleAssignSelected = useCallback((itemRowIds: string[]) => {
@@ -443,6 +471,17 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
       );
     }
 
+    if (isRollingDraft && rollingDraftAudit && draftWithAssignments?.rows) {
+      const allocations = buildRollingPlanAllocations({
+        rows: draftWithAssignments.rows,
+        allocationQuantityByRowId: rollingDraftAudit.allocationQuantityByRowId,
+        itemAllocations,
+        bucketKeyByWorkGroupId: bucketKeyByWgId,
+        unassignedByArea: rollingDraftAudit.syntheticUnassignedByArea,
+      });
+      return { buckets, allocations };
+    }
+
     const allocations = itemAllocations.map((alloc) => {
       const bucketKey = bucketKeyByWgId.get(alloc.workGroupId);
       if (!bucketKey) return null;
@@ -450,7 +489,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     }).filter((value): value is NonNullable<typeof value> => value !== null);
 
     return { buckets, allocations };
-  }, [workGroups, plMap, itemAllocations]);
+  }, [workGroups, plMap, itemAllocations, isRollingDraft, rollingDraftAudit, draftWithAssignments]);
 
   function isDraftNotMutableError(err: unknown): boolean {
     return err instanceof BffRequestError
@@ -460,7 +499,12 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
 
   const handleSaveDraft = useCallback(() => {
     if (!draftId || !capabilities.canSaveDraft || isPublishedDraft) return;
-    savePlan.mutate({ draftId, body: buildPlanPayload() });
+    setPlanBuildError(null);
+    try {
+      savePlan.mutate({ draftId, body: buildPlanPayload() });
+    } catch (error) {
+      setPlanBuildError(error instanceof Error ? error.message : 'לא ניתן לבנות את תוכנית השמירה.');
+    }
   }, [draftId, capabilities.canSaveDraft, isPublishedDraft, buildPlanPayload, savePlan]);
 
   const handlePublish = useCallback(() => {
@@ -498,8 +542,15 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
       );
     };
 
+    let body;
+    try {
+      body = buildPlanPayload();
+    } catch (error) {
+      setPublishError(error instanceof Error ? error.message : 'לא ניתן לבנות את תוכנית הפרסום.');
+      return;
+    }
     savePlan.mutate(
-      { draftId, body: buildPlanPayload() },
+      { draftId, body },
       {
         onSuccess: publishToShift,
         onError: (err) => {
@@ -583,8 +634,8 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
       },
     });
   }, [draftPublication, revertPublication, refetchDraft]);
-  const isLoading = isDemandMode ? (previewLoading || draftLoading) : hierarchyLoading;
-  const error = isDemandMode ? (previewError || draftError) : hierarchyError;
+  const isLoading = isDemandMode ? (draftLoading || (!isRollingDraft && previewLoading)) : hierarchyLoading;
+  const error = isDemandMode ? (draftError || (!isRollingDraft ? previewError : null) || rollingDraftAuditResult.error) : hierarchyError;
 
   if (isLoading) {
     return (
@@ -629,12 +680,12 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
       {isDemandMode && !isBannerDismissed && (
         <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-2 text-sm flex items-start gap-3">
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-amber-900">תכנון ביקוש גולמי מ-DataSheet</p>
+            <p className="font-bold text-amber-900">{isRollingDraft ? 'תכנון מכל הביקוש הזמין' : 'תכנון ביקוש גולמי מ-DataSheet'}</p>
             <div className="text-xs text-amber-700 mt-0.5 space-y-0.5">
               {planningPreview && (
                 <p>קובץ: {planningPreview.batch.sourceFile} | גיליון: {planningPreview.batch.sourceSheet} | סטטוס: {planningPreview.batch.status}</p>
               )}
-              <p>{isPublishedDraft ? 'הטיוטה כבר פורסמה למשמרת ונשארת לקריאה בלבד' : 'לא שויך למשמרת — הנתונים מגיעים מ-DataSheet ונמצאים בשלב תכנון בלבד'}</p>
+              <p>{isPublishedDraft ? 'הטיוטה כבר פורסמה למשמרת ונשארת לקריאה בלבד' : isRollingDraft ? 'הטיוטה כוללת את הביקוש הזמין למשמרת ונמצאת בשלב תכנון בלבד' : 'לא שויך למשמרת — הנתונים מגיעים מ-DataSheet ונמצאים בשלב תכנון בלבד'}</p>
             </div>
           </div>
           <button
@@ -733,6 +784,9 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
               )}
               {savePlan.isError && (
                 <p className="text-xs text-red-600 font-semibold">שגיאה בשמירה: {savePlan.error?.message}</p>
+              )}
+              {planBuildError && (
+                <p className="text-xs text-red-600 font-semibold">שגיאה בשמירה: {planBuildError}</p>
               )}
             </div>
           ) : (
