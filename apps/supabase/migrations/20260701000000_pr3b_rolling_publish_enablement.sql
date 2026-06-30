@@ -197,7 +197,9 @@ begin
      and nbr.fk_delivery_date is not distinct from ak.fk_delivery_date
   )
   -- 6. Emit conflicts for any stale/duplicate/insufficient allocations
-  select jsonb_build_object(
+  --    DISTINCT ensures one row per allocation when newest_batch_rows
+  --    produces multiple rows for the same fallback key.
+  select distinct jsonb_build_object(
     'allocationId', c.allocation_id,
     'rawDemandRowId', c.raw_demand_row_id,
     'sku', c.sku,
@@ -664,7 +666,9 @@ begin
   end if;
 
   -- Acquire tenant-scoped advisory lock to serialize publish/revert/import
-  -- critical sections for this tenant
+  -- critical sections for this tenant.
+  -- The lock intentionally serializes batch and rolling publish paths
+  -- so rolling availability validation cannot race with batch consumption.
   perform pg_advisory_xact_lock(hashtextextended(
     p_tenant_id::text || ':demand_planning_publish', 0
   ));
