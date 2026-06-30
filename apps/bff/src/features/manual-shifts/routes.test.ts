@@ -638,6 +638,7 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     publishDemandPlanningDraftToShift: vi.fn(async () => ({
       shiftId: ids.shift,
       draftId: ids.shift,
+      publicationId: ids.shift,
       createdLines: 0,
       reusedLines: 0,
       createdOrders: 0,
@@ -3648,6 +3649,7 @@ describe('demand planning draft routes', () => {
   const publishResponse = {
     shiftId: ids.shift,
     draftId,
+    publicationId: ids.shift,
     createdLines: 1,
     reusedLines: 0,
     createdOrders: 2,

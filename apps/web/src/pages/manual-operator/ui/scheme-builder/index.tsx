@@ -72,7 +72,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   const publishUiMode: DemandPlanningPublishUiMode = targetShiftId ? 'readyToPublish' : 'noTargetShift';
   const isPublishedDraft = isDemandMode && draftUiMode === 'publishedDraft';
   const draftPublication = isPublishedDraft ? draftWithAssignments?.publication ?? null : null;
-  const canRevert = draftPublication?.status === 'active' && (draftWithAssignments?.canRevert ?? false);
+  const canRevert = draftPublication?.status === 'applied' && (draftWithAssignments?.canRevert ?? false);
   const revertBlockedReason = draftWithAssignments?.revertBlockedReason ?? null;
   const sourceScope = isPublishedDraft ? 'all' as const : (draftWithAssignments?.draft?.sourceScope ?? 'all') as 'all' | 'remaining';
   const {
@@ -481,6 +481,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
             setPublishResult({
               shiftId: data.shiftId,
               draftId: data.draftId,
+              publicationId: data.publicationId,
               createdLines: data.createdLines,
               reusedLines: data.reusedLines,
               createdOrders: data.createdOrders,

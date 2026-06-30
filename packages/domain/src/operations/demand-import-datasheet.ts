@@ -369,6 +369,7 @@ export type DemandPlanningPublishToShiftRequest = z.infer<typeof demandPlanningP
 export const demandPlanningPublishToShiftResponseSchema = z.object({
   shiftId: z.string().uuid(),
   draftId: z.string().uuid(),
+  publicationId: z.string().uuid(),
   createdLines: z.number().int().min(0),
   reusedLines: z.number().int().min(0),
   createdOrders: z.number().int().min(0),
