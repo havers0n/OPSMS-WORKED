@@ -1,7 +1,9 @@
 import type {
   RawDemandPlanningPreview,
   DemandPlanningDraftWithAssignments,
-  DemandImportAppendDiffResponse
+  DemandImportAppendDiffResponse,
+  DemandBacklogOrderListResponse,
+  DemandBacklogOrderQuery
 } from '@wos/domain';
 import { queryOptions } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
@@ -12,6 +14,32 @@ export const demandImportKeys = {
   draft: (draftId: string) => [...demandImportKeys.all, 'draft', draftId] as const,
   appendDiff: (batchId: string, shiftId: string) => [...demandImportKeys.all, 'append-diff', batchId, shiftId] as const
 };
+
+export const demandBacklogKeys = {
+  all: ['demand-backlog'] as const,
+  orders: (filters: DemandBacklogOrderQuery) => [...demandBacklogKeys.all, 'orders', {
+    dateFrom: filters.dateFrom, dateTo: filters.dateTo, status: filters.status, q: filters.q,
+    sku: filters.sku, customer: filters.customer, distributionArea: filters.distributionArea,
+    distributionLine: filters.distributionLine, sourceBatchId: filters.sourceBatchId,
+    page: filters.page, limit: filters.limit
+  }] as const
+};
+
+async function fetchDemandBacklogOrders(filters: DemandBacklogOrderQuery): Promise<DemandBacklogOrderListResponse> {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') params.set(key, String(value));
+  });
+  return bffRequest<DemandBacklogOrderListResponse>(`/api/demand-planning/backlog-orders?${params.toString()}`);
+}
+
+export function demandBacklogOrdersQueryOptions(filters: DemandBacklogOrderQuery) {
+  return queryOptions({
+    queryKey: demandBacklogKeys.orders(filters),
+    queryFn: () => fetchDemandBacklogOrders(filters),
+    staleTime: 30_000
+  });
+}
 
 async function fetchDemandPlanningPreview(batchId: string, scope: 'all' | 'remaining'): Promise<RawDemandPlanningPreview> {
   const suffix = scope === 'remaining' ? '?scope=remaining' : '';
