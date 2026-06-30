@@ -4213,6 +4213,4 @@ describe('demand planning draft routes', () => {
 
     await app.close();
   });
-    await app.close();
-  });
 });
