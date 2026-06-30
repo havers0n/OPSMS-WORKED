@@ -63,47 +63,79 @@ begin
 
   -- ============================================================
   -- Test 1: Schema constraints — source_kind, batch_id consistency
+  --
+  -- These direct inserts bypass RLS because the publication table
+  -- has no INSERT policy (publications are created via security-definer RPC).
+  -- We temporarily reset role to the test's superuser context.
   -- ============================================================
 
-  -- 1a: Insert publication with source_kind = 'batch' and non-null batch_id (valid)
-  insert into public.demand_planning_publications (tenant_id, batch_id, draft_id, target_shift_id, source_kind, status)
-  values (tenant_a, batch_a, gen_random_uuid(), shift_a, 'batch', 'applied');
+  execute 'reset role';
 
-  -- 1b: source_kind backfilled to 'batch' for existing rows
-  select source_kind into v_pub_source_kind
-  from public.demand_planning_publications
-  where tenant_id = tenant_a limit 1;
-
-  if v_pub_source_kind <> 'batch' then
-    raise exception 'PR3A-01 FAIL: expected source_kind=batch, got %.', v_pub_source_kind;
-  end if;
-
-  -- 1c: source_kind = 'rolling' batch_id can be null (valid)
-  insert into public.demand_planning_publications (tenant_id, draft_id, target_shift_id, source_kind, status)
-  values (tenant_a, gen_random_uuid(), shift_a, 'rolling', 'applied');
-
-  -- 1d: source_kind = 'batch' with null batch_id must fail
+  -- Create a scratch draft so publication FK constraints are satisfied
+  declare
+    v_scratch_draft uuid;
+    v_scratch_draft2 uuid;
+    v_scratch_draft3 uuid;
+    v_scratch_draft4 uuid;
   begin
-    insert into public.demand_planning_publications (tenant_id, draft_id, target_shift_id, source_kind, status)
-    values (tenant_a, gen_random_uuid(), shift_a, 'batch', 'applied');
-    raise exception 'PR3A-02 FAIL: batch publication with null batch_id should be rejected.';
-  exception
-    when check_violation then
-      null;
-  end;
+    insert into public.demand_planning_drafts (tenant_id, batch_id, status, source_kind)
+    values (tenant_a, batch_a, 'draft', 'batch') returning id into v_scratch_draft;
 
-  -- 1e: source_kind = 'rolling' with non-null batch_id must fail
-  begin
+    insert into public.demand_planning_drafts (tenant_id, status, source_kind)
+    values (tenant_a, 'draft', 'rolling') returning id into v_scratch_draft2;
+
+    insert into public.demand_planning_drafts (tenant_id, batch_id, status, source_kind)
+    values (tenant_a, batch_a, 'draft', 'batch') returning id into v_scratch_draft3;
+
+    insert into public.demand_planning_drafts (tenant_id, batch_id, status, source_kind)
+    values (tenant_a, batch_a, 'draft', 'batch') returning id into v_scratch_draft4;
+
+    -- 1a: Insert publication with source_kind = 'batch' and non-null batch_id (valid)
     insert into public.demand_planning_publications (tenant_id, batch_id, draft_id, target_shift_id, source_kind, status)
-    values (tenant_a, batch_a, gen_random_uuid(), shift_a, 'rolling', 'applied');
-    raise exception 'PR3A-03 FAIL: rolling publication with non-null batch_id should be rejected.';
-  exception
-    when check_violation then
-      null;
+    values (tenant_a, batch_a, v_scratch_draft, shift_a, 'batch', 'applied');
+
+    -- 1b: source_kind backfilled to 'batch' for existing rows
+    select source_kind into v_pub_source_kind
+    from public.demand_planning_publications
+    where tenant_id = tenant_a limit 1;
+
+    if v_pub_source_kind <> 'batch' then
+      raise exception 'PR3A-01 FAIL: expected source_kind=batch, got %.', v_pub_source_kind;
+    end if;
+
+    -- 1c: source_kind = 'rolling' batch_id can be null (valid)
+    insert into public.demand_planning_publications (tenant_id, draft_id, target_shift_id, source_kind, status)
+    values (tenant_a, v_scratch_draft2, shift_a, 'rolling', 'applied');
+
+    -- 1d: source_kind = 'batch' with null batch_id must fail
+    begin
+      insert into public.demand_planning_publications (tenant_id, draft_id, target_shift_id, source_kind, status)
+      values (tenant_a, v_scratch_draft3, shift_a, 'batch', 'applied');
+      raise exception 'PR3A-02 FAIL: batch publication with null batch_id should be rejected.';
+    exception
+      when check_violation then
+        null;
+    end;
+
+    -- 1e: source_kind = 'rolling' with non-null batch_id must fail
+    begin
+      insert into public.demand_planning_publications (tenant_id, batch_id, draft_id, target_shift_id, source_kind, status)
+      values (tenant_a, batch_a, v_scratch_draft4, shift_a, 'rolling', 'applied');
+      raise exception 'PR3A-03 FAIL: rolling publication with non-null batch_id should be rejected.';
+    exception
+      when check_violation then
+        null;
+    end;
   end;
 
   -- Clean up test rows
   delete from public.demand_planning_publications where tenant_id = tenant_a;
+
+  -- Restore authenticated role for subsequent tests
+  execute 'set local role authenticated';
+  perform set_config('request.jwt.claim.sub', user_a::text, true);
+  perform set_config('request.jwt.claims', json_build_object('sub', user_a::text)::text, true);
+  perform set_config('request.jwt.claim.role', 'authenticated', true);
 
   -- ============================================================
   -- Test 2: Batch publish creates publication header + returns publicationId
@@ -238,15 +270,31 @@ begin
   -- Test 5: Reverted publications no longer consume availability
   -- ============================================================
 
-  -- Publish draft_one again (60 units of row_one)
-  result := public.manual_shift_publish_demand_planning_draft(
-    tenant_a, draft_one, p_target_shift_id := shift_a
-  );
+  -- Publish row_one again via a new draft (the original allocation_id was
+  -- already consumed in the first publish; revert does not delete ledger
+  -- rows, so we need a fresh allocation).
+  declare
+    draft_reborn uuid;
+    bucket_reborn uuid;
+  begin
+    insert into public.demand_planning_drafts (tenant_id, batch_id, status, source_kind)
+    values (tenant_a, batch_a, 'draft', 'batch') returning id into draft_reborn;
 
-  pub_id := result->>'publicationId';
-  if pub_id is null then
-    raise exception 'PR3A-40 FAIL: re-publish must return publicationId.';
-  end if;
+    insert into public.demand_planning_buckets (tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, sort_order)
+    values (tenant_a, draft_reborn, batch_a, 'North', 'Line A', 'Bucket Reborn', 1) returning id into bucket_reborn;
+
+    insert into public.demand_planning_allocations (tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity)
+    values (tenant_a, draft_reborn, batch_a, row_one, bucket_reborn, 60);
+
+    result := public.manual_shift_publish_demand_planning_draft(
+      tenant_a, draft_reborn, p_target_shift_id := shift_a
+    );
+
+    pub_id := result->>'publicationId';
+    if pub_id is null then
+      raise exception 'PR3A-40 FAIL: re-publish must return publicationId.';
+    end if;
+  end;
 
   -- Now create draft_two that tries to publish remaining 40 units of row_one
   insert into public.demand_planning_drafts (tenant_id, batch_id, status, source_kind)
@@ -296,7 +344,9 @@ begin
   end;
 
   -- ============================================================
-  -- Test 6: Rolling publish remains blocked at SQL level
+  -- Test 6: Rolling publish without allocations fails (PR-3A
+  -- originally blocked rolling entirely; PR-3B enables rolling
+  -- publish, but a draft with zero allocations still fails).
   -- ============================================================
 
   insert into public.demand_planning_drafts (tenant_id, status, source_kind)
@@ -306,10 +356,10 @@ begin
     result := public.manual_shift_publish_demand_planning_draft(
       tenant_a, draft_rolling, p_target_shift_id := shift_a
     );
-    raise exception 'PR3A-50 FAIL: rolling publish must be blocked.';
+    raise exception 'PR3A-50 FAIL: rolling publish with zero allocations must be blocked.';
   exception
     when raise_exception then
-      if sqlerrm <> 'DEMAND_PLANNING_ROLLING_PUBLISH_NOT_SUPPORTED' then
+      if sqlerrm <> 'NO_PUBLISHABLE_ROWS' then
         raise;
       end if;
   end;
