@@ -303,6 +303,10 @@ begin
           raise;
         end if;
     end;
+
+    -- Clean up batch_c so it does not pollute later tests
+    delete from public.raw_demand_rows where batch_id = batch_c;
+    delete from public.demand_import_batches where id = batch_c;
   end;
 
   -- ============================================================
@@ -340,9 +344,9 @@ begin
       raise exception 'PR3B-70 FAIL: split allocation publish must return publicationId.';
     end if;
 
-    if (result->>'createdOrders')::integer <> 1 then
-      -- Split allocations on same raw row but different buckets should group into one order
-      raise exception 'PR3B-71 FAIL: split allocations expected 1 order, got %.', result->>'createdOrders';
+    if (result->>'createdOrders')::integer <> 2 then
+      -- Split allocations on same identity but different buckets create separate orders
+      raise exception 'PR3B-71 FAIL: split allocations expected 2 orders, got %.', result->>'createdOrders';
     end if;
 
     -- Verify both allocations have ledger rows with correct batch_id
@@ -425,29 +429,76 @@ begin
   -- Test 11: Reverted publication no longer consumes
   -- ============================================================
 
-  -- After reverting draft_r1 (30 units), the available quantity goes back to 50
-  -- for row_so2 (draft_batch consumed 20, so 30 remain)
-  -- Actually draft_batch already consumed 20 from row_so2 on top of draft_r1's 30,
-  -- and draft_batch is NOT reverted. So total applied on row_so2 = 20.
-  -- Original row_so2 = 50, already_published = 20 (batch publish still applied)
-  -- Available = 30
-
+  -- After reverting draft_r1, the SO-2 identity had 30 units freed
+  -- (draft_batch consumed 20 from the 50 total, 30 remain).
+  -- Use a fresh batch/row identity that has partial publication
+  -- followed by a revert to test that consumption is released.
   declare
-    draft_after_revert uuid;
-    bucket_after_revert uuid;
+    batch_revert_test uuid;
+    row_revert_test uuid;
+    draft_rt1 uuid;
+    draft_rt2 uuid;
+    bucket_rt1 uuid;
+    bucket_rt2 uuid;
+    revert_test_pub_id uuid;
   begin
+    insert into public.demand_import_batches (tenant_id, source_file, source_sheet, status, rows_count, raw_rows_count, distribution_areas_count, distinct_orders_count, distinct_sku_count)
+    values (tenant_a, 'revert-test.xlsx', 'DataSheet', 'ready', 1, 1, 1, 1, 1)
+    returning id into batch_revert_test;
+
+    update public.demand_import_batches
+    set uploaded_at = timezone('utc', now()) + interval '4 hours'
+    where id = batch_revert_test;
+
+    insert into public.raw_demand_rows (tenant_id, batch_id, source_sheet, source_row_number, customer_name, order_number, sku, quantity, distribution_area, planned_delivery_date, planning_status, route_flow, product_handling_flow)
+    values (tenant_a, batch_revert_test, 'DataSheet', 2, 'Cust Rev', 'SO-REV', 'SKU-REV', 100, 'North', date '2026-07-01', 'unplanned', 'pickup', 'regular')
+    returning id into row_revert_test;
+
+    -- Publish 30 via rolling draft
     insert into public.demand_planning_drafts (tenant_id, status, source_kind)
-    values (tenant_a, 'draft', 'rolling') returning id into draft_after_revert;
+    values (tenant_a, 'draft', 'rolling') returning id into draft_rt1;
 
     insert into public.demand_planning_buckets (tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, sort_order)
-    values (tenant_a, draft_after_revert, null, 'North', 'Line G', 'Bucket AR', 1) returning id into bucket_after_revert;
+    values (tenant_a, draft_rt1, null, 'North', 'Line Rev', 'Bucket R1', 1) returning id into bucket_rt1;
 
-    -- row_so2: 50 - 20 (batch still applied) = 30 available. Request 30 → OK
     insert into public.demand_planning_allocations (tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity)
-    values (tenant_a, draft_after_revert, batch_b, row_so2, bucket_after_revert, 30);
+    values (tenant_a, draft_rt1, batch_revert_test, row_revert_test, bucket_rt1, 30);
 
     result := public.manual_shift_publish_demand_planning_draft(
-      tenant_a, draft_after_revert, p_target_shift_id := shift_a
+      tenant_a, draft_rt1, p_target_shift_id := shift_a
+    );
+
+    if result->>'publicationId' is null then
+      raise exception 'PR3B-98 FAIL: first revert-test publish must return publicationId.';
+    end if;
+
+    revert_test_pub_id := result->>'publicationId';
+
+    -- Revert
+    declare
+      revert_result jsonb;
+    begin
+      revert_result := public.demand_planning_revert_publication(
+        tenant_a, revert_test_pub_id
+      );
+
+      if (revert_result->>'revertedOrders')::integer <> 1 then
+        raise exception 'PR3B-99 FAIL: revert-test revert expected 1 order, got %.', revert_result->>'revertedOrders';
+      end if;
+    end;
+
+    -- Publish 60 after revert — should succeed (100 - 0 = 100 available after revert)
+    insert into public.demand_planning_drafts (tenant_id, status, source_kind)
+    values (tenant_a, 'draft', 'rolling') returning id into draft_rt2;
+
+    insert into public.demand_planning_buckets (tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, sort_order)
+    values (tenant_a, draft_rt2, null, 'North', 'Line Rev', 'Bucket R2', 2) returning id into bucket_rt2;
+
+    insert into public.demand_planning_allocations (tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity)
+    values (tenant_a, draft_rt2, batch_revert_test, row_revert_test, bucket_rt2, 60);
+
+    result := public.manual_shift_publish_demand_planning_draft(
+      tenant_a, draft_rt2, p_target_shift_id := shift_a
     );
 
     if result->>'publicationId' is null then

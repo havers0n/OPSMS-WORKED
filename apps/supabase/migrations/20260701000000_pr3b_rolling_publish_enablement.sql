@@ -112,28 +112,25 @@ begin
       b.id desc
   ),
   -- 3. Duplicate detection: rows in the newest batch per key
+  --    Note: aggregate ORDER BY is unsupported inside OVER(), so row_ids
+  --    is computed via a subquery; row_count uses a plain window count.
   newest_batch_rows as (
-    select
+    select distinct on (lr.fk_order_number, lr.fk_sku, lr.fk_customer_name,
+                        lr.fk_distribution_area, lr.fk_delivery_date)
       lr.fk_order_number, lr.fk_sku, lr.fk_customer_name,
       lr.fk_distribution_area, lr.fk_delivery_date,
       lr.latest_batch_id,
-      count(*) over (
-        partition by lr.fk_order_number, lr.fk_sku, lr.fk_customer_name,
-                     lr.fk_distribution_area, lr.fk_delivery_date
-      ) as row_count,
-      array_agg(r.id order by r.id) over (
-        partition by lr.fk_order_number, lr.fk_sku, lr.fk_customer_name,
-                     lr.fk_distribution_area, lr.fk_delivery_date
-      ) as row_ids
+      (select count(*)
+       from public.raw_demand_rows r2
+       where r2.tenant_id = lr.tenant_id
+         and r2.batch_id = lr.latest_batch_id
+         and coalesce(nullif(btrim(r2.order_number), ''), '') = lr.fk_order_number
+         and coalesce(nullif(btrim(r2.sku), ''), '') = lr.fk_sku
+         and coalesce(nullif(btrim(r2.customer_name), ''), '') = lr.fk_customer_name
+         and coalesce(nullif(btrim(r2.distribution_area), ''), '') = lr.fk_distribution_area
+         and r2.planned_delivery_date is not distinct from lr.fk_delivery_date
+      ) as row_count
     from latest_rows lr
-    join public.raw_demand_rows r
-      on r.tenant_id = lr.tenant_id
-     and r.batch_id = lr.latest_batch_id
-     and coalesce(nullif(btrim(r.order_number), ''), '') = lr.fk_order_number
-     and coalesce(nullif(btrim(r.sku), ''), '') = lr.fk_sku
-     and coalesce(nullif(btrim(r.customer_name), ''), '') = lr.fk_customer_name
-     and coalesce(nullif(btrim(r.distribution_area), ''), '') = lr.fk_distribution_area
-     and r.planned_delivery_date is not distinct from lr.fk_delivery_date
   ),
   -- 4. Per-key published quantity (revert-aware)
   published_by_key as (
