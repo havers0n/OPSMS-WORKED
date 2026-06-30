@@ -972,8 +972,8 @@ it('past date with a closed shift hides import actions', async () => {
 
       await waitFor(() => {
         expect(screen.getByTestId('lines-landing-plan-for-date')).toBeTruthy();
-        expect(screen.getByTestId('lines-landing-append-shift')).toBeTruthy();
-        expect(screen.getByTestId('lines-landing-edit-shift')).toBeTruthy();
+        expect(screen.getByTestId('lines-landing-demand-backlog')).toBeTruthy();
+        expect(screen.getByTestId('lines-landing-plan-from-batch')).toBeTruthy();
       });
       expect(screen.getByRole('heading', { name: 'תכנון קווים' })).toBeTruthy();
     });
@@ -1003,7 +1003,28 @@ it('past date with a closed shift hides import actions', async () => {
       await waitFor(() => {
         expect(screen.getByTestId('plan-for-date-pick-date')).toBeTruthy();
       });
-      expect(screen.getByRole('heading', { name: 'תכנון עבודה לתאריך' })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: 'בנה קווים מביקוש זמין' })).toBeTruthy();
+    });
+
+    it('plan-for-date creates one rolling draft from targetShiftId without loading batch cards', async () => {
+      const rollingDraft = { draft: { id: 'draft-rolling', tenantId: 'tenant-1', batchId: null, sourceKind: 'rolling', status: 'draft', targetShiftId: 'shift-target', createdBy: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, buckets: [], allocations: [], rows: [] };
+      mockedBffRequest.mockImplementation((url: string, init?: RequestInit) => {
+        if (String(url).includes('/api/manual-shifts/by-date?date=2026-07-01')) {
+          return Promise.resolve({ shift: { id: 'shift-target', tenantId: 'tenant-1', date: '2026-07-01', name: 'Target', status: 'active', createdBy: null, createdAt: new Date().toISOString(), closedAt: null }, lines: [] });
+        }
+        if (String(url) === '/api/demand-planning/rolling-drafts' && init?.method === 'POST') return Promise.resolve(rollingDraft);
+        if (String(url).includes('/api/demand-planning-drafts/draft-rolling')) return Promise.resolve(rollingDraft);
+        return Promise.resolve({ shift: null, lines: [] });
+      });
+
+      renderAt('/operator/manual/lines?intent=plan-for-date&targetDate=2026-07-01');
+
+      await waitFor(() => expect(mockedBffRequest).toHaveBeenCalledWith(
+        '/api/demand-planning/rolling-drafts',
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ targetShiftId: 'shift-target' }) }),
+      ));
+      expect(mockedBffRequest.mock.calls.filter(([url]) => String(url) === '/api/demand-planning/rolling-drafts')).toHaveLength(1);
+      expect(mockedBffRequest.mock.calls.some(([url]) => String(url).includes('/available-for-planning'))).toBe(false);
     });
 
     it('plan-for-date: no batches shows empty state', async () => {
@@ -1023,7 +1044,7 @@ it('past date with a closed shift hides import actions', async () => {
         return Promise.resolve({ shift: null, lines: [] });
       });
 
-      renderAt('/operator/manual/lines?intent=plan-for-date&targetDate=2026-07-01');
+      renderAt('/operator/manual/lines?intent=plan-from-batch&targetDate=2026-07-01');
 
       await waitFor(() => {
         expect(screen.getByTestId('plan-for-date-no-batches')).toBeTruthy();
@@ -1038,7 +1059,7 @@ it('past date with a closed shift hides import actions', async () => {
         return Promise.resolve({ shift: null, lines: [] });
       });
 
-      renderAt('/operator/manual/lines?intent=plan-for-date&targetDate=2026-07-01');
+      renderAt('/operator/manual/lines?intent=plan-from-batch&targetDate=2026-07-01');
 
       await waitFor(() => {
         expect(screen.getByTestId('plan-for-date-create-shift')).toBeTruthy();
@@ -1066,7 +1087,7 @@ it('past date with a closed shift hides import actions', async () => {
         return Promise.resolve({ shift: null, lines: [] });
       });
 
-      renderAt('/operator/manual/lines?intent=plan-for-date&targetDate=2026-07-01');
+      renderAt('/operator/manual/lines?intent=plan-from-batch&targetDate=2026-07-01');
 
       await waitFor(() => {
         expect(screen.getByText('test.xlsx')).toBeTruthy();
@@ -1181,12 +1202,20 @@ it('past date with a closed shift hides import actions', async () => {
       });
     });
 
-    it('route validation: draftId without batchId shows error', async () => {
-      mockedBffRequest.mockResolvedValue({ shift: null, lines: [] });
+    it('route validation: draftId without batchId loads rolling draft and reports missing rows', async () => {
+      mockedBffRequest.mockImplementation((url: string) => {
+        if (String(url).includes('/api/demand-planning-drafts/draft-only')) {
+          return Promise.resolve({
+            draft: { id: 'draft-only', tenantId: 'tenant-1', batchId: null, sourceKind: 'rolling', status: 'draft', createdBy: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            buckets: [], allocations: []
+          });
+        }
+        return Promise.resolve({ shift: null, lines: [] });
+      });
       renderAt('/operator/manual/lines?mode=demand&draftId=draft-only');
 
       await waitFor(() => {
-        expect(screen.getByText(/draftId ללא batchId/)).toBeTruthy();
+        expect(screen.getByText(/אינה כוללת את שורות המקור/)).toBeTruthy();
       });
     });
 

@@ -138,11 +138,16 @@ function ManualOperatorSectionContent({
     }
     const isPlanForDateIntent = mode === 'demand' && intent === 'plan-for-date';
     const isPlanForDatePreStep = intent === 'plan-for-date' && !batchId && !draftId;
+    const isBatchPlanPreStep = intent === 'plan-from-batch' && !batchId && !draftId;
     const isAppendCurrentShift = mode === 'demand' && intent === 'append-current-shift';
     const isDemandPlanForDate = isPlanForDateIntent && !!batchId && !!draftId;
 
     if (isPlanForDatePreStep) {
-      return <PlanForDateFlow />;
+      return <PlanForDateFlow sourceMode="rolling" />;
+    }
+
+    if (isBatchPlanPreStep) {
+      return <PlanForDateFlow sourceMode="batch" />;
     }
 
     if (isDemandPlanForDate) {
@@ -173,7 +178,7 @@ function ManualOperatorSectionContent({
     if (mode === 'append' && shiftIdFromParams && batchId) {
       return <AppendModePanel shiftId={shiftIdFromParams} batchId={batchId} />;
     }
-    if (mode === 'demand' && !!batchId && !!draftId) {
+    if (mode === 'demand' && !!draftId) {
       return <SchemeBuilder mode="demand" batchId={batchId} draftId={draftId} targetDate={targetDate} targetShiftId={targetShift?.id ?? targetShiftIdParam ?? undefined} />
     }
 
@@ -199,17 +204,6 @@ function ManualOperatorSectionContent({
       );
     }
 
-    if (draftId && !batchId) {
-      return (
-        <div className="mx-auto max-w-lg py-20 text-center" dir="rtl">
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-            <p className="font-bold">שגיאה: draftId ללא batchId</p>
-            <p className="mt-1">draftId דורש batchId תואם.</p>
-          </div>
-        </div>
-      );
-    }
-
     if (intent === 'append-current-shift' && mode !== 'demand') {
       return (
         <div className="mx-auto max-w-lg py-20 text-center" dir="rtl">
@@ -221,7 +215,7 @@ function ManualOperatorSectionContent({
       );
     }
 
-    if (intent && intent !== 'plan-for-date' && intent !== 'append-current-shift' && intent !== 'backlog') {
+    if (intent && intent !== 'plan-for-date' && intent !== 'plan-from-batch' && intent !== 'append-current-shift' && intent !== 'backlog') {
       return (
         <div className="mx-auto max-w-lg py-20 text-center" dir="rtl">
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
@@ -285,7 +279,7 @@ export function ManualOperatorPage() {
   const [showTargetDatePicker, setShowTargetDatePicker] = useState(false);
   const targetMaxDate = addDays(todayDate, 90);
 
-  const isDemandPlanningRoute = section === 'lines' && mode === 'demand' && !!batchId && !!draftId;
+  const isDemandPlanningRoute = section === 'lines' && mode === 'demand' && !!draftId;
   const isAppendRoute = section === 'lines' && mode === 'append' && !!shiftIdFromParams && !!batchId;
   const isAppendCurrentShiftRoute = section === 'lines' && mode === 'demand' && intent === 'append-current-shift';
   const hasShiftIdParam = (!!shiftIdFromParams && !isDemandPlanningRoute) || (isAppendCurrentShiftRoute && !!targetShiftIdParam);
@@ -334,12 +328,12 @@ export function ManualOperatorPage() {
   }, [location.pathname, location.search, section]);
 
   useEffect(() => {
-    if (mode !== 'demand' || !batchId || !draftId || typeof window === 'undefined') return;
+    if (mode !== 'demand' || !draftId || typeof window === 'undefined') return;
     const saved = localStorage.getItem('wos:demand-planning:last-context');
     if (!saved) return;
     try {
       const ctx = JSON.parse(saved);
-      if (ctx.mode === 'demand' && ctx.batchId === batchId && ctx.draftId === draftId) {
+      if (ctx.mode === 'demand' && ctx.draftId === draftId && (!batchId || ctx.batchId === batchId)) {
         saveDemandLastContext({
           ...ctx,
           url: `${location.pathname}${location.search}`,

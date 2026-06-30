@@ -70,6 +70,26 @@ export function useCreateDemandPlanningDraft() {
   });
 }
 
+const rollingDraftRequests = new Map<string, Promise<DemandPlanningDraftWithAssignments>>();
+
+async function createRollingDemandPlanningDraft(targetShiftId: string): Promise<DemandPlanningDraftWithAssignments> {
+  const existing = rollingDraftRequests.get(targetShiftId);
+  if (existing) return existing;
+
+  const request = bffRequest<DemandPlanningDraftWithAssignments>('/api/demand-planning/rolling-drafts', {
+    method: 'POST',
+    body: JSON.stringify({ targetShiftId })
+  }).finally(() => {
+    rollingDraftRequests.delete(targetShiftId);
+  });
+  rollingDraftRequests.set(targetShiftId, request);
+  return request;
+}
+
+export function useCreateRollingDemandPlanningDraft() {
+  return useMutation({ mutationFn: createRollingDemandPlanningDraft });
+}
+
 async function putDemandPlanningPlan(
   draftId: string,
   body: DemandPlanningPutPlanRequest

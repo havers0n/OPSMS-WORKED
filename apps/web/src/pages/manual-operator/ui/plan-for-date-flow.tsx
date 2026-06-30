@@ -1,11 +1,12 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, Calendar, Plus, ExternalLink, XCircle, Upload, AlertCircle } from 'lucide-react';
 import { shiftByDateQueryOptions } from '@/entities/manual-shift/api/queries';
 import { useCreateShift } from '@/entities/manual-shift/api/mutations';
 import { demandImportAvailableBatchesQueryOptions } from '@/entities/demand/api/queries';
-import { useCreateDemandPlanningDraft } from '@/entities/demand/api/mutations';
+import { useCreateDemandPlanningDraft, useCreateRollingDemandPlanningDraft } from '@/entities/demand/api/mutations';
+import { BffRequestError } from '@/shared/api/bff/client';
 import { saveDemandLastContext } from '@/entities/demand/lib/last-context';
 import { ShiftDatePicker } from './shift-date-picker';
 
@@ -49,7 +50,9 @@ function formatDisplayDate(dateStr: string): string {
   }).format(new Date(year, month - 1, day));
 }
 
-export function PlanForDateFlow() {
+const navigatedRollingDrafts = new Set<string>();
+
+export function PlanForDateFlow({ sourceMode = 'rolling' }: { sourceMode?: 'rolling' | 'batch' }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const todayDate = getTodayDateIsrael();
@@ -62,6 +65,8 @@ export function PlanForDateFlow() {
 
   const createShift = useCreateShift();
   const createDraftMutation = useCreateDemandPlanningDraft();
+  const createRollingDraft = useCreateRollingDemandPlanningDraft();
+  const attemptedShiftRef = useRef<string | null>(null);
 
   const { data: shiftData, isLoading: isShiftLoading } = useQuery({
     ...shiftByDateQueryOptions(targetDate ?? ''),
@@ -71,7 +76,7 @@ export function PlanForDateFlow() {
 
   const { data: availableData, isLoading: isBatchesLoading } = useQuery({
     ...demandImportAvailableBatchesQueryOptions(),
-    enabled: !!targetDate && !!targetShift,
+    enabled: sourceMode === 'batch' && !!targetDate && !!targetShift,
   });
 
   const handleSelectDate = useCallback((date: string) => {
@@ -119,6 +124,36 @@ export function PlanForDateFlow() {
     );
   }, [targetShift, targetDate, selectedBatchId, createDraftMutation, navigate]);
 
+  const startRollingDraft = useCallback((targetShiftId: string) => {
+    if (createRollingDraft.isPending || attemptedShiftRef.current === targetShiftId) return;
+    attemptedShiftRef.current = targetShiftId;
+    createRollingDraft.mutate(targetShiftId, {
+      onSuccess: (result) => {
+        if (navigatedRollingDrafts.has(result.draft.id)) return;
+        navigatedRollingDrafts.add(result.draft.id);
+        const params = new URLSearchParams({
+          mode: 'demand',
+          intent: 'plan-for-date',
+          targetShiftId,
+          draftId: result.draft.id,
+        });
+        if (targetDate) params.set('targetDate', targetDate);
+        navigate(`/operator/manual/lines?${params.toString()}`, { replace: true });
+      },
+      onError: () => {
+        attemptedShiftRef.current = null;
+      },
+    });
+  }, [createRollingDraft, navigate, targetDate]);
+
+  useEffect(() => {
+    if (sourceMode !== 'rolling' || !targetShift || targetShift.status !== 'active') return;
+    startRollingDraft(targetShift.id);
+  }, [sourceMode, targetShift, startRollingDraft]);
+
+  const rollingNoDemand = createRollingDraft.error instanceof BffRequestError
+    && createRollingDraft.error.code === 'ROLLING_NO_AVAILABLE_DEMAND';
+
   const batches = availableData?.batches ?? [];
   const planableBatches = batches.filter((b) => b.canPlan);
   const consumedBatches = batches.filter((b) => !b.canPlan);
@@ -127,8 +162,8 @@ export function PlanForDateFlow() {
     <div className="flex-1 flex flex-col bg-gray-50" dir="rtl">
 
       <div className="border-b border-gray-200 bg-white px-4 py-4">
-        <h1 className="text-xl font-bold text-gray-900">תכנון עבודה לתאריך</h1>
-        <p className="text-xs text-gray-500 mt-1">בחר תאריך עבודה כדי ליצור או לערוך משמרת</p>
+        <h1 className="text-xl font-bold text-gray-900">{sourceMode === 'rolling' ? 'בנה קווים מביקוש זמין' : 'תכנון ידני מאצווה'}</h1>
+        <p className="text-xs text-gray-500 mt-1">בחר תאריך עבודה כדי ליצור או לבחור משמרת יעד</p>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -218,8 +253,23 @@ export function PlanForDateFlow() {
             </section>
           )}
 
-          {/* Step 3: Source Picker (only for active shifts) */}
-          {targetDate && targetShift && targetShift.status === 'active' && (
+          {sourceMode === 'rolling' && targetDate && targetShift && targetShift.status === 'active' && (
+            <section className="rounded-2xl border border-blue-200 bg-blue-50 p-6 space-y-4" data-testid="rolling-draft-status">
+              {createRollingDraft.isPending ? (
+                <div className="flex items-center gap-2 text-sm text-blue-800"><Loader2 size={16} className="animate-spin" />יוצר טיוטה מכל הביקוש הזמין…</div>
+              ) : createRollingDraft.isError ? (
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-amber-900">{rollingNoDemand ? 'אין ביקוש זמין לתכנון עבור המשמרת' : 'יצירת טיוטת התכנון נכשלה'}</p>
+                  <button type="button" onClick={() => startRollingDraft(targetShift.id)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" data-testid="rolling-draft-retry">נסה שוב</button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-blue-800"><Loader2 size={16} className="animate-spin" />פותח את בונה הקווים…</div>
+              )}
+            </section>
+          )}
+
+          {/* Advanced batch source picker */}
+          {sourceMode === 'batch' && targetDate && targetShift && targetShift.status === 'active' && (
             <section className="rounded-2xl border border-gray-200 bg-white p-6 space-y-4">
               <div className="flex items-center gap-2">
                 <ExternalLink size={18} className="text-blue-600 shrink-0" />
