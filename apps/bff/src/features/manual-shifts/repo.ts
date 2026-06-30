@@ -1063,6 +1063,11 @@ export type ManualShiftsRepo = {
     sourceSheet: string;
     rows: RawDemandRowStaging[];
   }): Promise<void>;
+  updateDemandImportBatchStatus(input: {
+    tenantId: string;
+    batchId: string;
+    status: DemandImportBatchStatus;
+  }): Promise<DemandImportBatch | null>;
   getDemandImportBatch(input: {
     tenantId: string;
     batchId: string;
@@ -2326,6 +2331,23 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       if (error) {
         throw error;
       }
+    },
+
+    async updateDemandImportBatchStatus(input) {
+      const { data, error } = await supabase
+        .from('demand_import_batches')
+        .update({ status: input.status })
+        .eq('tenant_id', input.tenantId)
+        .eq('id', input.batchId)
+        .select(demandImportBatchColumns)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') return null;
+        throw error;
+      }
+
+      return data ? mapDemandImportBatchRow(data as DemandImportBatchRow) : null;
     },
 
     async getDemandImportBatch(input) {

@@ -689,3 +689,25 @@ export type DemandPlanningRevertPublicationResponse = {
   revertedItems: number;
   releasedQuantity: number;
 };
+
+// ──── Rolling Publish Conflict types ──────────────────────────────────────────
+
+export const rollingPublishConflictStatusSchema = z.enum([
+  'available',
+  'stale',
+  'insufficient_quantity',
+  'duplicate_conflict'
+]);
+export type RollingPublishConflictStatus = z.infer<typeof rollingPublishConflictStatusSchema>;
+
+export const rollingPublishConflictSchema = z.object({
+  allocationId: z.string().uuid(),
+  rawDemandRowId: z.string().uuid(),
+  sku: z.string().nullable(),
+  orderNumber: z.string().nullable(),
+  requestedQuantity: z.number(),
+  availableQuantity: z.number(),
+  status: rollingPublishConflictStatusSchema,
+  reason: z.string()
+});
+export type RollingPublishConflict = z.infer<typeof rollingPublishConflictSchema>;

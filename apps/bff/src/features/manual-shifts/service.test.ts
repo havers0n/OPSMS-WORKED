@@ -663,6 +663,12 @@ function createRepo() {
         });
       }
     }),
+    updateDemandImportBatchStatus: vi.fn(async (input) => {
+      const batch = state.demandImportBatches.find((entry) => entry.id === input.batchId && entry.tenantId === input.tenantId);
+      if (!batch) return null;
+      batch.status = input.status;
+      return batch;
+    }),
     getDemandImportBatch: vi.fn(async (input) => {
       const batch = state.demandImportBatches.find((entry) => entry.id === input.batchId && entry.tenantId === input.tenantId);
       if (!batch) {
