@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { normalizeWorkbookDate } from './manual-shift-monthly-import';
+import { demandPlanningPublicationSchema } from './rolling-available-demand';
 
 export const demandImportBatchStatusSchema = z.enum(['draft', 'ready', 'archived', 'failed']);
 export type DemandImportBatchStatus = z.infer<typeof demandImportBatchStatusSchema>;
@@ -289,6 +290,8 @@ export const demandPlanningDraftSchema = z.object({
   sourceKind: demandPlanningSourceKindSchema.default('batch'),
   status: demandPlanningDraftStatusSchema,
   sourceScope: demandPlanningSourceScopeSchema.optional(),
+  targetDate: z.string().nullable().optional(),
+  targetShiftId: z.string().uuid().nullable().optional(),
   createdBy: z.string().uuid().nullable(),
   createdAt: z.string().datetime({ offset: true }),
   updatedAt: z.string().datetime({ offset: true })
@@ -325,13 +328,12 @@ export type DemandPlanningAllocation = z.infer<typeof demandPlanningAllocationSc
 export const demandPlanningDraftWithAssignmentsSchema = z.object({
   draft: demandPlanningDraftSchema,
   buckets: z.array(demandPlanningBucketSchema),
-  allocations: z.array(demandPlanningAllocationSchema)
+  allocations: z.array(demandPlanningAllocationSchema),
+  publication: demandPlanningPublicationSchema.nullable().optional(),
+  canRevert: z.boolean().optional(),
+  revertBlockedReason: z.string().nullable().optional()
 });
-export type DemandPlanningDraftWithAssignments = z.infer<typeof demandPlanningDraftWithAssignmentsSchema> & {
-  publication?: import('./rolling-available-demand').DemandPlanningPublication | null;
-  canRevert?: boolean;
-  revertBlockedReason?: string | null;
-};
+export type DemandPlanningDraftWithAssignments = z.infer<typeof demandPlanningDraftWithAssignmentsSchema>;
 
 export const demandPlanningPreviewQuerySchema = z.object({
   scope: demandPlanningSourceScopeSchema.default('all')
@@ -339,7 +341,9 @@ export const demandPlanningPreviewQuerySchema = z.object({
 export type DemandPlanningPreviewQuery = z.infer<typeof demandPlanningPreviewQuerySchema>;
 
 export const demandPlanningCreateDraftRequestSchema = z.object({
-  scope: demandPlanningSourceScopeSchema.default('all')
+  scope: demandPlanningSourceScopeSchema.default('all'),
+  targetDate: z.string().nullable().optional(),
+  targetShiftId: z.string().uuid().nullable().optional()
 });
 export type DemandPlanningCreateDraftRequest = z.infer<typeof demandPlanningCreateDraftRequestSchema>;
 

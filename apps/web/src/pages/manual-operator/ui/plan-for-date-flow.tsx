@@ -184,14 +184,17 @@ export function PlanForDateFlow() {
                   טוען משמרת...
                 </div>
               ) : targetShift ? (
-                <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+                <div className={`rounded-xl border p-4 ${targetShift.status === 'active' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-green-900">משמרת קיימת: {targetShift.name}</span>
-                    <span className="rounded bg-green-200 px-2 py-0.5 text-xs text-green-800">
+                    <span className={`font-semibold ${targetShift.status === 'active' ? 'text-green-900' : 'text-red-900'}`}>משמרת: {targetShift.name}</span>
+                    <span className={`rounded px-2 py-0.5 text-xs ${targetShift.status === 'active' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
                       {targetShift.status === 'active' ? 'פעילה' : 'סגורה'}
                     </span>
                   </div>
-                  <p className="text-xs text-green-700 mt-1">מספר מזהה: {targetShift.id}</p>
+                  <p className="text-xs text-gray-600 mt-1">מספר מזהה: {targetShift.id}</p>
+                  {targetShift.status !== 'active' && (
+                    <p className="text-xs text-red-700 mt-2">לא ניתן לתכנן עבודה למשמרת סגורה.</p>
+                  )}
                 </div>
               ) : (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
@@ -215,8 +218,8 @@ export function PlanForDateFlow() {
             </section>
           )}
 
-          {/* Step 3: Source Picker */}
-          {targetDate && targetShift && (
+          {/* Step 3: Source Picker (only for active shifts) */}
+          {targetDate && targetShift && targetShift.status === 'active' && (
             <section className="rounded-2xl border border-gray-200 bg-white p-6 space-y-4">
               <div className="flex items-center gap-2">
                 <ExternalLink size={18} className="text-blue-600 shrink-0" />

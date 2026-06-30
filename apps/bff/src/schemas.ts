@@ -121,7 +121,8 @@ import {
   demandBacklogQuerySchema,
   demandBacklogItemResponseSchema,
   demandBacklogSourceBatchSchema,
-  rollingAvailableDemandResponseSchema
+  rollingAvailableDemandResponseSchema,
+  demandPlanningPublicationSchema
 } from '@wos/domain';
 
 // ── Rack Inspector ──────────────────────────────────────────────────────────
@@ -622,17 +623,6 @@ export const demandPlanningCreateDraftRequestBodySchema = demandPlanningCreateDr
 export const demandPlanningPutPlanRequestBodySchema = demandPlanningPutPlanRequestSchema;
 export const demandPlanningPublishToShiftRequestBodySchema = demandPlanningPublishToShiftRequestSchema;
 export const demandPlanningPublishToShiftResponseBodySchema = demandPlanningPublishToShiftResponseSchema;
-const demandPlanningPublicationSchema = z.object({
-  id: z.string().uuid(),
-  tenantId: z.string().uuid(),
-  batchId: z.string().uuid(),
-  draftId: z.string().uuid(),
-  targetShiftId: z.string().uuid(),
-  status: z.enum(['applied', 'reverted']),
-  createdAt: z.string(),
-  revertedAt: z.string().nullable(),
-  revertedBy: z.string().uuid().nullable()
-});
 export const demandPlanningPublicationResponseSchema = demandPlanningPublicationSchema;
 
 const demandPlanningRevertPublicationResponseSchema = z.object({

@@ -872,7 +872,9 @@ export function registerManualShiftsRoutes(
         tenantId,
         batchId,
         createdBy: auth.user.id ?? null,
-        sourceScope: body.scope
+        sourceScope: body.scope,
+        targetDate: body.targetDate ?? null,
+        targetShiftId: body.targetShiftId ?? null
       });
 
       void reply.code(201);
