@@ -599,6 +599,53 @@ begin
   end;
 
   -- ============================================================
+  -- Test 13: requires_review planning status cannot be published
+  -- ============================================================
+
+  -- Bypass CHECK constraint to insert requires_review for test
+  execute 'alter table public.raw_demand_rows drop constraint if exists raw_demand_rows_planning_status_check';
+
+  declare
+    batch_review uuid;
+    row_review uuid;
+    draft_review uuid;
+    bucket_review uuid;
+  begin
+    insert into public.demand_import_batches (tenant_id, source_file, source_sheet, status, rows_count, raw_rows_count, distribution_areas_count, distinct_orders_count, distinct_sku_count)
+    values (tenant_a, 'review-test.xlsx', 'DataSheet', 'ready', 1, 1, 1, 1, 1)
+    returning id into batch_review;
+
+    update public.demand_import_batches
+    set uploaded_at = timezone('utc', now()) + interval '5 hours'
+    where id = batch_review;
+
+    insert into public.raw_demand_rows (tenant_id, batch_id, source_sheet, source_row_number, customer_name, order_number, sku, quantity, distribution_area, planned_delivery_date, planning_status, route_flow, product_handling_flow)
+    values (tenant_a, batch_review, 'DataSheet', 2, 'Cust Review', 'SO-REVIEW', 'SKU-REVIEW', 50, 'North', date '2026-07-01', 'requires_review', 'pickup', 'regular')
+    returning id into row_review;
+
+    insert into public.demand_planning_drafts (tenant_id, status, source_kind)
+    values (tenant_a, 'draft', 'rolling') returning id into draft_review;
+
+    insert into public.demand_planning_buckets (tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, sort_order)
+    values (tenant_a, draft_review, null, 'North', 'Line Review', 'Bucket Review', 1) returning id into bucket_review;
+
+    insert into public.demand_planning_allocations (tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity)
+    values (tenant_a, draft_review, batch_review, row_review, bucket_review, 10);
+
+    begin
+      result := public.manual_shift_publish_demand_planning_draft(
+        tenant_a, draft_review, p_target_shift_id := shift_a
+      );
+      raise exception 'PR3B-120 FAIL: requires_review publish should be rejected.';
+    exception
+      when raise_exception then
+        if sqlerrm <> 'NO_PUBLISHABLE_ROWS' then
+          raise;  -- unexpected error, re-raise
+        end if;
+    end;
+  end;
+
+  -- ============================================================
   -- All assertions passed
   -- ============================================================
   raise notice 'PR-3B: All rolling publish SQL tests passed.';

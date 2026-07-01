@@ -7717,6 +7717,21 @@ describe('demand planning draft — publish to shift', () => {
     expect(result.allocations[0].rawDemandRowId).toBe(rollingRowId1);
   });
 
+  it('excludes rows with null plannedDeliveryDate as defense-in-depth', async () => {
+    const { repo, addRow } = createRollingDraftRepo();
+    const service = createManualShiftsServiceFromRepo(repo);
+
+    addRow({ id: rollingRowId1, quantity: 10, distribution_area: 'North', order_number: 'SO26090001', planning_status: 'unplanned', planned_delivery_date: null });
+    addRow({ id: rollingRowId2, quantity: 5, distribution_area: 'South', order_number: 'SO26090001', planning_status: 'unplanned' });
+
+    const result = await service.createRollingDemandPlanningDraft({ tenantId: ids.tenant, createdBy: null, targetShiftId: rollingTargetShiftId });
+
+    // rollingRowId1 has null plannedDeliveryDate → excluded defensively
+    // rollingRowId2 has valid date → included
+    expect(result.allocations).toHaveLength(1);
+    expect(result.allocations[0].rawDemandRowId).toBe(rollingRowId2);
+  });
+
   it('excludes fully_consumed and over_published rows', async () => {
     const { repo, addRow } = createRollingDraftRepo();
     const service = createManualShiftsServiceFromRepo(repo);
