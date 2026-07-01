@@ -203,6 +203,19 @@ describe('scheme-store', () => {
   });
 
   describe('allocateItemRows', () => {
+    it('assigns a row to a newly created work group in local state', () => {
+      const store = useSchemeBuilderStore.getState();
+      const lineId = store.createPlanningLine('דרום', 'ראשי');
+      const workGroupId = store.createWorkGroup(lineId, 'כללי');
+
+      expect(store.allocateItemRows(['item-1'], workGroupId, {
+        order: [{ ...makeItem('item-1', 'order', 10) }],
+      })).toEqual({ ok: true });
+      expect(useSchemeBuilderStore.getState().itemAllocations).toEqual([
+        expect.objectContaining({ itemRowId: 'item-1', workGroupId, qty: 10 }),
+      ]);
+    });
+
     it('allocates full remaining qty for each row', () => {
       const store = useSchemeBuilderStore.getState();
       const plId = store.createPlanningLine('south', 'קו 1');

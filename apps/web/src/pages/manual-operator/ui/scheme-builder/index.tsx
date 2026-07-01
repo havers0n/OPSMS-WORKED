@@ -10,7 +10,8 @@ import { BffRequestError } from '@/shared/api/bff/client';
 import { useSchemeBuilderStore } from './scheme-store';
 import { adaptWorkHierarchyToSource, adaptOrderItemsToSource } from './source-data-adapter';
 import { adaptDemandPlanningPreviewToSource } from './demand-source-adapter';
-import { auditAndAdaptRollingDraft, buildRollingPlanAllocations } from './rolling-source-adapter';
+import { auditAndAdaptRollingDraft } from './rolling-source-adapter';
+import { buildPlanPayload } from './plan-payload';
 import type { DemandPlanningPublishToShiftResponse } from '@wos/domain';
 import type { SourceOrderItem, OrderBadgeStatus, PlanningLine, WorkGroup, ItemAllocation, SchemeBuilderCapabilities, DemandPlanningDraftUiMode, DemandPlanningPublishUiMode } from './scheme-types';
 import { AreaOverview } from './area-overview';
@@ -420,8 +421,6 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     }).filter((r) => r.item);
   }, [quantityModalState, capabilities.canAssignOrders, drawerItems, getAssignedQty]);
 
-  const plMap = useMemo(() => new Map(planningLines.map((pl) => [pl.id, pl])), [planningLines]);
-
   const BANNER_DISMISS_KEY = 'wos:demand-planning:banner-dismiss';
   const [userDismissed, setUserDismissed] = useState(false);
 
@@ -452,44 +451,14 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     }
   }, [bannerDismissKey]);
 
-  const buildPlanPayload = useCallback(() => {
-    const buckets = workGroups.map((wg) => {
-      const pl = plMap.get(wg.planningLineId);
-      return {
-        distributionArea: wg.areaName === '__missing__' ? null : wg.areaName,
-        planningLineName: pl?.name ?? 'default',
-        bucketName: wg.name,
-      };
-    });
-
-    const bucketKeyByWgId = new Map<string, string>();
-    for (const wg of workGroups) {
-      const pl = plMap.get(wg.planningLineId);
-      bucketKeyByWgId.set(
-        wg.id,
-        `${wg.areaName === '__missing__' ? '' : (wg.areaName ?? '')}|${pl?.name ?? 'default'}|${wg.name}`,
-      );
-    }
-
-    if (isRollingDraft && rollingDraftAudit && draftWithAssignments?.rows) {
-      const allocations = buildRollingPlanAllocations({
-        rows: draftWithAssignments.rows,
-        allocationQuantityByRowId: rollingDraftAudit.allocationQuantityByRowId,
-        itemAllocations,
-        bucketKeyByWorkGroupId: bucketKeyByWgId,
-        unassignedByArea: rollingDraftAudit.syntheticUnassignedByArea,
-      });
-      return { buckets, allocations };
-    }
-
-    const allocations = itemAllocations.map((alloc) => {
-      const bucketKey = bucketKeyByWgId.get(alloc.workGroupId);
-      if (!bucketKey) return null;
-      return { rawDemandRowId: alloc.itemRowId, bucketKey, allocatedQuantity: alloc.qty };
-    }).filter((value): value is NonNullable<typeof value> => value !== null);
-
-    return { buckets, allocations };
-  }, [workGroups, plMap, itemAllocations, isRollingDraft, rollingDraftAudit, draftWithAssignments]);
+  const createPlanPayload = useCallback(() => buildPlanPayload({
+    sourceKind: draftWithAssignments?.draft.sourceKind,
+    planningLines,
+    workGroups,
+    itemAllocations,
+    rollingDraftAudit,
+    draftRows: draftWithAssignments?.rows,
+  }), [draftWithAssignments, planningLines, workGroups, itemAllocations, rollingDraftAudit]);
 
   function isDraftNotMutableError(err: unknown): boolean {
     return err instanceof BffRequestError
@@ -501,11 +470,11 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     if (!draftId || !capabilities.canSaveDraft || isPublishedDraft) return;
     setPlanBuildError(null);
     try {
-      savePlan.mutate({ draftId, body: buildPlanPayload() });
+      savePlan.mutate({ draftId, body: createPlanPayload() });
     } catch (error) {
       setPlanBuildError(error instanceof Error ? error.message : 'לא ניתן לבנות את תוכנית השמירה.');
     }
-  }, [draftId, capabilities.canSaveDraft, isPublishedDraft, buildPlanPayload, savePlan]);
+  }, [draftId, capabilities.canSaveDraft, isPublishedDraft, createPlanPayload, savePlan]);
 
   const handlePublish = useCallback(() => {
     if (!draftId || !targetShiftId) return;
@@ -544,7 +513,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
 
     let body;
     try {
-      body = buildPlanPayload();
+      body = createPlanPayload();
     } catch (error) {
       setPublishError(error instanceof Error ? error.message : 'לא ניתן לבנות את תוכנית הפרסום.');
       return;
@@ -563,7 +532,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
         },
       },
     );
-  }, [draftId, targetShiftId, isPublishedDraft, capabilities.canPublishToShift, savePlan, publishPlan, buildPlanPayload, refetchDraft]);
+  }, [draftId, targetShiftId, isPublishedDraft, capabilities.canPublishToShift, savePlan, publishPlan, createPlanPayload, refetchDraft]);
 
   function getPublishErrorMessage(err: unknown): string {
     if (isDraftNotMutableError(err)) return 'הטיוטה כבר פורסמה למשמרת';
@@ -783,10 +752,19 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
                 <p className="text-xs text-green-700 font-semibold">הטיוטה נשמרה</p>
               )}
               {savePlan.isError && (
-                <p className="text-xs text-red-600 font-semibold">שגיאה בשמירה: {savePlan.error?.message}</p>
+                <div role="alert" className="rounded-md border-2 border-red-500 bg-red-50 p-3 text-sm font-semibold text-red-800">
+                  <div>שמירת הטיוטה נכשלה</div>
+                  {savePlan.error instanceof BffRequestError && savePlan.error.code && (
+                    <div className="font-mono text-xs" dir="ltr">{savePlan.error.code}</div>
+                  )}
+                  <div>{savePlan.error?.message}</div>
+                </div>
               )}
               {planBuildError && (
-                <p className="text-xs text-red-600 font-semibold">שגיאה בשמירה: {planBuildError}</p>
+                <div role="alert" className="rounded-md border-2 border-red-500 bg-red-50 p-3 text-sm font-semibold text-red-800">
+                  <div>שמירת הטיוטה נכשלה</div>
+                  <div>{planBuildError}</div>
+                </div>
               )}
             </div>
           ) : (
