@@ -407,7 +407,8 @@ export type DemandImportDataSheetParsedRow = z.infer<typeof demandImportDataShee
 export const parseDemandImportDataSheetPreviewInputSchema = z.object({
   sourceFile: z.string().min(1),
   sourceSheet: z.literal('DataSheet'),
-  rows: z.array(demandImportDataSheetParsedRowSchema)
+  rows: z.array(demandImportDataSheetParsedRowSchema),
+  targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional()
 });
 export type ParseDemandImportDataSheetPreviewInput = z.infer<typeof parseDemandImportDataSheetPreviewInputSchema>;
 
@@ -620,7 +621,7 @@ export function parseDemandImportDataSheetPreview(
     const distributionArea = normalizeTrimmedString(row.distributionArea);
     const rawRouteLine = normalizeTrimmedString(row.rawRouteLine);
     const plannedDeliveryDateRaw = row.plannedDeliveryDateRaw;
-    const plannedDeliveryDate = normalizeWorkbookDate(plannedDeliveryDateRaw);
+    let plannedDeliveryDate = normalizeWorkbookDate(plannedDeliveryDateRaw);
     const plannedDeliveryDateRawDiagnostic = plannedDeliveryDateRaw instanceof Date
       ? plannedDeliveryDateRaw.toISOString()
       : normalizeTrimmedString(plannedDeliveryDateRaw);
@@ -639,12 +640,16 @@ export function parseDemandImportDataSheetPreview(
         field: 'plannedDeliveryDate'
       });
     } else if (!hasPlannedDeliveryDateInput) {
-      issues.push({
-        severity: 'warning',
-        code: 'MISSING_PLANNED_DELIVERY_DATE',
-        message: 'Missing planned delivery date; row requires backlog review and is unavailable to target-date rolling.',
-        field: 'plannedDeliveryDate'
-      });
+      if (parsedInput.targetDate) {
+        plannedDeliveryDate = parsedInput.targetDate;
+      } else {
+        issues.push({
+          severity: 'warning',
+          code: 'MISSING_PLANNED_DELIVERY_DATE',
+          message: 'Missing planned delivery date; row requires backlog review and is unavailable to target-date rolling.',
+          field: 'plannedDeliveryDate'
+        });
+      }
     }
 
     if (!orderNumber) {

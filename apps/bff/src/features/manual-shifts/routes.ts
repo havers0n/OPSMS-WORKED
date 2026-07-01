@@ -3,7 +3,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { ZodError } from 'zod';
 import {
   ManualShiftImportError,
-  parseDemandImportDataSheetPreview,
   parseDailyManualShiftImport,
   parseManualShiftMonthlyPreview,
   planManualShiftMonthlyImportApply
@@ -745,7 +744,8 @@ export function registerManualShiftsRoutes(
       const tenantId = requireTenant(auth);
       logImportStage(request, '/api/demand-imports/datasheet/preview', 'tenant_resolved', { tenantId });
 
-      const { fileName, fileBuffer } = await readMultipartUpload(request, {
+      const { fileName, fileBuffer, fields } = await readMultipartUpload(request, {
+        allowedFieldNames: ['targetShiftId'],
         route: '/api/demand-imports/datasheet/preview'
       });
 
@@ -759,7 +759,13 @@ export function registerManualShiftsRoutes(
         rowCount: workbook.rows.length
       });
 
-      const preview = parseDemandImportDataSheetPreview(workbook);
+      const preview = await getManualShiftsService(auth).previewDemandImportDataSheet({
+        tenantId,
+        targetShiftId: fields.get('targetShiftId') ?? null,
+        sourceFile: workbook.sourceFile,
+        sourceSheet: workbook.sourceSheet,
+        rows: workbook.rows
+      });
       logImportStage(request, '/api/demand-imports/datasheet/preview', 'preview_result', {
         rowsCount: preview.rowsCount,
         rawRowsCount: preview.rawRowsCount,
@@ -784,7 +790,8 @@ export function registerManualShiftsRoutes(
       const tenantId = requireTenant(auth);
       logImportStage(request, '/api/demand-imports/datasheet', 'tenant_resolved', { tenantId });
 
-      const { fileName, fileBuffer } = await readMultipartUpload(request, {
+      const { fileName, fileBuffer, fields } = await readMultipartUpload(request, {
+        allowedFieldNames: ['targetShiftId'],
         route: '/api/demand-imports/datasheet'
       });
 
@@ -798,12 +805,13 @@ export function registerManualShiftsRoutes(
         rowCount: workbook.rows.length
       });
 
-      const preview = parseDemandImportDataSheetPreview(workbook);
       const result = await getManualShiftsService(auth).createDemandImportDataSheet({
         tenantId,
         sourceFile: fileName,
-        preview,
-        uploadedBy: auth.user.id ?? null
+        uploadedBy: auth.user.id ?? null,
+        targetShiftId: fields.get('targetShiftId') ?? null,
+        sourceSheet: workbook.sourceSheet,
+        rows: workbook.rows
       });
       logImportStage(request, '/api/demand-imports/datasheet', 'service_result', {
         batchId: result.batch.id,

@@ -44,7 +44,7 @@ export function DatasheetImportPanel({ shiftId, appendTargetDate }: { shiftId?: 
     setSelectedFile(null);
     setCreateResult(null);
     try {
-      const response = await previewMutation.mutateAsync(file);
+      const response = await previewMutation.mutateAsync({ file, targetShiftId: shiftId });
       setPreview(response.preview);
       setSelectedFile(file);
     } catch (error) {
@@ -63,7 +63,7 @@ export function DatasheetImportPanel({ shiftId, appendTargetDate }: { shiftId?: 
     if (!selectedFile || isBlocking) return;
     setErrorMessage(null);
     try {
-      const result = await createMutation.mutateAsync(selectedFile);
+      const result = await createMutation.mutateAsync({ file: selectedFile, targetShiftId: shiftId });
       setCreateResult(result);
       setSelectedFile(null);
       setPreview(null);

@@ -53,6 +53,52 @@ describe('demand import DataSheet parser', () => {
     });
   });
 
+  it('fills plannedDeliveryDate from targetDate when Excel date is blank', () => {
+    const result = parseDemandImportDataSheetPreview({
+      sourceFile: 'datasheet.xlsx',
+      sourceSheet: 'DataSheet',
+      rows: [buildRow({ plannedDeliveryDateRaw: null })],
+      targetDate: '2026-07-15'
+    });
+
+    expect(result.rows[0].plannedDeliveryDate).toBe('2026-07-15');
+    expect(result.rows[0].plannedDeliveryDateRaw).toBeNull();
+    expect(result.rows[0].issues.find((i) => i.code === 'MISSING_PLANNED_DELIVERY_DATE')).toBeUndefined();
+    expect(result.warningRowsCount).toBe(0);
+  });
+
+  it('keeps plannedDeliveryDate null and warns when Excel date is blank and no targetDate', () => {
+    const result = parseDemandImportDataSheetPreview({
+      sourceFile: 'datasheet.xlsx',
+      sourceSheet: 'DataSheet',
+      rows: [buildRow({ plannedDeliveryDateRaw: null })]
+    });
+
+    expect(result.rows[0].plannedDeliveryDate).toBeNull();
+    expect(result.warningRowsCount).toBe(1);
+    expect(result.rows[0].issues).toContainEqual(expect.objectContaining({
+      code: 'MISSING_PLANNED_DELIVERY_DATE',
+      severity: 'warning'
+    }));
+  });
+
+  it('does not apply targetDate fallback when Excel date is non-empty but invalid', () => {
+    const result = parseDemandImportDataSheetPreview({
+      sourceFile: 'datasheet.xlsx',
+      sourceSheet: 'DataSheet',
+      rows: [buildRow({ plannedDeliveryDateRaw: '31.02.2026' })],
+      targetDate: '2026-07-15'
+    });
+
+    expect(result.rows[0].plannedDeliveryDate).toBeNull();
+    expect(result.errorRowsCount).toBe(1);
+    expect(result.rows[0].issues).toContainEqual(expect.objectContaining({
+      code: 'INVALID_PLANNED_DELIVERY_DATE',
+      severity: 'error'
+    }));
+    expect(result.rows[0].issues.find((i) => i.code === 'MISSING_PLANNED_DELIVERY_DATE')).toBeUndefined();
+  });
+
   it('marks missing distribution area as error', () => {
     const result = parseDemandImportDataSheetPreview({
       sourceFile: 'datasheet.xlsx',
