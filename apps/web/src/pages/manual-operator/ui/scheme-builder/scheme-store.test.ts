@@ -1,4 +1,4 @@
-﻿import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach } from 'vitest';
 import { useSchemeBuilderStore, getOrderSplitStatus } from './scheme-store';
 import type { SourceOrderItem, ItemAllocation } from './scheme-types';
 
@@ -200,6 +200,20 @@ describe('scheme-store', () => {
       const result = store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 6, totalQty: 10 });
       expect(result).toEqual({ ok: true });
     });
+
+    it('stores only the entered partial quantity', () => {
+      const store = useSchemeBuilderStore.getState();
+      const plId = store.createPlanningLine('south', 'קו 1');
+      const wgId = store.createWorkGroup(plId, 'קבוצה 1');
+      const result = store.allocateItemQty({ itemRowId: 'i1', workGroupId: wgId, qty: 6, totalQty: 12 });
+
+      expect(result).toEqual({ ok: true });
+      expect(useSchemeBuilderStore.getState().itemAllocations).toEqual([
+        expect.objectContaining({ itemRowId: 'i1', workGroupId: wgId, qty: 6 }),
+      ]);
+      expect(useSchemeBuilderStore.getState().getAssignedQty('i1')).toBe(6);
+      expect(useSchemeBuilderStore.getState().getRemainingQty('i1', 12)).toBe(6);
+    });
   });
 
   describe('allocateItemRows', () => {
@@ -228,6 +242,30 @@ describe('scheme-store', () => {
       const i2Assigned = useSchemeBuilderStore.getState().getAssignedQty('i2');
       expect(i1Assigned).toBe(10);
       expect(i2Assigned).toBe(5);
+    });
+
+    it('allocates only the provided rows and ignores duplicates', () => {
+      const store = useSchemeBuilderStore.getState();
+      const plId = store.createPlanningLine('south', 'קו 1');
+      const wgId = store.createWorkGroup(plId, 'קבוצה 1');
+      const orderItemMap = {
+        'order-1': [
+          makeItem('i1', 'order-1', 1),
+          makeItem('i2', 'order-1', 1),
+          makeItem('i3', 'order-1', 1),
+          makeItem('i4', 'order-1', 1),
+          makeItem('i5', 'order-1', 1),
+        ],
+      };
+
+      const result = store.allocateItemRows(['i2', 'i4', 'i2', 'i4'], wgId, orderItemMap);
+      expect(result).toEqual({ ok: true });
+      expect(useSchemeBuilderStore.getState().getAssignedQty('i1')).toBe(0);
+      expect(useSchemeBuilderStore.getState().getAssignedQty('i2')).toBe(1);
+      expect(useSchemeBuilderStore.getState().getAssignedQty('i3')).toBe(0);
+      expect(useSchemeBuilderStore.getState().getAssignedQty('i4')).toBe(1);
+      expect(useSchemeBuilderStore.getState().getAssignedQty('i5')).toBe(0);
+      expect(useSchemeBuilderStore.getState().getWorkGroupItemCount(wgId)).toBe(2);
     });
   });
 

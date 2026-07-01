@@ -21,13 +21,13 @@ describe('rolling source adapter', () => {
   it('blocks duplicate raw demand row allocations', () => {
     const data = fixture();
     data.allocations.push({ ...data.allocations[0], id: '30000000-0000-4000-8000-000000000002' });
-    expect(() => auditAndAdaptRollingDraft(data)).toThrow(/יותר מהקצאה אחת/);
+    expect(() => auditAndAdaptRollingDraft(data)).toThrow(/more than one allocation/i);
   });
 
   it('blocks incomplete row detail', () => {
     const data = fixture();
     data.rows = [];
-    expect(() => auditAndAdaptRollingDraft(data)).toThrow(/חסרה שורת מקור/);
+    expect(() => auditAndAdaptRollingDraft(data)).toThrow(/Missing source row for allocation/i);
   });
 
   it('serializes every canonical row exactly once and preserves unassigned rows', () => {
@@ -41,6 +41,42 @@ describe('rolling source adapter', () => {
       bucketKeyByWorkGroupId: new Map([[unassignedId, 'North|default|unassigned']]),
       unassignedByArea: audit.syntheticUnassignedByArea,
     });
+
     expect(allocations).toEqual([{ rawDemandRowId: data.rows![0].id, bucketKey: 'North|default|unassigned', allocatedQuantity: 4 }]);
+  });
+
+  it('serializes the actual partial quantity for an assigned rolling row', () => {
+    const allocations = buildRollingPlanAllocations({
+      rows: fixture().rows!,
+      allocationQuantityByRowId: new Map([['50000000-0000-4000-8000-000000000001', 12]]),
+      itemAllocations: [
+        { id: 'alloc-local-1', itemRowId: '50000000-0000-4000-8000-000000000001', workGroupId: 'wg-1', qty: 6, createdAt: 1 },
+      ],
+      bucketKeyByWorkGroupId: new Map([
+        ['wg-1', 'North|Line A|Group A'],
+        ['rolling-unassigned:10000000-0000-4000-8000-000000000001:North', 'North|default|unassigned'],
+      ]),
+      unassignedByArea: new Map([['North', 'rolling-unassigned:10000000-0000-4000-8000-000000000001:North']]),
+    });
+
+    expect(allocations).toEqual([
+      { rawDemandRowId: '50000000-0000-4000-8000-000000000001', bucketKey: 'North|Line A|Group A', allocatedQuantity: 6 },
+    ]);
+  });
+
+  it('fails clearly when a rolling row is split across multiple work groups', () => {
+    expect(() => buildRollingPlanAllocations({
+      rows: fixture().rows!,
+      allocationQuantityByRowId: new Map([['50000000-0000-4000-8000-000000000001', 12]]),
+      itemAllocations: [
+        { id: 'alloc-local-1', itemRowId: '50000000-0000-4000-8000-000000000001', workGroupId: 'wg-1', qty: 6, createdAt: 1 },
+        { id: 'alloc-local-2', itemRowId: '50000000-0000-4000-8000-000000000001', workGroupId: 'wg-2', qty: 6, createdAt: 2 },
+      ],
+      bucketKeyByWorkGroupId: new Map([
+        ['wg-1', 'North|Line A|Group A'],
+        ['wg-2', 'North|Line B|Group B'],
+      ]),
+      unassignedByArea: new Map([['North', 'rolling-unassigned:10000000-0000-4000-8000-000000000001:North']]),
+    })).toThrow(/cannot be split across multiple work groups/i);
   });
 });

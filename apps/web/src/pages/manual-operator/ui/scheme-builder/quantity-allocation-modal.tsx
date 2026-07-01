@@ -23,7 +23,6 @@ export function QuantityAllocationModal({
   const [quantities, setQuantities] = useState<Record<string, number>>({});
 
   const validRows = useMemo(() => itemRows.filter((r) => r.remainingQty > 0), [itemRows]);
-
   const fullyAllocatedRows = useMemo(() => itemRows.filter((r) => r.remainingQty === 0), [itemRows]);
 
   const getQty = (itemRowId: string, remainingQty: number): number => {
@@ -60,10 +59,11 @@ export function QuantityAllocationModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-bold text-gray-900">הקצאת כמות לקבוצה</h2>
+          <h2 className="text-lg font-bold text-gray-900">הקצאת כמויות לשורות המסומנות</h2>
           <p className="text-sm text-gray-500 mt-1">
             קבוצת עבודה: <span className="font-semibold text-blue-700">{workGroupName}</span>
           </p>
+          <p className="text-xs text-gray-500 mt-1">הפעולה תחול רק על השורות שנבחרו.</p>
         </div>
 
         <div className="px-6 py-4 max-h-80 overflow-y-auto">
@@ -75,7 +75,7 @@ export function QuantityAllocationModal({
             <table className="w-full text-sm text-right">
               <thead className="bg-gray-100 border-b border-gray-200">
                 <tr>
-                  <th className="p-2 font-medium text-gray-700">מק"ט</th>
+                  <th className="p-2 font-medium text-gray-700">מק&quot;ט</th>
                   <th className="p-2 font-medium text-gray-700">תיאור</th>
                   <th className="p-2 font-medium text-gray-700 text-center">כמות מקורית</th>
                   <th className="p-2 font-medium text-gray-700 text-center">שויך</th>
@@ -104,7 +104,7 @@ export function QuantityAllocationModal({
                             const val = parseInt(e.target.value, 10);
                             setQuantities((prev) => ({
                               ...prev,
-                              [row.item.id]: isNaN(val) ? 0 : val,
+                              [row.item.id]: Number.isNaN(val) ? 0 : val,
                             }));
                           }}
                           className={`w-16 text-center border rounded px-1 py-0.5 text-xs ${
@@ -122,13 +122,13 @@ export function QuantityAllocationModal({
 
           {fullyAllocatedRows.length > 0 && (
             <div className="mt-3 text-xs text-gray-500 bg-gray-50 rounded px-3 py-2">
-              {fullyAllocatedRows.length} שורות הוקצו במלואן ולא נכללות
+              {fullyAllocatedRows.length} שורות שהיו מסומנות כבר הוקצו במלואן
             </div>
           )}
 
           {validRows.length > 0 && (
             <div className="mt-3 text-xs text-gray-500 bg-blue-50 rounded px-3 py-2">
-              ברירת מחדל: הקצאת מלוא הכמות הנותרת. ניתן לשנות לכל שורה.
+              כברירת מחדל, ההקצאה תמלא את הכמות שנותרה. אפשר לשנות לכל שורה.
             </div>
           )}
         </div>
@@ -147,7 +147,7 @@ export function QuantityAllocationModal({
             disabled={!allValid}
             className="px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            אשר הקצאה
+            אשר הקצאה לשורות המסומנות
           </button>
         </div>
       </div>

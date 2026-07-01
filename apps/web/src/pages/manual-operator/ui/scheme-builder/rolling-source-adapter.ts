@@ -18,24 +18,26 @@ export function auditAndAdaptRollingDraft(data: DemandPlanningDraftWithAssignmen
   const allocationByRowId = new Map<string, (typeof data.allocations)[number]>();
   for (const allocation of data.allocations) {
     if (allocationByRowId.has(allocation.rawDemandRowId)) {
-      throw new Error(`טיוטת הביקוש כוללת יותר מהקצאה אחת לשורה ${allocation.rawDemandRowId}.`);
+      throw new Error(`Rolling draft contains more than one allocation for row ${allocation.rawDemandRowId}.`);
     }
     allocationByRowId.set(allocation.rawDemandRowId, allocation);
   }
 
   const rowsById = new Map(data.rows.map((row) => [row.id, row]));
   for (const rowId of allocationByRowId.keys()) {
-    if (!rowsById.has(rowId)) throw new Error(`חסרה שורת מקור עבור הקצאה ${rowId}.`);
+    if (!rowsById.has(rowId)) throw new Error(`Missing source row for allocation ${rowId}.`);
   }
 
   const includedRows = data.rows.filter((row) => allocationByRowId.has(row.id));
   if (includedRows.length !== allocationByRowId.size) {
-    throw new Error('פרטי שורות המקור בטיוטה אינם שלמים.');
+    throw new Error('Rolling draft source row details are incomplete.');
   }
 
   const bucketsById = new Map(data.buckets.map((bucket) => [bucket.id, bucket]));
   for (const allocation of allocationByRowId.values()) {
-    if (!bucketsById.has(allocation.bucketId)) throw new Error(`חסר יעד תכנון עבור הקצאה ${allocation.id}.`);
+    if (!bucketsById.has(allocation.bucketId)) {
+      throw new Error(`Missing planning bucket for allocation ${allocation.id}.`);
+    }
   }
 
   const syntheticUnassignedByArea = new Map<string, string>();
@@ -87,7 +89,7 @@ export function auditAndAdaptRollingDraft(data: DemandPlanningDraftWithAssignmen
       hasCheckUnits: false,
       sourceDeliveryLine: null,
       areaName: key,
-      areaDisplayName: first.distributionArea ?? '(ללא אזור)',
+      areaDisplayName: first.distributionArea ?? '(no area)',
       deliveryPointId: null,
       deliveryPointName: null,
       deliveryPointMatchStatus: null,
@@ -97,7 +99,7 @@ export function auditAndAdaptRollingDraft(data: DemandPlanningDraftWithAssignmen
     const current = areasByName.get(key);
     areasByName.set(key, {
       areaName: key,
-      displayName: first.distributionArea ?? '(ללא אזור)',
+      displayName: first.distributionArea ?? '(no area)',
       totalOrders: (current?.totalOrders ?? 0) + 1,
       totalQuantity: (current?.totalQuantity ?? 0) + totalQuantity,
       itemLinesCount: (current?.itemLinesCount ?? 0) + items.length,
@@ -119,17 +121,35 @@ export function buildRollingPlanAllocations(input: {
   unassignedByArea: Map<string, string>;
 }) {
   const rowById = new Map(input.rows.map((row) => [row.id, row]));
+  const allocationsByRowId = new Map<string, ItemAllocation[]>();
+
+  for (const allocation of input.itemAllocations) {
+    const existing = allocationsByRowId.get(allocation.itemRowId);
+    if (existing) existing.push(allocation);
+    else allocationsByRowId.set(allocation.itemRowId, [allocation]);
+  }
+
   return [...input.allocationQuantityByRowId].map(([rowId, quantity]) => {
-    const current = input.itemAllocations.filter((allocation) => allocation.itemRowId === rowId);
-    if (current.length > 1) throw new Error(`לא ניתן לשמור יותר מיעד אחד לשורת ביקוש ${rowId}.`);
-    let workGroupId: string | undefined = current[0]?.workGroupId;
+    const current = allocationsByRowId.get(rowId) ?? [];
+    const workGroupIds = [...new Set(current.map((allocation) => allocation.workGroupId))];
+
+    if (workGroupIds.length > 1) {
+      throw new Error(`Rolling draft row ${rowId} cannot be split across multiple work groups.`);
+    }
+
+    let workGroupId: string | undefined = workGroupIds[0];
+    let allocationQuantity = current.reduce((sum, allocation) => sum + allocation.qty, 0);
+
     if (!workGroupId) {
       const row = rowById.get(rowId);
-      if (!row) throw new Error(`חסרה שורת מקור ${rowId}.`);
+      if (!row) throw new Error(`Missing source row ${rowId}.`);
       workGroupId = input.unassignedByArea.get(areaKey(row.distributionArea));
+      allocationQuantity = quantity;
     }
+
     const bucketKey = workGroupId ? input.bucketKeyByWorkGroupId.get(workGroupId) : null;
-    if (!bucketKey) throw new Error(`חסר יעד לא משויך עבור שורת ביקוש ${rowId}.`);
-    return { rawDemandRowId: rowId, bucketKey, allocatedQuantity: quantity };
+    if (!bucketKey) throw new Error(`Missing target bucket for row ${rowId}.`);
+
+    return { rawDemandRowId: rowId, bucketKey, allocatedQuantity: allocationQuantity };
   });
 }

@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, ChevronDown, ChevronUp, Save, Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -142,15 +142,16 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   const [planBuildError, setPlanBuildError] = useState<string | null>(null);
 
   const [drawerOrderId, setDrawerOrderId] = useState<string | null>(null);
-  const [assignItemIds, setAssignItemIds] = useState<string[]>([]);
+  const [assignFlow, setAssignFlow] = useState<{
+    itemRowIds: string[];
+    mode: 'selected' | 'all-unassigned';
+  } | null>(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
 
   const [quantityModalState, setQuantityModalState] = useState<{
     itemRowIds: string[];
     workGroupId: string;
   } | null>(null);
-
-  const [isWholeOrderAssign, setIsWholeOrderAssign] = useState(false);
 
   const [showOrders, setShowOrders] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -334,8 +335,9 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
 
   const handleCloseItemsDrawer = useCallback(() => {
     setDrawerOrderId(null);
-    setAssignItemIds([]);
-    setIsWholeOrderAssign(false);
+    setAssignFlow(null);
+    setShowAssignModal(false);
+    setQuantityModalState(null);
   }, []);
 
   const handleOpenQuantityModal = useCallback((itemRowIds: string[], workGroupId: string) => {
@@ -352,12 +354,12 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
         allocateItemQty({
           itemRowId: alloc.itemRowId,
           workGroupId,
-          qty: isRollingDraft ? (rollingDraftAudit?.allocationQuantityByRowId.get(alloc.itemRowId) ?? alloc.qty) : alloc.qty,
+          qty: alloc.qty,
           totalQty: item.quantity,
         });
       }
       setQuantityModalState(null);
-      setAssignItemIds([]);
+      setAssignFlow(null);
     },
     [allocateItemQty, drawerItems, capabilities.canAssignOrders, isRollingDraft, rollingDraftAudit],
   );
@@ -368,8 +370,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
       handleOpenQuantityModal(itemRowIds, targetWorkGroupId);
       return;
     }
-    setAssignItemIds(itemRowIds);
-    setIsWholeOrderAssign(false);
+    setAssignFlow({ itemRowIds, mode: 'selected' });
     setShowAssignModal(true);
   }, [capabilities.canAssignOrders, targetWorkGroupId, handleOpenQuantityModal]);
 
@@ -379,24 +380,23 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
       allocateItemRows(itemRowIds, targetWorkGroupId, orderItemMap);
       return;
     }
-    setAssignItemIds(itemRowIds);
-    setIsWholeOrderAssign(true);
+    setAssignFlow({ itemRowIds, mode: 'all-unassigned' });
     setShowAssignModal(true);
   }, [capabilities.canAssignOrders, targetWorkGroupId, allocateItemRows, orderItemMap]);
 
   const handleConfirmAssign = useCallback(
     (workGroupId: string) => {
       if (!capabilities.canAssignOrders) return;
-      if (isWholeOrderAssign) {
-        allocateItemRows(assignItemIds, workGroupId, orderItemMap);
-        setAssignItemIds([]);
-        setIsWholeOrderAssign(false);
+      if (assignFlow?.mode === 'all-unassigned') {
+        allocateItemRows(assignFlow.itemRowIds, workGroupId, orderItemMap);
+        setShowAssignModal(false);
+        setAssignFlow(null);
       } else {
-        handleOpenQuantityModal(assignItemIds, workGroupId);
-        setIsWholeOrderAssign(false);
+        setShowAssignModal(false);
+        handleOpenQuantityModal(assignFlow?.itemRowIds ?? [], workGroupId);
       }
     },
-    [capabilities.canAssignOrders, assignItemIds, isWholeOrderAssign, allocateItemRows, handleOpenQuantityModal, orderItemMap],
+    [capabilities.canAssignOrders, assignFlow, allocateItemRows, handleOpenQuantityModal, orderItemMap],
   );
 
   const handleStartAssign = useCallback((workGroupId: string) => {
@@ -913,16 +913,16 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
         <>
           <AssignModalV2
             isOpen={showAssignModal}
-            onClose={() => { setShowAssignModal(false); setAssignItemIds([]); setIsWholeOrderAssign(false); }}
+            onClose={() => { setShowAssignModal(false); setAssignFlow(null); }}
             targetAreaName={selectedAreaName}
-            itemCount={assignItemIds.length}
+            itemCount={assignFlow?.itemRowIds.length ?? 0}
             onAssign={handleConfirmAssign}
           />
 
           {quantityModalState && (
             <QuantityAllocationModal
               isOpen={true}
-              onClose={() => { setQuantityModalState(null); setAssignItemIds([]); }}
+              onClose={() => { setQuantityModalState(null); setAssignFlow(null); }}
               itemRows={quantityModalRows}
               workGroupName={getWorkGroup(quantityModalState.workGroupId)?.name ?? ''}
               onConfirm={(allocs) => handleConfirmAllocations(allocs, quantityModalState.workGroupId)}

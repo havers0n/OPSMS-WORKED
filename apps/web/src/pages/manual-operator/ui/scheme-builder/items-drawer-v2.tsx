@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckSquare, Loader2, Square } from 'lucide-react';
 import type { SourceOrder, SourceOrderItem, SchemeBuilderCapabilities } from './scheme-types';
 import { useSchemeBuilderStore, getOrderSplitStatus } from './scheme-store';
@@ -39,6 +39,10 @@ export function ItemsDrawerV2({
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [order.orderId]);
+
   const itemSplitStatus = getOrderSplitStatus(order.orderId, items, itemAllocations);
 
   const rowsWithRemaining = useMemo(
@@ -51,6 +55,8 @@ export function ItemsDrawerV2({
   );
 
   const unassignedItemIds = rowsWithRemaining.map((i) => i.id);
+  const selectedUnassignedIds = useMemo(() => unassignedItemIds.filter((id) => selectedIds.has(id)), [selectedIds, unassignedItemIds]);
+  const allUnassignedSelected = unassignedItemIds.length > 0 && selectedUnassignedIds.length === unassignedItemIds.length;
 
   const toggleId = (id: string) => {
     const item = items.find((i) => i.id === id);
@@ -67,11 +73,7 @@ export function ItemsDrawerV2({
   };
 
   const toggleSelectAllVisible = () => {
-    if (selectedIds.size === items.filter((i) => {
-      const allocs = allocationsByItem.get(i.id) ?? [];
-      const assignedQty = allocs.reduce((s, a) => s + a.qty, 0);
-      return i.quantity - assignedQty > 0;
-    }).length) {
+    if (allUnassignedSelected) {
       setSelectedIds(new Set());
     } else {
       setSelectedIds(new Set(unassignedItemIds));
@@ -84,7 +86,7 @@ export function ItemsDrawerV2({
 
   const handleAssignSelected = () => {
     if (selectedIds.size === 0) return;
-    onAssignSelected(Array.from(selectedIds));
+    onAssignSelected(selectedUnassignedIds);
     setSelectedIds(new Set());
   };
 
@@ -165,29 +167,31 @@ export function ItemsDrawerV2({
             <button
               type="button"
               onClick={toggleSelectAllVisible}
+              aria-pressed={allUnassignedSelected}
               className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1"
             >
-              {selectedIds.size === unassignedItemIds.length && unassignedItemIds.length > 0 ? <CheckSquare size={14} /> : <Square size={14} />}
-              בחר הכל
+              {allUnassignedSelected ? <CheckSquare size={14} /> : <Square size={14} />}
+              {"בחר את כל השורות שלא שובצו"}
             </button>
             <button
               type="button"
               onClick={toggleSelectUnassigned}
+              aria-pressed={selectedUnassignedIds.length === unassignedItemIds.length && unassignedItemIds.length > 0}
               className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1"
             >
               <Square size={14} />
-              בחר לא משויכות ({unassignedItemIds.length})
+              {"בחר שורות פנויות (" + unassignedItemIds.length + ")"}
             </button>
             <div className="flex-1" />
-            {selectedIds.size > 0 && (
+            {selectedUnassignedIds.length > 0 && (
               <button
                 type="button"
                 onClick={handleAssignSelected}
                 className="px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
               >
                 {targetWorkGroupName
-                  ? `שייך לקבוצה: ${targetWorkGroupName} (${selectedIds.size})`
-                  : `שייך מסומנים (${selectedIds.size})`}
+                  ? `שייך שורות מסומנות בלבד לקבוצה: ${targetWorkGroupName} (${selectedIds.size})`
+                  : `שייך שורות מסומנות בלבד (${selectedIds.size})`}
               </button>
             )}
             {!targetWorkGroupName && unassignedItemIds.length > 0 && (
@@ -196,7 +200,7 @@ export function ItemsDrawerV2({
                 onClick={handleAssignAllUnassigned}
                 className="px-3 py-1.5 text-xs font-medium rounded-md border border-blue-300 text-blue-700 hover:bg-blue-50 transition-colors"
               >
-                שייך את כל השורות שלא שובצו ({unassignedItemIds.length})
+                {"שייך את כל השורות הפנויות (" + unassignedItemIds.length + ")"}
               </button>
             )}
           </div>
@@ -249,6 +253,8 @@ export function ItemsDrawerV2({
                             type="button"
                             onClick={() => toggleId(item.id)}
                             disabled={isFullyAllocated}
+                            aria-label={isSelected ? `בטל בחירה לשורה ${item.sku}` : `בחר שורה ${item.sku}`}
+                            aria-pressed={isSelected}
                             className={`transition-colors ${isFullyAllocated ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-blue-600'}`}
                           >
                             {isSelected ? <CheckSquare size={16} className="text-blue-600" /> : <Square size={16} />}
@@ -320,3 +326,4 @@ export function ItemsDrawerV2({
     </div>
   );
 }
+

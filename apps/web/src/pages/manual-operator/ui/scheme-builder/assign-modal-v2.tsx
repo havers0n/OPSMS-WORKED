@@ -52,18 +52,19 @@ export function AssignModalV2({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-bold text-gray-900">שייך לקבוצת עבודה</h2>
+          <h2 className="text-lg font-bold text-gray-900">בחר קבוצת עבודה לשורות המסומנות</h2>
           <p className="text-sm text-gray-500 mt-1">{itemCount} שורות מסומנות</p>
+          <p className="text-xs text-gray-500 mt-1">המשך ישויך רק לשורות שנבחרו.</p>
         </div>
 
         <div className="px-6 py-4 max-h-72 overflow-y-auto">
           {areaLines.length === 0 ? (
             <div className="text-sm text-gray-500 text-center py-4">
-              יש ליצור קו עבודה וקבוצת עבודה לפני שיוך שורות
+              אין קו עבודה וקבוצות עבודה לשיוך בשטח זה
             </div>
           ) : totalGroups === 0 ? (
             <div className="text-sm text-gray-500 text-center py-4">
-              יש ליצור קבוצת עבודה לפני שיוך שורות
+              אין קבוצות עבודה לשיוך בשטח זה
             </div>
           ) : (
             <div className="space-y-4">
@@ -110,7 +111,7 @@ export function AssignModalV2({
             disabled={!selectedWgId}
             className="px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            שייך
+            המשך לשיוך
           </button>
         </div>
       </div>

@@ -1,4 +1,4 @@
-﻿import { create } from 'zustand';
+import { create } from 'zustand';
 import type { PlanningLine, WorkGroup, OrderSplitStatus, SourceOrderItem, DeleteResult, AllocateResult, ItemAllocation } from './scheme-types';
 
 function generateId(prefix: string): string {
@@ -158,22 +158,25 @@ export const useSchemeBuilderStore = create<SchemeBuilderState>((set, get) => ({
   },
 
   allocateItemRows: (itemRowIds: string[], workGroupId: string, orderItemMap: Record<string, SourceOrderItem[]>): AllocateResult => {
-    const state = get();
-    let hasError: AllocateResult | null = null;
-    for (const itemRowId of itemRowIds) {
-      let totalQty = 0;
-      for (const items of Object.values(orderItemMap)) {
-        const found = items.find((i) => i.id === itemRowId);
-        if (found) {
-          totalQty = found.quantity;
-          break;
+    const rowById = new Map<string, SourceOrderItem>();
+    for (const items of Object.values(orderItemMap)) {
+      for (const item of items) {
+        if (!rowById.has(item.id)) {
+          rowById.set(item.id, item);
         }
       }
+    }
+
+    let hasError: AllocateResult | null = null;
+    const uniqueItemRowIds = [...new Set(itemRowIds)];
+    for (const itemRowId of uniqueItemRowIds) {
+      const row = rowById.get(itemRowId);
+      const totalQty = row?.quantity ?? 0;
       if (totalQty <= 0) {
         hasError = { ok: false, reason: 'missing_item_qty' };
         continue;
       }
-      const currentAssigned = state.itemAllocations
+      const currentAssigned = get().itemAllocations
         .filter((a) => a.itemRowId === itemRowId)
         .reduce((sum, a) => sum + a.qty, 0);
       const remaining = totalQty - currentAssigned;
