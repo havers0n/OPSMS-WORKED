@@ -8,6 +8,7 @@ import type {
 } from './scheme-types';
 import { useSchemeBuilderStore } from './scheme-store';
 import { getVisiblePlanningLines, getVisibleWorkGroups } from './scheme-display-utils';
+import { getPlanReadiness } from './scheme-readiness';
 
 const CONFLICT_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   stale: { label: 'לא עדכני', className: 'text-red-700 bg-red-50' },
@@ -62,6 +63,15 @@ export function PublishSummary({
   const planningLines = useSchemeBuilderStore((s) => s.planningLines);
   const workGroups = useSchemeBuilderStore((s) => s.workGroups);
   const itemAllocations = useSchemeBuilderStore((s) => s.itemAllocations);
+
+  const readiness = getPlanReadiness({
+    orders,
+    orderItemMap,
+    planningLines,
+    workGroups,
+    itemAllocations,
+    publishUiMode,
+  });
 
   const loadedItemRows = Object.values(orderItemMap).reduce((acc, items) => acc + items.length, 0);
   const assignedRowIds = new Set(itemAllocations.map((a) => a.itemRowId));
@@ -167,6 +177,47 @@ export function PublishSummary({
         </div>
       </div>
 
+      {readiness.status === 'empty' && (
+        <div className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
+          אין הזמנות לתכנון
+        </div>
+      )}
+
+      {readiness.status === 'blocked' && (
+        <div className="space-y-1">
+          <div className="rounded-lg px-3 py-2 text-xs font-bold bg-red-50 text-red-800">
+            התוכנית חסומה לפרסום
+          </div>
+          {readiness.blockers.map((b, i) => (
+            <div key={i} className="flex items-start gap-1 text-xs text-red-700 bg-red-50 rounded p-1.5">
+              <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+              <span>{b}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {readiness.status === 'partial' && (
+        <div className="space-y-1">
+          <div className="rounded-lg px-3 py-2 text-xs font-bold bg-amber-50 text-amber-800">
+            ניתן לפרסם חלקית
+          </div>
+          {readiness.warnings.map((w, i) => (
+            <div key={i} className="flex items-start gap-1 text-xs text-amber-700 bg-amber-50 rounded p-1.5">
+              <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+              <span>{w}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {readiness.status === 'ready' && (
+        <div className="rounded-lg bg-green-50 px-3 py-2 text-xs text-green-800 flex items-center gap-1">
+          <CheckCircle size={12} />
+          <span>כל השורות שויכו — ניתן לפרסם למשמרת</span>
+        </div>
+      )}
+
       {publishUiMode === 'noTargetShift' && (
         <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
           בחר משמרת יעד כדי לאפשר פרסום. append/diff נשאר במסלול נפרד.
@@ -177,7 +228,7 @@ export function PublishSummary({
         <button
           type="button"
           onClick={onPublish}
-          disabled={isPublishing}
+          disabled={isPublishing || !readiness.canPublish}
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
         >
           {isPublishing ? (

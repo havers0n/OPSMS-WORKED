@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PublishSummary } from './publish-summary';
 import { useSchemeBuilderStore } from './scheme-store';
 import type { SourceOrder, RollingPublishConflict } from './scheme-types';
@@ -148,5 +148,201 @@ describe('PublishSummary', () => {
 
     expect(screen.getByText('הביקוש השתנה מאז יצירת הטיוטה')).toBeInTheDocument();
     expect(screen.queryByText(/שורות לא ניתן לפרסם/)).toBeNull();
+  });
+
+  it('renders blocked readiness status and blockers', () => {
+    useSchemeBuilderStore.setState({
+      planningLines: [
+        { id: 'pl-user', areaName: 'North', name: 'Line A', sortOrder: 0, createdAt: 0 },
+      ],
+      workGroups: [
+        { id: 'wg-user', planningLineId: 'pl-user', areaName: 'North', name: 'Group A', createdAt: 0 },
+      ],
+      itemAllocations: [],
+    });
+
+    render(
+      <PublishSummary
+        orders={[makeOrder('order-1')]}
+        orderItemMap={{
+          'order-1': [
+            { id: 'i1', orderId: 'order-1', sku: 'SKU-1', description: null, category: null, quantity: 10, notes: null, zone: null, sourceRows: null, sourceFile: null },
+            { id: 'i2', orderId: 'order-1', sku: 'SKU-2', description: null, category: null, quantity: 5, notes: null, zone: null, sourceRows: null, sourceFile: null },
+          ],
+        }}
+        publishUiMode="readyToPublish"
+      />,
+    );
+
+    expect(screen.getByText('התוכנית חסומה לפרסום')).toBeInTheDocument();
+    expect(screen.getByText('אין שורות לפרסום')).toBeInTheDocument();
+  });
+
+  it('renders partial readiness status and warning', () => {
+    useSchemeBuilderStore.setState({
+      planningLines: [
+        { id: 'pl-user', areaName: 'North', name: 'Line A', sortOrder: 0, createdAt: 0 },
+      ],
+      workGroups: [
+        { id: 'wg-user', planningLineId: 'pl-user', areaName: 'North', name: 'Group A', createdAt: 0 },
+      ],
+      itemAllocations: [
+        { id: 'a1', itemRowId: 'i1', workGroupId: 'wg-user', qty: 6, createdAt: 0 },
+      ],
+    });
+
+    render(
+      <PublishSummary
+        orders={[makeOrder('order-1')]}
+        orderItemMap={{
+          'order-1': [
+            { id: 'i1', orderId: 'order-1', sku: 'SKU-1', description: null, category: null, quantity: 10, notes: null, zone: null, sourceRows: null, sourceFile: null },
+          ],
+        }}
+        publishUiMode="readyToPublish"
+      />,
+    );
+
+    expect(screen.getByText('ניתן לפרסם חלקית')).toBeInTheDocument();
+    expect(screen.getByText('1 שורות שובצו חלקית — היתרה תישאר זמינה לתכנון הבא')).toBeInTheDocument();
+  });
+
+  it('enables publish button when partial status allows publishing', () => {
+    useSchemeBuilderStore.setState({
+      planningLines: [
+        { id: 'pl-user', areaName: 'North', name: 'Line A', sortOrder: 0, createdAt: 0 },
+      ],
+      workGroups: [
+        { id: 'wg-user', planningLineId: 'pl-user', areaName: 'North', name: 'Group A', createdAt: 0 },
+      ],
+      itemAllocations: [
+        { id: 'a1', itemRowId: 'i1', workGroupId: 'wg-user', qty: 6, createdAt: 0 },
+      ],
+    });
+
+    render(
+      <PublishSummary
+        orders={[makeOrder('order-1')]}
+        orderItemMap={{
+          'order-1': [
+            { id: 'i1', orderId: 'order-1', sku: 'SKU-1', description: null, category: null, quantity: 10, notes: null, zone: null, sourceRows: null, sourceFile: null },
+          ],
+        }}
+        publishUiMode="readyToPublish"
+        canPublish={true}
+        onPublish={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'פרסם לעבודה' })).toBeEnabled();
+  });
+
+  it('renders ready readiness message and enables publish button', () => {
+    useSchemeBuilderStore.setState({
+      planningLines: [
+        { id: 'pl-user', areaName: 'North', name: 'Line A', sortOrder: 0, createdAt: 0 },
+      ],
+      workGroups: [
+        { id: 'wg-user', planningLineId: 'pl-user', areaName: 'North', name: 'Group A', createdAt: 0 },
+      ],
+      itemAllocations: [
+        { id: 'a1', itemRowId: 'i1', workGroupId: 'wg-user', qty: 10, createdAt: 0 },
+      ],
+    });
+
+    render(
+      <PublishSummary
+        orders={[makeOrder('order-1')]}
+        orderItemMap={{
+          'order-1': [
+            { id: 'i1', orderId: 'order-1', sku: 'SKU-1', description: null, category: null, quantity: 10, notes: null, zone: null, sourceRows: null, sourceFile: null },
+          ],
+        }}
+        publishUiMode="readyToPublish"
+        canPublish={true}
+        onPublish={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('כל השורות שויכו — ניתן לפרסם למשמרת')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'פרסם לעבודה' })).toBeEnabled();
+  });
+
+  it('disables publish button when readiness blocks publishing', () => {
+    useSchemeBuilderStore.setState({
+      planningLines: [
+        { id: 'pl-user', areaName: 'North', name: 'Line A', sortOrder: 0, createdAt: 0 },
+      ],
+      workGroups: [
+        { id: 'wg-user', planningLineId: 'pl-user', areaName: 'North', name: 'Group A', createdAt: 0 },
+      ],
+      itemAllocations: [],
+    });
+
+    render(
+      <PublishSummary
+        orders={[makeOrder('order-1')]}
+        orderItemMap={{
+          'order-1': [
+            { id: 'i1', orderId: 'order-1', sku: 'SKU-1', description: null, category: null, quantity: 10, notes: null, zone: null, sourceRows: null, sourceFile: null },
+          ],
+        }}
+        publishUiMode="readyToPublish"
+        canPublish={true}
+        onPublish={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'פרסם לעבודה' })).toBeDisabled();
+  });
+
+  it('still renders conflict UX alongside readiness when publishConflicts and publishError exist', () => {
+    const conflicts: RollingPublishConflict[] = [
+      {
+        allocationId: 'a0000000-0000-4000-8000-000000000001',
+        rawDemandRowId: 'r0000000-0000-4000-8000-000000000001',
+        sku: 'SKU-CONFLICT',
+        orderNumber: 'SO-CONFLICT',
+        requestedQuantity: 10,
+        availableQuantity: 0,
+        status: 'stale',
+        reason: 'Row is stale.',
+      },
+    ];
+
+    useSchemeBuilderStore.setState({
+      planningLines: [
+        { id: 'pl-user', areaName: 'North', name: 'Line A', sortOrder: 0, createdAt: 0 },
+      ],
+      workGroups: [
+        { id: 'wg-user', planningLineId: 'pl-user', areaName: 'North', name: 'Group A', createdAt: 0 },
+      ],
+      itemAllocations: [
+        { id: 'a1', itemRowId: 'i1', workGroupId: 'wg-user', qty: 10, createdAt: 0 },
+      ],
+    });
+
+    render(
+      <PublishSummary
+        orders={[makeOrder('order-1')]}
+        orderItemMap={{
+          'order-1': [
+            { id: 'i1', orderId: 'order-1', sku: 'SKU-1', description: null, category: null, quantity: 10, notes: null, zone: null, sourceRows: null, sourceFile: null },
+            { id: 'i2', orderId: 'order-1', sku: 'SKU-2', description: null, category: null, quantity: 5, notes: null, zone: null, sourceRows: null, sourceFile: null },
+          ],
+        }}
+        publishUiMode="readyToPublish"
+        canPublish={true}
+        onPublish={vi.fn()}
+        publishError="הביקוש השתנה מאז יצירת הטיוטה"
+        publishConflicts={conflicts}
+      />,
+    );
+
+    expect(screen.getByText('ניתן לפרסם חלקית')).toBeInTheDocument();
+    expect(screen.getByText('1 שורות לא שובצו ולא יפורסמו')).toBeInTheDocument();
+    expect(screen.getByText('1 שורות לא ניתן לפרסם בגלל שינוי בביקוש הזמין')).toBeInTheDocument();
+    expect(screen.getByText('SKU-CONFLICT')).toBeInTheDocument();
+    expect(screen.getByText('לא עדכני')).toBeInTheDocument();
   });
 });

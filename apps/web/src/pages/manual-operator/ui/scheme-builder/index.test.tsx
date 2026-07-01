@@ -163,6 +163,17 @@ function makeDraft(status: 'draft' | 'applied') {
         createdAt: '2026-06-24T12:00:00.000Z',
         updatedAt: '2026-06-24T12:00:00.000Z',
       },
+      {
+        id: 'a2000000-0000-4000-8000-000000000001',
+        tenantId: 't0000000-0000-4000-8000-000000000001',
+        draftId: DRAFT_ID,
+        batchId: BATCH_ID,
+        bucketId: 'b1000000-0000-4000-8000-000000000001',
+        rawDemandRowId: 'r0000000-0000-4000-8000-000000000002',
+        allocatedQuantity: 20,
+        createdAt: '2026-06-24T12:00:00.000Z',
+        updatedAt: '2026-06-24T12:00:00.000Z',
+      },
     ],
   };
 }
