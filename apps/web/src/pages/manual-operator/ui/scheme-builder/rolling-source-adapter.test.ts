@@ -30,33 +30,27 @@ describe('rolling source adapter', () => {
     expect(() => auditAndAdaptRollingDraft(data)).toThrow(/Missing source row for allocation/i);
   });
 
-  it('serializes every canonical row exactly once and preserves unassigned rows', () => {
+  it('skips unassigned rows with no user-visible allocation', () => {
     const data = fixture();
     const audit = auditAndAdaptRollingDraft(data);
-    const unassignedId = audit.syntheticUnassignedByArea.get('North')!;
     const allocations = buildRollingPlanAllocations({
-      rows: data.rows!,
       allocationQuantityByRowId: audit.allocationQuantityByRowId,
       itemAllocations: [],
-      bucketKeyByWorkGroupId: new Map([[unassignedId, 'North|default|unassigned']]),
-      unassignedByArea: audit.syntheticUnassignedByArea,
+      bucketKeyByWorkGroupId: new Map(),
     });
 
-    expect(allocations).toEqual([{ rawDemandRowId: data.rows![0].id, bucketKey: 'North|default|unassigned', allocatedQuantity: 4 }]);
+    expect(allocations).toEqual([]);
   });
 
   it('serializes the actual partial quantity for an assigned rolling row', () => {
     const allocations = buildRollingPlanAllocations({
-      rows: fixture().rows!,
       allocationQuantityByRowId: new Map([['50000000-0000-4000-8000-000000000001', 12]]),
       itemAllocations: [
         { id: 'alloc-local-1', itemRowId: '50000000-0000-4000-8000-000000000001', workGroupId: 'wg-1', qty: 6, createdAt: 1 },
       ],
       bucketKeyByWorkGroupId: new Map([
         ['wg-1', 'North|Line A|Group A'],
-        ['rolling-unassigned:10000000-0000-4000-8000-000000000001:North', 'North|default|unassigned'],
       ]),
-      unassignedByArea: new Map([['North', 'rolling-unassigned:10000000-0000-4000-8000-000000000001:North']]),
     });
 
     expect(allocations).toEqual([
@@ -66,7 +60,6 @@ describe('rolling source adapter', () => {
 
   it('fails clearly when a rolling row is split across multiple work groups', () => {
     expect(() => buildRollingPlanAllocations({
-      rows: fixture().rows!,
       allocationQuantityByRowId: new Map([['50000000-0000-4000-8000-000000000001', 12]]),
       itemAllocations: [
         { id: 'alloc-local-1', itemRowId: '50000000-0000-4000-8000-000000000001', workGroupId: 'wg-1', qty: 6, createdAt: 1 },
@@ -76,7 +69,6 @@ describe('rolling source adapter', () => {
         ['wg-1', 'North|Line A|Group A'],
         ['wg-2', 'North|Line B|Group B'],
       ]),
-      unassignedByArea: new Map([['North', 'rolling-unassigned:10000000-0000-4000-8000-000000000001:North']]),
     })).toThrow(/cannot be split across multiple work groups/i);
   });
 });

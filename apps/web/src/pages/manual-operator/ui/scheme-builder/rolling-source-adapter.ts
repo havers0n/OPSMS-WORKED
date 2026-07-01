@@ -114,13 +114,10 @@ export function auditAndAdaptRollingDraft(data: DemandPlanningDraftWithAssignmen
 }
 
 export function buildRollingPlanAllocations(input: {
-  rows: RawDemandRow[];
   allocationQuantityByRowId: Map<string, number>;
   itemAllocations: ItemAllocation[];
   bucketKeyByWorkGroupId: Map<string, string>;
-  unassignedByArea: Map<string, string>;
 }) {
-  const rowById = new Map(input.rows.map((row) => [row.id, row]));
   const allocationsByRowId = new Map<string, ItemAllocation[]>();
 
   for (const allocation of input.itemAllocations) {
@@ -129,27 +126,28 @@ export function buildRollingPlanAllocations(input: {
     else allocationsByRowId.set(allocation.itemRowId, [allocation]);
   }
 
-  return [...input.allocationQuantityByRowId].map(([rowId, quantity]) => {
-    const current = allocationsByRowId.get(rowId) ?? [];
+  const result: { rawDemandRowId: string; bucketKey: string; allocatedQuantity: number }[] = [];
+
+  for (const [rowId] of input.allocationQuantityByRowId) {
+    const current = allocationsByRowId.get(rowId);
+    if (!current || current.length === 0) continue;
+
     const workGroupIds = [...new Set(current.map((allocation) => allocation.workGroupId))];
 
     if (workGroupIds.length > 1) {
       throw new Error(`Rolling draft row ${rowId} cannot be split across multiple work groups.`);
     }
 
-    let workGroupId: string | undefined = workGroupIds[0];
-    let allocationQuantity = current.reduce((sum, allocation) => sum + allocation.qty, 0);
+    const workGroupId = workGroupIds[0];
+    const allocationQuantity = current.reduce((sum, a) => sum + a.qty, 0);
+    const bucketKey = input.bucketKeyByWorkGroupId.get(workGroupId);
 
-    if (!workGroupId) {
-      const row = rowById.get(rowId);
-      if (!row) throw new Error(`Missing source row ${rowId}.`);
-      workGroupId = input.unassignedByArea.get(areaKey(row.distributionArea));
-      allocationQuantity = quantity;
+    if (!bucketKey) {
+      throw new Error(`Missing target bucket for row ${rowId}.`);
     }
 
-    const bucketKey = workGroupId ? input.bucketKeyByWorkGroupId.get(workGroupId) : null;
-    if (!bucketKey) throw new Error(`Missing target bucket for row ${rowId}.`);
+    result.push({ rawDemandRowId: rowId, bucketKey, allocatedQuantity: allocationQuantity });
+  }
 
-    return { rawDemandRowId: rowId, bucketKey, allocatedQuantity: allocationQuantity };
-  });
+  return result;
 }

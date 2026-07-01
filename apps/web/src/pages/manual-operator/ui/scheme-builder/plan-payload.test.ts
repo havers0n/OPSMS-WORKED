@@ -46,7 +46,7 @@ describe('buildPlanPayload', () => {
       allocations: [{ rawDemandRowId: 'row-1', bucketKey: '|Ч§Ч• Чђ|Ч§Ч‘Ч•Ч¦Ч” Чђ', allocatedQuantity: 3 }],
     });
   });
-  it('keeps the rolling row-set valid while only moving selected rows to the chosen bucket', () => {
+  it('sends only user-allocated rows in the rolling plan payload, omitting unassigned rows', () => {
     const selectedRow = { id: 'row-selected', distributionArea: 'North' } as RawDemandRow;
     const untouchedRow = { id: 'row-untouched', distributionArea: 'North' } as RawDemandRow;
     const rollingAuditWithTwoRows = {
@@ -72,7 +72,6 @@ describe('buildPlanPayload', () => {
 
     expect(payload.allocations).toEqual([
       { rawDemandRowId: 'row-selected', bucketKey: 'North|North|North', allocatedQuantity: 3 },
-      { rawDemandRowId: 'row-untouched', bucketKey: 'North|North|unassigned', allocatedQuantity: 4 },
     ]);
   });
 

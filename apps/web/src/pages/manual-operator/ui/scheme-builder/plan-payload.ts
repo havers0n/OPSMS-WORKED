@@ -36,11 +36,9 @@ export function buildPlanPayload(input: BuildPlanPayloadInput): DemandPlanningPu
     return {
       buckets,
       allocations: buildRollingPlanAllocations({
-        rows: input.draftRows,
         allocationQuantityByRowId: input.rollingDraftAudit.allocationQuantityByRowId,
         itemAllocations: input.itemAllocations,
         bucketKeyByWorkGroupId,
-        unassignedByArea: input.rollingDraftAudit.syntheticUnassignedByArea,
       }),
     };
   }
