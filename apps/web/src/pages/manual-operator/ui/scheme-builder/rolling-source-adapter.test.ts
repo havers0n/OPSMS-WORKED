@@ -27,7 +27,7 @@ describe('rolling source adapter', () => {
   it('blocks incomplete row detail', () => {
     const data = fixture();
     data.rows = [];
-    expect(() => auditAndAdaptRollingDraft(data)).toThrow(/missing source row/i);
+    expect(() => auditAndAdaptRollingDraft(data)).toThrow(/Missing source row for allocation/i);
   });
 
   it('serializes every canonical row exactly once and preserves unassigned rows', () => {

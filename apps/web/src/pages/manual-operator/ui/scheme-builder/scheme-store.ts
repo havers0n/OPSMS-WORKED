@@ -1,4 +1,4 @@
-﻿import { create } from 'zustand';
+import { create } from 'zustand';
 import type { PlanningLine, WorkGroup, OrderSplitStatus, SourceOrderItem, DeleteResult, AllocateResult, ItemAllocation } from './scheme-types';
 
 function generateId(prefix: string): string {

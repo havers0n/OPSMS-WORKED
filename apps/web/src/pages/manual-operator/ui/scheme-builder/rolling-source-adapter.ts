@@ -13,7 +13,7 @@ function areaKey(area: string | null) {
 }
 
 export function auditAndAdaptRollingDraft(data: DemandPlanningDraftWithAssignments): RollingDraftAudit {
-  if (!data.rows) throw new Error('Rolling draft is missing source rows.');
+  if (!data.rows) throw new Error('טיוטת הביקוש אינה כוללת את שורות המקור הנדרשות.');
 
   const allocationByRowId = new Map<string, (typeof data.allocations)[number]>();
   for (const allocation of data.allocations) {

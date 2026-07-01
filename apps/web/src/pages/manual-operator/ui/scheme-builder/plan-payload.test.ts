@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { RawDemandRow } from '@wos/domain';
 import { buildPlanPayload } from './plan-payload';
 import type { RollingDraftAudit } from './rolling-source-adapter';

@@ -1,4 +1,4 @@
-﻿import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach } from 'vitest';
 import { useSchemeBuilderStore, getOrderSplitStatus } from './scheme-store';
 import type { SourceOrderItem, ItemAllocation } from './scheme-types';
 

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckSquare, Loader2, Square } from 'lucide-react';
 import type { SourceOrder, SourceOrderItem, SchemeBuilderCapabilities } from './scheme-types';
 import { useSchemeBuilderStore, getOrderSplitStatus } from './scheme-store';

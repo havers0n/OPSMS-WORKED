@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useSchemeBuilderStore } from './scheme-store';
 import { getVisiblePlanningLines, getVisibleWorkGroups } from './scheme-display-utils';
 
