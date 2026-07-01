@@ -70,4 +70,5 @@ export * from './operations/manual-shift-print';
 export * from './operations/bonded-coverage-request';
 export * from './operations/demand-backlog';
 export * from './operations/rolling-available-demand';
+export * from './operations/demand-explorer';
 export * from './master-data/delivery-point';

@@ -743,6 +743,15 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
       buckets: [],
       allocations: []
     })) as unknown as ManualShiftsService['createRollingDemandPlanningDraft'],
+    getDemandExplorer: vi.fn(async () => ({
+      orders: [],
+      pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
+      summary: { totalOrders: 0, totalSkuCount: 0, totalQuantity: 0, totalAssignedQuantity: 0, totalRemainingQuantity: 0 }
+    })),
+    getDemandExplorerOrderItems: vi.fn(async () => ({
+      orderId: '',
+      items: []
+    })),
     ...overrides
   };
 }

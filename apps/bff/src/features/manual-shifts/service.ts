@@ -60,9 +60,14 @@ import type {
   DemandAvailableDemandSnapshot,
   RollingAvailableDemandResponse,
   DemandBacklogOrderStatus,
-  DemandBacklogOrderListResponse
+  DemandBacklogOrderListResponse,
+  DemandExplorerResponse,
+  DemandExplorerOrder,
+  DemandExplorerItem,
+  DemandExplorerItemsResponse,
+  DemandExplorerOrderStatus
 } from '@wos/domain';
-import { buildAvailableDemandResponse, parseDemandImportDataSheetPreview, resolveRollingAvailableDemandV1, computeBacklogOrderStatus } from '@wos/domain';
+import { buildAvailableDemandResponse, parseDemandImportDataSheetPreview, resolveRollingAvailableDemandV1, computeBacklogOrderStatus, isUserVisiblePlanningBucket, computeExplorerOrderStatus, computeExplorerRemainingQuantity, computeExplorerSkuCount, computeOrderGroupKey, hashOrderGroupKey } from '@wos/domain';
 import {
   buildProductControlRow,
   buildRawDemandPlanningPreview,
@@ -492,6 +497,23 @@ export type ManualShiftsService = {
     tenantId: string;
     targetShiftId: string;
   }): Promise<RollingAvailableDemandResponse>;
+
+  // Demand Explorer (PR-1)
+  getDemandExplorer(input: {
+    tenantId: string;
+    draftId: string;
+    distributionArea?: string;
+    search?: string;
+    status?: DemandExplorerOrderStatus;
+    page: number;
+    limit: number;
+  }): Promise<DemandExplorerResponse>;
+
+  getDemandExplorerOrderItems(input: {
+    tenantId: string;
+    draftId: string;
+    orderId: string;
+  }): Promise<DemandExplorerItemsResponse>;
 };
 
 function formatLocalDate(date: Date, timeZone: string) {
@@ -3546,6 +3568,208 @@ export function createManualShiftsServiceFromRepo(
     async getRollingAvailableDemand(input) {
       const { targetDate } = await resolveActiveTargetShift(input.tenantId, input.targetShiftId);
       return resolveRollingAvailableDemandForTargetDate(input.tenantId, targetDate);
+    },
+
+    async getDemandExplorer(input) {
+      const draft = await repo.getDemandPlanningDraft({
+        tenantId: input.tenantId,
+        draftId: input.draftId
+      });
+      if (!draft) throw demandPlanningDraftNotFound(input.draftId);
+
+      const [buckets, allocations] = await Promise.all([
+        repo.listDemandPlanningBuckets({ tenantId: input.tenantId, draftId: input.draftId }),
+        repo.listDemandPlanningAllocations({ tenantId: input.tenantId, draftId: input.draftId })
+      ]);
+
+      const allocRowIds = [...new Set(allocations.map((a) => a.rawDemandRowId))];
+      let rows: RawDemandRow[] = [];
+      if (allocRowIds.length > 0) {
+        rows = await repo.listRawDemandRowsByIds({ tenantId: input.tenantId, rowIds: allocRowIds });
+      }
+
+      if (rows.length === 0) {
+        return {
+          orders: [],
+          pagination: { page: input.page, limit: input.limit, total: 0, totalPages: 0 },
+          summary: { totalOrders: 0, totalSkuCount: 0, totalQuantity: 0, totalAssignedQuantity: 0, totalRemainingQuantity: 0 }
+        };
+      }
+
+      const userVisibleBucketIds = new Set(
+        buckets.filter((b) => isUserVisiblePlanningBucket(b)).map((b) => b.id)
+      );
+
+      const assignedQtyByRowId = new Map<string, number>();
+      for (const alloc of allocations) {
+        if (userVisibleBucketIds.has(alloc.bucketId)) {
+          assignedQtyByRowId.set(
+            alloc.rawDemandRowId,
+            (assignedQtyByRowId.get(alloc.rawDemandRowId) ?? 0) + alloc.allocatedQuantity
+          );
+        }
+      }
+
+      // Group rows by logical order key including distributionArea and plannedDeliveryDate
+      const orderKeyToRows = new Map<string, RawDemandRow[]>();
+      for (const row of rows) {
+        const key = computeOrderGroupKey({
+          distributionArea: row.distributionArea,
+          orderNumber: row.orderNumber,
+          customerName: row.customerName,
+          plannedDeliveryDate: row.plannedDeliveryDate,
+        });
+        const group = orderKeyToRows.get(key) ?? [];
+        group.push(row);
+        orderKeyToRows.set(key, group);
+      }
+
+      // Build order entries keeping key→rows map for SKU search
+      interface OrderEntry { key: string; order: DemandExplorerOrder; }
+      const entries: OrderEntry[] = [];
+      for (const [key, orderRows] of orderKeyToRows) {
+        const first = orderRows[0];
+        let totalQuantity = 0;
+        for (const r of orderRows) {
+          totalQuantity += r.quantity ?? 0;
+        }
+        let assignedQuantity = 0;
+        for (const r of orderRows) {
+          assignedQuantity += assignedQtyByRowId.get(r.id) ?? 0;
+        }
+        const remainingQuantity = computeExplorerRemainingQuantity(totalQuantity, assignedQuantity);
+        entries.push({
+          key,
+          order: {
+            orderId: hashOrderGroupKey(key),
+            orderNumber: first.orderNumber,
+            customerName: first.customerName,
+            distributionArea: first.distributionArea,
+            rowCount: orderRows.length,
+            skuCount: computeExplorerSkuCount(orderRows),
+            totalQuantity,
+            assignedQuantity,
+            remainingQuantity,
+            publishedQuantity: 0,
+            status: computeExplorerOrderStatus(totalQuantity, assignedQuantity)
+          }
+        });
+      }
+
+      // Server-side filter: distributionArea
+      let filtered = entries;
+      if (input.distributionArea) {
+        const da = input.distributionArea.toLowerCase();
+        filtered = filtered.filter((e) => (e.order.distributionArea ?? '').toLowerCase() === da);
+      }
+
+      // Server-side filter: free-text search (orderNumber, customerName, SKU)
+      if (input.search) {
+        const q = input.search.toLowerCase();
+        filtered = filtered.filter((e) => {
+          const orderRows = orderKeyToRows.get(e.key);
+          return (e.order.orderNumber ?? '').toLowerCase().includes(q) ||
+            (e.order.customerName ?? '').toLowerCase().includes(q) ||
+            (orderRows ?? []).some((r) => (r.sku ?? '').toLowerCase().includes(q));
+        });
+      }
+
+      // Server-side filter: status
+      if (input.status) {
+        filtered = filtered.filter((e) => e.order.status === input.status);
+      }
+
+      const orders = filtered.map((e) => e.order);
+      const total = orders.length;
+      const totalPages = Math.max(1, Math.ceil(total / input.limit));
+      const start = (input.page - 1) * input.limit;
+      const pageOrders = orders.slice(start, start + input.limit);
+
+      const totalSkuCount = orders.reduce((s, o) => s + o.skuCount, 0);
+      const totalQuantity = orders.reduce((s, o) => s + o.totalQuantity, 0);
+      const totalAssignedQuantity = orders.reduce((s, o) => s + o.assignedQuantity, 0);
+      const totalRemainingQuantity = orders.reduce((s, o) => s + o.remainingQuantity, 0);
+
+      return {
+        orders: pageOrders,
+        pagination: { page: input.page, limit: input.limit, total, totalPages },
+        summary: { totalOrders: total, totalSkuCount, totalQuantity, totalAssignedQuantity, totalRemainingQuantity }
+      };
+    },
+
+    async getDemandExplorerOrderItems(input) {
+      const draft = await repo.getDemandPlanningDraft({
+        tenantId: input.tenantId,
+        draftId: input.draftId
+      });
+      if (!draft) throw demandPlanningDraftNotFound(input.draftId);
+
+      const [buckets, allocations] = await Promise.all([
+        repo.listDemandPlanningBuckets({ tenantId: input.tenantId, draftId: input.draftId }),
+        repo.listDemandPlanningAllocations({ tenantId: input.tenantId, draftId: input.draftId })
+      ]);
+
+      const allocRowIds = [...new Set(allocations.map((a) => a.rawDemandRowId))];
+      let rows: RawDemandRow[] = [];
+      if (allocRowIds.length > 0) {
+        rows = await repo.listRawDemandRowsByIds({ tenantId: input.tenantId, rowIds: allocRowIds });
+      }
+
+      const userVisibleBucketIds = new Set(
+        buckets.filter((b) => isUserVisiblePlanningBucket(b)).map((b) => b.id)
+      );
+
+      const assignedQtyByRowId = new Map<string, number>();
+      for (const alloc of allocations) {
+        if (userVisibleBucketIds.has(alloc.bucketId)) {
+          assignedQtyByRowId.set(
+            alloc.rawDemandRowId,
+            (assignedQtyByRowId.get(alloc.rawDemandRowId) ?? 0) + alloc.allocatedQuantity
+          );
+        }
+      }
+
+      const orderKeyToRows = new Map<string, RawDemandRow[]>();
+      for (const row of rows) {
+        const key = computeOrderGroupKey({
+          distributionArea: row.distributionArea,
+          orderNumber: row.orderNumber,
+          customerName: row.customerName,
+          plannedDeliveryDate: row.plannedDeliveryDate,
+        });
+        const group = orderKeyToRows.get(key) ?? [];
+        group.push(row);
+        orderKeyToRows.set(key, group);
+      }
+
+      let matchedRows: RawDemandRow[] | undefined;
+      for (const [key, orderRows] of orderKeyToRows) {
+        if (hashOrderGroupKey(key) === input.orderId) {
+          matchedRows = orderRows;
+          break;
+        }
+      }
+
+      if (!matchedRows) {
+        return { orderId: input.orderId, items: [] };
+      }
+
+      const items: DemandExplorerItem[] = matchedRows.map((r) => {
+        const assignedQty = assignedQtyByRowId.get(r.id) ?? 0;
+        const qty = r.quantity ?? 0;
+        return {
+          itemId: r.id,
+          sku: r.sku ?? '',
+          description: r.description,
+          category: r.category,
+          quantity: qty,
+          assignedQuantity: assignedQty,
+          remainingQuantity: computeExplorerRemainingQuantity(qty, assignedQty),
+          status: r.planningStatus
+        };
+      });
+
+      return { orderId: input.orderId, items };
     },
 
     async getDemandBacklogOrders(input) {

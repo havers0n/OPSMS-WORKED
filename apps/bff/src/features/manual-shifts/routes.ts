@@ -88,7 +88,10 @@ import {
   demandBacklogOrderListResponseSchema,
   rollingAvailableDemandResponseSchema,
   rollingAvailableDemandQuerySchema,
-  rollingCreateDraftRequestSchema
+  rollingCreateDraftRequestSchema,
+  demandExplorerQuerySchema,
+  demandExplorerResponseSchema,
+  demandExplorerItemsResponseSchema
 } from '../../schemas.js';
 import { parseOrThrow } from '../../validation.js';
 import { generatePickerSheetPdf, type PickerSheetPdfParams } from './picker-sheet-pdf.js';
@@ -1011,6 +1014,54 @@ export function registerManualShiftsRoutes(
       });
 
       return parseOrThrow(demandPlanningRevertPublicationResponseBodySchema, result);
+    });
+  });
+
+  // --- Demand Explorer (PR-1: read-only) ---
+
+  app.get('/api/demand-planning-drafts/:draftId/demand-explorer', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-planning-drafts/:draftId/demand-explorer', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      const tenantId = requireTenant(auth);
+      const { id: draftId } = parseOrThrow(idResponseSchema, {
+        id: request.params && typeof request.params === 'object' ? (request.params as Record<string, unknown>).draftId : null
+      });
+      const query = parseOrThrow(demandExplorerQuerySchema, request.query);
+
+      const result = await getManualShiftsService(auth).getDemandExplorer({
+        tenantId,
+        draftId,
+        distributionArea: query.distributionArea,
+        search: query.search,
+        status: query.status,
+        page: query.page,
+        limit: query.limit
+      });
+
+      return parseOrThrow(demandExplorerResponseSchema, result);
+    });
+  });
+
+  app.get('/api/demand-planning-drafts/:draftId/demand-explorer/orders/:orderId/items', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/demand-planning-drafts/:draftId/demand-explorer/orders/:orderId/items', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+
+      const tenantId = requireTenant(auth);
+      const params = request.params as Record<string, string | undefined>;
+      const { id: draftId } = parseOrThrow(idResponseSchema, { id: params.draftId });
+      const orderId = params.orderId;
+      if (!orderId) throw new ApiError(400, 'MISSING_ORDER_ID', 'orderId is required');
+
+      const result = await getManualShiftsService(auth).getDemandExplorerOrderItems({
+        tenantId,
+        draftId,
+        orderId
+      });
+
+      return parseOrThrow(demandExplorerItemsResponseSchema, result);
     });
   });
 

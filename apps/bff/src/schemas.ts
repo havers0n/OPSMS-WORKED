@@ -130,7 +130,11 @@ import {
   rollingAvailableDemandResponseSchema,
   rollingAvailableDemandQuerySchema,
   rollingCreateDraftRequestSchema,
-  demandPlanningPublicationSchema
+  demandPlanningPublicationSchema,
+  demandExplorerOrderStatusSchema,
+  demandExplorerQuerySchema,
+  demandExplorerResponseSchema,
+  demandExplorerItemsResponseSchema
 } from '@wos/domain';
 
 // ── Rack Inspector ──────────────────────────────────────────────────────────
@@ -665,6 +669,7 @@ export { demandBacklogListResponseSchema, demandBacklogSummaryResponseSchema, de
 export { demandBacklogItemResponseSchema, demandBacklogSourceBatchSchema };
 export { demandBacklogOrderQuerySchema, demandBacklogOrderItemSchema, demandBacklogOrderListResponseSchema, demandBacklogOrderStatusSchema };
 export { rollingAvailableDemandResponseSchema, rollingAvailableDemandQuerySchema, rollingCreateDraftRequestSchema };
+export { demandExplorerOrderStatusSchema, demandExplorerQuerySchema, demandExplorerResponseSchema, demandExplorerItemsResponseSchema } from '@wos/domain';
 export { pickerSheetPrintDataSchema } from '@wos/domain';
 
 // ── Orders ────────────────────────────────────────────────────────────────────

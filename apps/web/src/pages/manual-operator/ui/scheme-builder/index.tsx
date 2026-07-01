@@ -23,6 +23,7 @@ import { ProblemQueue } from './problem-queue';
 import { PublishSummary } from './publish-summary';
 import { filterOrdersBySearch, filterOrdersByStatus } from './order-list-utils';
 import { OrderCard } from './order-card';
+import { DemandExplorerView } from './demand-explorer-view';
 
 interface ShiftModeProps {
   mode?: 'shift';
@@ -154,6 +155,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     workGroupId: string;
   } | null>(null);
 
+  const [viewMode, setViewMode] = useState<'work-lines' | 'available-orders'>('work-lines');
   const [showOrders, setShowOrders] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | OrderBadgeStatus>('all');
@@ -683,14 +685,40 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
         </div>
       )}
 
-      {/* Compact toolbar — area selector pills */}
+      {/* Compact toolbar — area selector pills + view switch */}
       <div className="shrink-0 border-b border-gray-200 bg-white px-3 py-1.5 flex items-center gap-2">
         <AreaOverview
           areas={source.areas}
           selectedAreaName={selectedAreaName}
           onSelectArea={setSelectedArea}
         />
-        {isDemandMode && (
+        {isDemandMode && selectedAreaName && (
+          <div className="flex items-center gap-1 mr-auto">
+            <button
+              type="button"
+              onClick={() => setViewMode('available-orders')}
+              className={`text-xs rounded-full px-3 py-1 font-medium transition-colors ${
+                viewMode === 'available-orders'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              הזמנות זמינות
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('work-lines')}
+              className={`text-xs rounded-full px-3 py-1 font-medium transition-colors ${
+                viewMode === 'work-lines'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              קווי עבודה
+            </button>
+          </div>
+        )}
+        {isDemandMode && viewMode === 'work-lines' && (
           <div className="md:hidden ms-auto">
             <button
               type="button"
@@ -798,119 +826,129 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
               טיוטה זו כבר פורסמה למשמרת. העריכה והשמירה מושבתות, ו-append/diff נשארים בזרימה נפרדת.
             </div>
           )}
-          {capabilities.canAssignOrders && targetWg && (
-            <div className="shrink-0 flex items-center gap-2 bg-blue-50 border-b border-blue-200 px-3 py-1.5 text-sm">
-              <span className="font-bold text-blue-800">קבוצת יעד: {targetWg.name}</span>
-              <span className="text-blue-600">— בחר הזמנה ושורות לשיוך</span>
-              <div className="flex-1" />
-              <button
-                type="button"
-                onClick={handleCancelTarget}
-                className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:text-blue-900 transition-colors"
-              >
-                <X size={14} />
-                בטל קבוצת יעד
-              </button>
-            </div>
-          )}
 
-          <div className="flex-1 overflow-y-auto p-3">
-            {selectedAreaName ? (
-              <WorkGroupWorkspace
-                selectedAreaName={selectedAreaName}
-                orderItemMap={orderItemMap}
-                onStartAssign={handleStartAssign}
-                capabilities={capabilities}
-                orderNumberMap={orderNumberMap}
-                sourceOrders={source.orders}
-                isShiftMode={!isDemandMode}
-                shiftId={!isDemandMode && shiftId ? shiftId : null}
-                onShowUnassignedOrders={isDemandMode ? () => {
-                  setShowOrders(true);
-                  setStatusFilter('unassigned');
-                } : undefined}
-              />
-            ) : (
-              <div className="bg-white border border-dashed border-gray-300 rounded-lg p-6 text-center">
-                <h2 className="text-sm font-bold text-gray-800 mb-1">בחר איזור הפצה</h2>
-                <p className="text-xs text-gray-500">
-                  בחר איזור הפצה מהרשימה כדי להתחיל בתכנון קבוצות עבודה
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Collapsible orders ribbon */}
-          {selectedAreaName && (
-            <div className="shrink-0 border-t border-gray-200 bg-white">
-              <button
-                type="button"
-                onClick={() => setShowOrders((v) => !v)}
-                className="flex items-center gap-2 w-full px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-              >
-                {showOrders ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
-                הזמנות באיזור ({areaOrders.length})
-              </button>
-
-              {showOrders && (
-                <div>
-                  <div className="px-3 pb-1.5">
-                    <div className="relative">
-                      <Search size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="חיפוש הזמנה / לקוח / מק״ט"
-                        className="w-full pr-7 pl-2 py-1 text-xs border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none bg-gray-50 placeholder-gray-400"
-                        dir="rtl"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="px-3 pb-1.5 flex flex-wrap gap-1">
-                    {(['all', 'not_loaded', 'unassigned', 'partial', 'split', 'assigned'] as const).map((f) => {
-                      const labels: Record<string, string> = {
-                        all: 'הכל', not_loaded: 'לא נטען', unassigned: 'לא שויך',
-                        partial: 'חלקי', split: 'מפוצל', assigned: 'שויך',
-                      };
-                      return (
-                        <button
-                          key={f}
-                          type="button"
-                          onClick={() => setStatusFilter(f)}
-                          className={`text-[11px] rounded-full px-2 py-0.5 font-medium transition-colors ${
-                            statusFilter === f
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                          }`}
-                        >
-                          {labels[f]}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="h-40 flex overflow-x-auto gap-2 px-3 pb-2">
-                    {statusFilteredOrders.length === 0 ? (
-                      <div className="flex items-center justify-center w-full text-xs text-gray-400">
-                        לא נמצאו הזמנות
-                      </div>
-                    ) : (
-                      statusFilteredOrders.map((order) => (
-                        <OrderCard
-                          key={order.orderId}
-                          order={order}
-                          orderItemMap={orderItemMap}
-                          itemAllocations={itemAllocations}
-                          onClick={() => handleOpenItemsDrawer(order.orderId)}
-                        />
-                      ))
-                    )}
-                  </div>
+          {isDemandMode && viewMode === 'available-orders' && draftId ? (
+            <DemandExplorerView
+              draftId={draftId}
+              distributionArea={selectedAreaName}
+            />
+          ) : (
+            <>
+              {capabilities.canAssignOrders && targetWg && (
+                <div className="shrink-0 flex items-center gap-2 bg-blue-50 border-b border-blue-200 px-3 py-1.5 text-sm">
+                  <span className="font-bold text-blue-800">קבוצת יעד: {targetWg.name}</span>
+                  <span className="text-blue-600">— בחר הזמנה ושורות לשיוך</span>
+                  <div className="flex-1" />
+                  <button
+                    type="button"
+                    onClick={handleCancelTarget}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:text-blue-900 transition-colors"
+                  >
+                    <X size={14} />
+                    בטל קבוצת יעד
+                  </button>
                 </div>
               )}
-            </div>
+
+              <div className="flex-1 overflow-y-auto p-3">
+                {selectedAreaName ? (
+                  <WorkGroupWorkspace
+                    selectedAreaName={selectedAreaName}
+                    orderItemMap={orderItemMap}
+                    onStartAssign={handleStartAssign}
+                    capabilities={capabilities}
+                    orderNumberMap={orderNumberMap}
+                    sourceOrders={source.orders}
+                    isShiftMode={!isDemandMode}
+                    shiftId={!isDemandMode && shiftId ? shiftId : null}
+                    onShowUnassignedOrders={isDemandMode ? () => {
+                      setShowOrders(true);
+                      setStatusFilter('unassigned');
+                    } : undefined}
+                  />
+                ) : (
+                  <div className="bg-white border border-dashed border-gray-300 rounded-lg p-6 text-center">
+                    <h2 className="text-sm font-bold text-gray-800 mb-1">בחר איזור הפצה</h2>
+                    <p className="text-xs text-gray-500">
+                      בחר איזור הפצה מהרשימה כדי להתחיל בתכנון קבוצות עבודה
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Collapsible orders ribbon */}
+              {selectedAreaName && (
+                <div className="shrink-0 border-t border-gray-200 bg-white">
+                  <button
+                    type="button"
+                    onClick={() => setShowOrders((v) => !v)}
+                    className="flex items-center gap-2 w-full px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    {showOrders ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
+                    הזמנות באיזור ({areaOrders.length})
+                  </button>
+
+                  {showOrders && (
+                    <div>
+                      <div className="px-3 pb-1.5">
+                        <div className="relative">
+                          <Search size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                          <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="חיפוש הזמנה / לקוח / מק״ט"
+                            className="w-full pr-7 pl-2 py-1 text-xs border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none bg-gray-50 placeholder-gray-400"
+                            dir="rtl"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="px-3 pb-1.5 flex flex-wrap gap-1">
+                        {(['all', 'not_loaded', 'unassigned', 'partial', 'split', 'assigned'] as const).map((f) => {
+                          const labels: Record<string, string> = {
+                            all: 'הכל', not_loaded: 'לא נטען', unassigned: 'לא שויך',
+                            partial: 'חלקי', split: 'מפוצל', assigned: 'שויך',
+                          };
+                          return (
+                            <button
+                              key={f}
+                              type="button"
+                              onClick={() => setStatusFilter(f)}
+                              className={`text-[11px] rounded-full px-2 py-0.5 font-medium transition-colors ${
+                                statusFilter === f
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              }`}
+                            >
+                              {labels[f]}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="h-40 flex overflow-x-auto gap-2 px-3 pb-2">
+                        {statusFilteredOrders.length === 0 ? (
+                          <div className="flex items-center justify-center w-full text-xs text-gray-400">
+                            לא נמצאו הזמנות
+                          </div>
+                        ) : (
+                          statusFilteredOrders.map((order) => (
+                            <OrderCard
+                              key={order.orderId}
+                              order={order}
+                              orderItemMap={orderItemMap}
+                              itemAllocations={itemAllocations}
+                              onClick={() => handleOpenItemsDrawer(order.orderId)}
+                            />
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>

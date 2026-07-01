@@ -3,7 +3,10 @@ import type {
   DemandPlanningDraftWithAssignments,
   DemandImportAppendDiffResponse,
   DemandBacklogOrderListResponse,
-  DemandBacklogOrderQuery
+  DemandBacklogOrderQuery,
+  DemandExplorerQuery,
+  DemandExplorerResponse,
+  DemandExplorerItemsResponse
 } from '@wos/domain';
 import { queryOptions } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
@@ -116,6 +119,56 @@ export function demandImportAvailableBatchesQueryOptions() {
   return queryOptions({
     queryKey: demandImportAvailableBatchesQueryKey,
     queryFn: fetchDemandImportAvailableBatches,
+    staleTime: 30_000
+  });
+}
+
+// ── Demand Explorer (PR-1) ──────────────────────────────────────────────────
+
+export const demandExplorerKeys = {
+  all: ['demand-explorer'] as const,
+  list: (draftId: string, filters: DemandExplorerQuery) => [...demandExplorerKeys.all, 'list', draftId, {
+    distributionArea: filters.distributionArea,
+    search: filters.search,
+    status: filters.status,
+    page: filters.page,
+    limit: filters.limit
+  }] as const,
+  orderItems: (draftId: string, orderId: string) => [...demandExplorerKeys.all, 'order-items', draftId, orderId] as const
+};
+
+async function fetchDemandExplorer(draftId: string, filters: DemandExplorerQuery): Promise<DemandExplorerResponse> {
+  const params = new URLSearchParams();
+  if (filters.distributionArea) params.set('distributionArea', filters.distributionArea);
+  if (filters.search) params.set('search', filters.search);
+  if (filters.status) params.set('status', filters.status);
+  params.set('page', String(filters.page ?? 1));
+  params.set('limit', String(filters.limit ?? 20));
+  return bffRequest<DemandExplorerResponse>(
+    `/api/demand-planning-drafts/${draftId}/demand-explorer?${params.toString()}`
+  );
+}
+
+export function demandExplorerQueryOptions(draftId: string, filters: DemandExplorerQuery) {
+  return queryOptions({
+    queryKey: demandExplorerKeys.list(draftId, filters),
+    queryFn: () => fetchDemandExplorer(draftId, filters),
+    enabled: !!draftId,
+    staleTime: 30_000
+  });
+}
+
+async function fetchDemandExplorerOrderItems(draftId: string, orderId: string): Promise<DemandExplorerItemsResponse> {
+  return bffRequest<DemandExplorerItemsResponse>(
+    `/api/demand-planning-drafts/${draftId}/demand-explorer/orders/${orderId}/items`
+  );
+}
+
+export function demandExplorerOrderItemsQueryOptions(draftId: string, orderId: string) {
+  return queryOptions({
+    queryKey: demandExplorerKeys.orderItems(draftId, orderId),
+    queryFn: () => fetchDemandExplorerOrderItems(draftId, orderId),
+    enabled: !!draftId && !!orderId,
     staleTime: 30_000
   });
 }
