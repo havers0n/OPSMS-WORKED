@@ -1,12 +1,20 @@
-import { Send, ArrowRight, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Send, ArrowRight, Loader2, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import type {
   SourceOrder,
   SourceOrderItem,
   DemandPlanningDraftUiMode,
   DemandPlanningPublishUiMode,
+  RollingPublishConflict,
 } from './scheme-types';
 import { useSchemeBuilderStore } from './scheme-store';
 import { getVisiblePlanningLines, getVisibleWorkGroups } from './scheme-display-utils';
+
+const CONFLICT_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+  stale: { label: 'לא עדכני', className: 'text-red-700 bg-red-50' },
+  insufficient_quantity: { label: 'כמות לא מספיקה', className: 'text-red-700 bg-red-50' },
+  duplicate_conflict: { label: 'כפילות בביקוש', className: 'text-amber-700 bg-amber-50' },
+  available: { label: 'זמין', className: 'text-green-700 bg-green-50' },
+};
 
 interface PublishSummaryProps {
   orders: SourceOrder[];
@@ -18,6 +26,7 @@ interface PublishSummaryProps {
   onPublish?: () => void;
   publishResult?: { createdLines: number; createdOrders: number; createdItems: number; skippedRows: number; warnings: string[] } | null;
   publishError?: string | null;
+  publishConflicts?: RollingPublishConflict[] | null;
   onNavigateToWork?: () => void;
   hasRemainingDemand?: boolean;
   isCreatingRemainingDraft?: boolean;
@@ -39,6 +48,7 @@ export function PublishSummary({
   onPublish,
   publishResult,
   publishError,
+  publishConflicts,
   onNavigateToWork,
   hasRemainingDemand: _hasRemainingDemand = false,
   isCreatingRemainingDraft: _isCreatingRemainingDraft = false,
@@ -185,9 +195,49 @@ export function PublishSummary({
       )}
 
       {publishError && (
-        <div className="text-xs text-red-600 bg-red-50 rounded p-2 flex items-start gap-1">
-          <AlertTriangle size={12} className="shrink-0 mt-0.5" />
-          <span>{publishError}</span>
+        <div className="space-y-2">
+          <div className="text-xs text-red-600 bg-red-50 rounded p-2 flex items-start gap-1">
+            <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+            <span>{publishError}</span>
+          </div>
+
+          {publishConflicts && publishConflicts.length > 0 && (
+            <div className="rounded border border-red-200 bg-red-50 overflow-hidden">
+              <div className="bg-red-100 px-2 py-1.5 border-b border-red-200">
+                <p className="text-xs font-bold text-red-900">
+                  <XCircle size={12} className="inline ml-1" />
+                  {publishConflicts.length} שורות לא ניתן לפרסם בגלל שינוי בביקוש הזמין
+                </p>
+                <p className="text-[10px] text-red-700 mt-0.5">
+                  חלק מהשורות כבר אינן זמינות לפרסום. יש לרענן את הטיוטה או לשנות את השיוך.
+                </p>
+              </div>
+              <div className="max-h-48 overflow-y-auto divide-y divide-red-200">
+                {publishConflicts.map((conflict, i) => {
+                  const statusConfig = CONFLICT_STATUS_CONFIG[conflict.status] ?? { label: conflict.status, className: 'text-gray-700 bg-gray-50' };
+                  return (
+                    <div key={conflict.allocationId ?? i} className="px-2 py-1.5 text-[11px] space-y-0.5">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <span className="font-mono text-gray-500 truncate max-w-[80px]" title={conflict.sku ?? ''}>{conflict.sku ?? '—'}</span>
+                        <span className="text-gray-300">·</span>
+                        <span className="text-gray-700 truncate max-w-[80px]" title={conflict.orderNumber ?? ''}>{conflict.orderNumber ?? '—'}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] text-gray-600">
+                        <span>בטיוטה: {conflict.requestedQuantity}</span>
+                        <span>זמין: {conflict.availableQuantity}</span>
+                        <span className={`inline-flex items-center rounded px-1 py-0.5 font-medium ${statusConfig.className}`}>
+                          {statusConfig.label}
+                        </span>
+                      </div>
+                      {conflict.reason && (
+                        <p className="text-[10px] text-gray-500 truncate" title={conflict.reason}>{conflict.reason}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

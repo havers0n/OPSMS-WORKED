@@ -12,7 +12,7 @@ import { adaptWorkHierarchyToSource, adaptOrderItemsToSource } from './source-da
 import { adaptDemandPlanningPreviewToSource } from './demand-source-adapter';
 import { auditAndAdaptRollingDraft } from './rolling-source-adapter';
 import { buildPlanPayload } from './plan-payload';
-import type { DemandPlanningPublishToShiftResponse } from '@wos/domain';
+import type { DemandPlanningPublishToShiftResponse, RollingPublishConflict } from '@wos/domain';
 import type { SourceOrderItem, OrderBadgeStatus, PlanningLine, WorkGroup, ItemAllocation, SchemeBuilderCapabilities, DemandPlanningDraftUiMode, DemandPlanningPublishUiMode } from './scheme-types';
 import { AreaOverview } from './area-overview';
 import { WorkGroupWorkspace } from './work-group-workspace';
@@ -139,6 +139,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
   const revertPublication = useRevertDemandPlanningPublication();
   const [publishResult, setPublishResult] = useState<DemandPlanningPublishToShiftResponse | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishConflicts, setPublishConflicts] = useState<RollingPublishConflict[] | null>(null);
   const [planBuildError, setPlanBuildError] = useState<string | null>(null);
 
   const [drawerOrderId, setDrawerOrderId] = useState<string | null>(null);
@@ -480,6 +481,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     if (!draftId || !targetShiftId) return;
     setPublishResult(null);
     setPublishError(null);
+    setPublishConflicts(null);
     if (isPublishedDraft) {
       setPublishError('הטיוטה כבר פורסמה למשמרת');
       return;
@@ -505,6 +507,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
             });
           },
           onError: (err) => {
+            setPublishConflicts(getPublishConflicts(err));
             setPublishError(getPublishErrorMessage(err));
           },
         },
@@ -536,6 +539,9 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
 
   function getPublishErrorMessage(err: unknown): string {
     if (isDraftNotMutableError(err)) return 'הטיוטה כבר פורסמה למשמרת';
+    if (err instanceof BffRequestError && err.code === 'ROLLING_DEMAND_STALE_OR_UNAVAILABLE') {
+      return 'הביקוש השתנה מאז יצירת הטיוטה';
+    }
     const msg = err instanceof Error ? err.message : '';
     if (msg.includes('NO_PUBLISHABLE_ROWS')) return 'אין שורות לפרסום למשמרת';
     if (msg.includes('already applied') || msg.includes('NOT_MUTABLE')) return 'הטיוטה כבר פורסמה למשמרת';
@@ -546,6 +552,15 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
     if (msg.includes('422') || msg.includes('NO_PUBLISHABLE')) return 'אין שורות לפרסום למשמרת';
     if (msg.includes('409')) return 'הטיוטה כבר פורסמה או שהמשמרת אינה פעילה';
     return 'הפרסום למשמרת נכשל';
+  }
+
+  function getPublishConflicts(err: unknown): RollingPublishConflict[] | null {
+    if (!(err instanceof BffRequestError)) return null;
+    if (err.code !== 'ROLLING_DEMAND_STALE_OR_UNAVAILABLE') return null;
+    if (!err.details || typeof err.details !== 'object') return null;
+    const details = err.details as Record<string, unknown>;
+    if (!Array.isArray(details.conflicts)) return null;
+    return details.conflicts as RollingPublishConflict[];
   }
 
   const handleNavigateToWork = useCallback(() => {
@@ -703,6 +718,7 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
               onPublish={handlePublish}
               publishResult={publishResult}
               publishError={publishError}
+              publishConflicts={publishConflicts}
               onNavigateToWork={targetShiftId ? handleNavigateToWork : undefined}
               hasRemainingDemand={hasRemainingDemand}
               isCreatingRemainingDraft={createDraft.isPending}

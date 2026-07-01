@@ -369,4 +369,52 @@ describe('SchemeBuilder demand lifecycle hardening', () => {
       ]));
     });
   });
+
+  it('renders conflict section when publish-to-shift returns ROLLING_DEMAND_STALE_OR_UNAVAILABLE', async () => {
+    mockBffRequest.mockImplementation((url: string, init?: RequestInit) => {
+      const path = String(url);
+      if (path.includes('/planning-preview')) {
+        return Promise.resolve(makePreview());
+      }
+      if (path.endsWith(`/api/demand-planning-drafts/${DRAFT_ID}`) || (path.includes(`/demand-planning-drafts/${DRAFT_ID}`) && !path.includes('/plan') && !path.includes('/publish-to-shift'))) {
+        return Promise.resolve(makeDraft('draft'));
+      }
+      if (path.includes(`/demand-planning-drafts/${DRAFT_ID}/plan`) && init?.method === 'PUT') {
+        return Promise.resolve(makeDraft('draft'));
+      }
+      if (path.includes(`/demand-planning-drafts/${DRAFT_ID}/publish-to-shift`) && init?.method === 'POST') {
+        return Promise.reject(new BffRequestError(409, 'ROLLING_DEMAND_STALE_OR_UNAVAILABLE', 'Rolling demand is stale.', null, null, {
+          conflicts: [
+            {
+              allocationId: 'a0000000-0000-4000-8000-000000000001',
+              rawDemandRowId: 'r0000000-0000-4000-8000-000000000001',
+              sku: 'SKU-CONFLICT',
+              orderNumber: 'SO-CONFLICT',
+              requestedQuantity: 10,
+              availableQuantity: 0,
+              status: 'stale',
+              reason: 'Row is stale.',
+            },
+          ],
+        }));
+      }
+      return Promise.reject(new Error(`Unhandled request: ${path}`));
+    });
+    renderBuilder(TARGET_SHIFT_ID);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'פרסם לעבודה' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'פרסם לעבודה' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('הביקוש השתנה מאז יצירת הטיוטה')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('1 שורות לא ניתן לפרסם בגלל שינוי בביקוש הזמין')).toBeInTheDocument();
+    expect(screen.getByText('SKU-CONFLICT')).toBeInTheDocument();
+    expect(screen.getByText('SO-CONFLICT')).toBeInTheDocument();
+    expect(screen.getByText('לא עדכני')).toBeInTheDocument();
+  });
 });

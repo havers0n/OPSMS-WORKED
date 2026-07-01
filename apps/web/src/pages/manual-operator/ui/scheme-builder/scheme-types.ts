@@ -1,4 +1,5 @@
-import type { DeliveryPointMatchStatus, ManualShiftOrderStatus, DemandImportIssue, RawDemandProductHandlingFlow, RawDemandPlanningStatus } from '@wos/domain';
+import type { DeliveryPointMatchStatus, ManualShiftOrderStatus, DemandImportIssue, RawDemandProductHandlingFlow, RawDemandPlanningStatus, RollingPublishConflict } from '@wos/domain';
+export type { RollingPublishConflict };
 
 export interface SourceDeliveryLine {
   lineId: string;
