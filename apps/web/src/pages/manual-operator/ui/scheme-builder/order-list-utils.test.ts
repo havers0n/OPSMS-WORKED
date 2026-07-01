@@ -129,6 +129,35 @@ describe('getOrderProgress', () => {
     expect(progress).toEqual({ allocatedQty: 4, totalQty: 15, allocatedRows: 1, totalRows: 2 });
   });
 
+  it('returns partial progress for 6 of 12 on a one-row order', () => {
+    const items = [makeItem('i1', 'order-1', 12)];
+    const allocations = [makeAlloc('i1', 'wg-1', 6)];
+
+    expect(getOrderBadgeStatus('order-1', { 'order-1': items }, allocations)).toBe('partial');
+    expect(getOrderProgress('order-1', { 'order-1': items }, allocations)).toEqual({
+      allocatedQty: 6,
+      totalQty: 12,
+      allocatedRows: 1,
+      totalRows: 1,
+    });
+  });
+
+  it('returns correct progress for 2 of 5 selected rows', () => {
+    const items = [
+      makeItem('i1', 'order-1', 1),
+      makeItem('i2', 'order-1', 1),
+      makeItem('i3', 'order-1', 1),
+      makeItem('i4', 'order-1', 1),
+      makeItem('i5', 'order-1', 1),
+    ];
+    const allocations = [
+      makeAlloc('i2', 'wg-1', 1),
+      makeAlloc('i4', 'wg-1', 1),
+    ];
+    const progress = getOrderProgress('order-1', { 'order-1': items }, allocations);
+    expect(progress).toEqual({ allocatedQty: 2, totalQty: 5, allocatedRows: 2, totalRows: 5 });
+  });
+
   it('returns correct progress for fully allocated order', () => {
     const items = [makeItem('i1', 'order-1', 10), makeItem('i2', 'order-1', 5)];
     const allocations = [

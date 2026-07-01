@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
@@ -17,19 +17,15 @@ function resetStore() {
 
 function populateStore() {
   const store = useSchemeBuilderStore.getState();
-  // user-created planning line
-  const plUser = { id: 'pl-user', areaName: 'דרום', name: 'כללי', sortOrder: 0, createdAt: 100 };
-  // technical planning line — should be hidden
-  const plTech = { id: 'pl-tech', areaName: 'דרום', name: 'default', sortOrder: 1, createdAt: 0 };
-  store.planningLines = [plUser, plTech];
-
-  // user-created work group under user line — should be visible
-  const wgUser = { id: 'wg-user', planningLineId: 'pl-user', areaName: 'דרום', name: 'כללי', createdAt: 200 };
-  // technical work group under user line — should be hidden
-  const wgTech = { id: 'wg-tech', planningLineId: 'pl-user', areaName: 'דרום', name: 'unassigned', createdAt: 0 };
-  // work group under technical line — should be hidden (both line and group are technical)
-  const wgTechLine = { id: 'wg-tech-line', planningLineId: 'pl-tech', areaName: 'דרום', name: 'unassigned', createdAt: 0 };
-  store.workGroups = [wgUser, wgTech, wgTechLine];
+  store.planningLines = [
+    { id: 'pl-user', areaName: 'דרום', name: 'כללי', sortOrder: 0, createdAt: 100 },
+    { id: 'pl-tech', areaName: 'דרום', name: 'default', sortOrder: 1, createdAt: 0 },
+  ];
+  store.workGroups = [
+    { id: 'wg-user', planningLineId: 'pl-user', areaName: 'דרום', name: 'צוות א', createdAt: 200 },
+    { id: 'wg-tech', planningLineId: 'pl-user', areaName: 'דרום', name: 'unassigned', createdAt: 0 },
+    { id: 'wg-tech-line', planningLineId: 'pl-tech', areaName: 'דרום', name: 'unassigned', createdAt: 0 },
+  ];
 }
 
 describe('AssignModalV2', () => {
@@ -47,10 +43,10 @@ describe('AssignModalV2', () => {
         onAssign={() => {}}
       />,
     );
-    expect(screen.getByText('יש ליצור קו עבודה וקבוצת עבודה לפני שיוך שורות')).toBeInTheDocument();
+    expect(screen.getByText('אין קו עבודה וקבוצות עבודה לשיוך בשטח זה')).toBeInTheDocument();
   });
 
-  it('hides technical "default" planning line and "unassigned" work groups', () => {
+  it('hides technical default planning lines and unassigned work groups', () => {
     populateStore();
 
     render(
@@ -63,11 +59,7 @@ describe('AssignModalV2', () => {
       />,
     );
 
-    // user-created planning line name and group button are both visible
-    const allInstances = screen.getAllByText('כללי');
-    expect(allInstances.length).toBeGreaterThanOrEqual(2);
-
-    // technical names should NOT appear
+    expect(screen.getByRole('heading', { name: 'בחר קבוצת עבודה לשורות המסומנות' })).toBeInTheDocument();
     expect(screen.queryByText('default')).toBeNull();
     expect(screen.queryByText('unassigned')).toBeNull();
   });
@@ -86,20 +78,13 @@ describe('AssignModalV2', () => {
       />,
     );
 
-    const assignButton = screen.getByRole('button', { name: 'שייך' });
+    const assignButton = screen.getByRole('button', { name: 'המשך לשיוך' });
     expect(assignButton).toBeDisabled();
 
-    // click the user group button
-    const groupButtons = screen.getAllByRole('button');
-    const userGroupBtn = groupButtons.find(
-      (btn) => btn.textContent === 'כללי' && btn.tagName === 'BUTTON' && btn !== assignButton,
-    );
-    expect(userGroupBtn).toBeTruthy();
-    fireEvent.click(userGroupBtn!);
-
+    fireEvent.click(screen.getByRole('button', { name: 'צוות א' }));
     expect(assignButton).toBeEnabled();
-    fireEvent.click(assignButton);
 
+    fireEvent.click(assignButton);
     expect(onAssign).toHaveBeenCalledTimes(1);
     expect(onAssign).toHaveBeenCalledWith('wg-user');
   });
@@ -117,7 +102,7 @@ describe('AssignModalV2', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  it('shows "create work group" empty state when all groups are technical', () => {
+  it('shows an empty state when all groups are technical', () => {
     const store = useSchemeBuilderStore.getState();
     store.planningLines = [{ id: 'pl-1', areaName: 'דרום', name: 'כללי', sortOrder: 0, createdAt: 100 }];
     store.workGroups = [{ id: 'wg-unassigned', planningLineId: 'pl-1', areaName: 'דרום', name: 'unassigned', createdAt: 0 }];
@@ -132,10 +117,7 @@ describe('AssignModalV2', () => {
       />,
     );
 
-    // should show "create work group before assigning" message
-    expect(screen.getByText('יש ליצור קבוצת עבודה לפני שיוך שורות')).toBeInTheDocument();
-
-    // should NOT show the technical group name
+    expect(screen.getByText('אין קבוצות עבודה לשיוך בשטח זה')).toBeInTheDocument();
     expect(screen.queryByText('unassigned')).toBeNull();
   });
 });
