@@ -6,6 +6,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { SchemeBuilder } from './index';
 import { useSchemeBuilderStore } from './scheme-store';
+import { BffRequestError } from '@/shared/api/bff/client';
 
 const mockBffRequest = vi.fn();
 
@@ -222,6 +223,34 @@ function renderBuilder(targetShiftId?: string, initialEntry = '/operator/manual/
   );
 }
 
+function makeRollingDraft() {
+  const draft = makeDraft('draft');
+  return {
+    ...draft,
+    draft: { ...draft.draft, batchId: null, sourceKind: 'rolling' as const },
+    buckets: [{ ...draft.buckets[0], batchId: null, distributionArea: 'דרום', planningLineName: 'ראשי', bucketName: 'כללי' }],
+    allocations: [{ ...draft.allocations[0], batchId: BATCH_ID, bucketId: draft.buckets[0].id, rawDemandRowId: 'r0000000-0000-4000-8000-000000000001' }],
+    rows: [{
+      id: 'r0000000-0000-4000-8000-000000000001', tenantId: draft.draft.tenantId, batchId: BATCH_ID,
+      sourceSheet: 'DataSheet', sourceRowNumber: 2, agent: null, orderDate: null, customerName: 'לקוח', orderNumber: 'SO-1',
+      sku: 'SKU-1', description: 'מוצר', category: null, quantity: 10, cost: null, notes: null, distributionArea: 'דרום',
+      rawRouteLine: null, plannedDeliveryDate: '2026-07-01', plannedRouteLine: null, plannedWorkBucket: null,
+      planningStatus: 'unplanned', routeFlow: 'unassigned', productHandlingFlow: 'regular', noteDateHints: [], issues: [],
+      createdAt: '2026-06-24T12:00:00.000Z',
+    }],
+  };
+}
+
+function renderRollingBuilder() {
+  return render(
+    <MemoryRouter>
+      <QueryClientProvider client={makeQueryClient()}>
+        <SchemeBuilder mode="demand" draftId={DRAFT_ID} />
+      </QueryClientProvider>
+    </MemoryRouter>,
+  );
+}
+
 describe('SchemeBuilder demand lifecycle hardening', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -307,6 +336,37 @@ describe('SchemeBuilder demand lifecycle hardening', () => {
 
       expect(planCalls).toHaveLength(1);
       expect(publishCalls).toHaveLength(1);
+    });
+  });
+
+  it('surfaces the rolling row-set mismatch code and message as a visible alert', async () => {
+    const rollingDraft = makeRollingDraft();
+    mockBffRequest.mockImplementation((url: string, init?: RequestInit) => {
+      if (String(url).includes('/plan') && init?.method === 'PUT') {
+        return Promise.reject(new BffRequestError(400, 'DEMAND_PLANNING_ROLLING_ROW_SET_MISMATCH', 'Rolling row set does not match the saved draft.', null, null));
+      }
+      return Promise.resolve(rollingDraft);
+    });
+    renderRollingBuilder();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'שמור טיוטה' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('DEMAND_PLANNING_ROLLING_ROW_SET_MISMATCH');
+    expect(alert).toHaveTextContent('Rolling row set does not match the saved draft.');
+  });
+
+  it('hydrates a saved rolling non-default bucket and assignment after reload', async () => {
+    mockBffRequest.mockResolvedValue(makeRollingDraft());
+    renderRollingBuilder();
+
+    await waitFor(() => {
+      const state = useSchemeBuilderStore.getState();
+      expect(state.planningLines).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'ראשי' })]));
+      expect(state.workGroups).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'כללי' })]));
+      expect(state.itemAllocations).toEqual(expect.arrayContaining([
+        expect.objectContaining({ itemRowId: 'r0000000-0000-4000-8000-000000000001', workGroupId: 'b1000000-0000-4000-8000-000000000001' }),
+      ]));
     });
   });
 });
