@@ -121,9 +121,9 @@ begin
   values (tenant_a, batch_a, 'draft') returning id into draft_one;
 
   insert into public.demand_planning_buckets (
-    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, sort_order
+    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, bucket_kind, sort_order
   ) values (
-    tenant_a, draft_one, batch_a, 'דרום', 'קו א', 'סיגריות', 1
+    tenant_a, draft_one, batch_a, 'דרום', 'קו א', 'סיגריות', 'work_group', 1
   ) returning id into bucket_one;
 
   insert into public.demand_planning_allocations (
@@ -139,9 +139,9 @@ begin
   values (tenant_a, batch_a, 'draft') returning id into draft_two;
 
   insert into public.demand_planning_buckets (
-    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, sort_order
+    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, bucket_kind, sort_order
   ) values (
-    tenant_a, draft_two, batch_a, 'דרום', 'קו א', 'סיגריות', 1
+    tenant_a, draft_two, batch_a, 'דרום', 'קו א', 'סיגריות', 'work_group', 1
   ) returning id into bucket_two;
 
   insert into public.demand_planning_allocations (
@@ -157,9 +157,9 @@ begin
   values (tenant_a, batch_a, 'draft') returning id into draft_three;
 
   insert into public.demand_planning_buckets (
-    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, sort_order
+    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, bucket_kind, sort_order
   ) values (
-    tenant_a, draft_three, batch_a, 'דרום', 'קו א', 'סיגריות', 1
+    tenant_a, draft_three, batch_a, 'דרום', 'קו א', 'סיגריות', 'work_group', 1
   ) returning id into bucket_three;
 
   insert into public.demand_planning_allocations (
@@ -175,9 +175,9 @@ begin
   values (tenant_a, batch_a, 'draft') returning id into draft_four;
 
   insert into public.demand_planning_buckets (
-    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, sort_order
+    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, bucket_kind, sort_order
   ) values (
-    tenant_a, draft_four, batch_a, 'דרום', 'קו א', 'סיגריות', 1
+    tenant_a, draft_four, batch_a, 'דרום', 'קו א', 'סיגריות', 'work_group', 1
   ) returning id into bucket_four;
 
   insert into public.demand_planning_allocations (

@@ -146,6 +146,7 @@ import {
   demandPlanningBucketNotFound,
   demandPlanningTargetDateAmbiguous,
   demandPlanningExistingLineConflict,
+  demandPlanningDraftHasUnassignedAllocations,
   demandPlanningNoPublishableRows,
   demandPlanningPublicationNotFound,
   demandPlanningPublicationAlreadyReverted,
@@ -2858,6 +2859,7 @@ export function createManualShiftsServiceFromRepo(
         distributionArea: area.distributionArea,
         planningLineName: 'default',
         bucketName: 'unassigned',
+        bucketKind: 'technical_unassigned' as const,
         sortOrder: i
       }));
 
@@ -2939,6 +2941,7 @@ export function createManualShiftsServiceFromRepo(
         distributionArea: groupRows[0].distributionArea,
         planningLineName: 'default' as const,
         bucketName: 'unassigned' as const,
+        bucketKind: 'technical_unassigned' as const,
         sortOrder: i
       }));
 
@@ -3130,6 +3133,18 @@ export function createManualShiftsServiceFromRepo(
         draftId: input.draftId
       });
 
+      function resolveBucketKind(b: {
+        bucketKind?: string;
+        planningLineName: string;
+        bucketName: string;
+      }): string {
+        if (b.bucketKind) return b.bucketKind;
+        if (b.planningLineName === 'default' && b.bucketName === 'unassigned') {
+          return 'technical_unassigned';
+        }
+        return 'work_group';
+      }
+
       const planBatchId = isRolling ? null : draft.batchId;
       const buckets = await repo.insertDemandPlanningBuckets({
         tenantId: input.tenantId,
@@ -3139,6 +3154,7 @@ export function createManualShiftsServiceFromRepo(
           distributionArea: b.distributionArea,
           planningLineName: b.planningLineName,
           bucketName: b.bucketName,
+          bucketKind: resolveBucketKind(b),
           sortOrder: i
         }))
       });
@@ -3239,6 +3255,27 @@ export function createManualShiftsServiceFromRepo(
       if (draft.targetShiftId && draft.targetShiftId !== input.targetShiftId) {
         throw new ApiError(409, 'DEMAND_PLANNING_TARGET_MISMATCH',
           `Draft ${input.draftId} is bound to shift ${draft.targetShiftId}, but publish target is ${input.targetShiftId}.`);
+      }
+
+      // PR-1.1: Reject publish if any allocation targets a technical_unassigned bucket
+      const publishBuckets = await repo.listDemandPlanningBuckets({
+        tenantId: input.tenantId,
+        draftId: input.draftId
+      });
+      const publishAllocations = await repo.listDemandPlanningAllocations({
+        tenantId: input.tenantId,
+        draftId: input.draftId
+      });
+      const techUnassignedBucketIds = new Set(
+        publishBuckets
+          .filter((b) => b.bucketKind === 'technical_unassigned')
+          .map((b) => b.id)
+      );
+      const hasUnassignedAllocations = publishAllocations.some(
+        (a) => techUnassignedBucketIds.has(a.bucketId) && a.allocatedQuantity > 0
+      );
+      if (hasUnassignedAllocations) {
+        throw demandPlanningDraftHasUnassignedAllocations(input.draftId);
       }
 
       try {

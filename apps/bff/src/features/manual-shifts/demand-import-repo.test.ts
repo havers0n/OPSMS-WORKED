@@ -286,8 +286,8 @@ describe('demand planning draft repo methods', () => {
       draftId: draft.id,
       batchId,
       buckets: [
-        { distributionArea: 'דרום', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 0 },
-        { distributionArea: 'צפון', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 1 }
+        { distributionArea: 'דרום', planningLineName: 'default', bucketName: 'unassigned', bucketKind: 'technical_unassigned', sortOrder: 0 },
+        { distributionArea: 'צפון', planningLineName: 'default', bucketName: 'unassigned', bucketKind: 'technical_unassigned', sortOrder: 1 }
       ]
     });
 
@@ -310,7 +310,7 @@ describe('demand planning draft repo methods', () => {
       tenantId: tenantA,
       draftId: draft.id,
       batchId,
-      buckets: [{ distributionArea: 'דרום', planningLineName: 'default', bucketName: 'כללי', sortOrder: 0 }]
+      buckets: [{ distributionArea: 'דרום', planningLineName: 'default', bucketName: 'כללי', bucketKind: 'work_group', sortOrder: 0 }]
     });
 
     const allocations = await repo.insertDemandPlanningAllocations({
@@ -340,7 +340,7 @@ describe('demand planning draft repo methods', () => {
       tenantId: tenantA,
       draftId: draft.id,
       batchId,
-      buckets: [{ distributionArea: 'דרום', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 0 }]
+      buckets: [{ distributionArea: 'דרום', planningLineName: 'default', bucketName: 'unassigned', bucketKind: 'technical_unassigned', sortOrder: 0 }]
     });
 
     await repo.deleteDemandPlanningBucketsByDraft({ tenantId: tenantA, draftId: draft.id });
@@ -358,7 +358,7 @@ describe('demand planning draft repo methods', () => {
       tenantId: tenantA,
       draftId: draft.id,
       batchId,
-      buckets: [{ distributionArea: 'דרום', planningLineName: 'default', bucketName: 'כללי', sortOrder: 0 }]
+      buckets: [{ distributionArea: 'דרום', planningLineName: 'default', bucketName: 'כללי', bucketKind: 'work_group', sortOrder: 0 }]
     });
 
     await repo.insertDemandPlanningAllocations({
@@ -487,8 +487,8 @@ describe('demand planning draft repo methods', () => {
       draftId: draft.id,
       batchId: null,
       buckets: [
-        { distributionArea: 'דרום', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 0 },
-        { distributionArea: 'צפון', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 1 }
+        { distributionArea: 'דרום', planningLineName: 'default', bucketName: 'unassigned', bucketKind: 'technical_unassigned', sortOrder: 0 },
+        { distributionArea: 'צפון', planningLineName: 'default', bucketName: 'unassigned', bucketKind: 'technical_unassigned', sortOrder: 1 }
       ]
     });
 
@@ -518,8 +518,8 @@ describe('demand planning draft repo methods', () => {
       draftId: draft.id,
       batchId: null,
       buckets: [
-        { distributionArea: 'דרום', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 0 },
-        { distributionArea: 'צפון', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 1 }
+        { distributionArea: 'דרום', planningLineName: 'default', bucketName: 'unassigned', bucketKind: 'technical_unassigned', sortOrder: 0 },
+        { distributionArea: 'צפון', planningLineName: 'default', bucketName: 'unassigned', bucketKind: 'technical_unassigned', sortOrder: 1 }
       ]
     });
 

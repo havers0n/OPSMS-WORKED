@@ -57,8 +57,8 @@ begin
   insert into public.demand_planning_drafts (tenant_id, batch_id, source_scope)
   values (tenant_a, batch_a, 'all') returning id into draft_one;
   insert into public.demand_planning_buckets (
-    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name
-  ) values (tenant_a, draft_one, batch_a, 'south', 'line-1', 'group-1')
+    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, bucket_kind
+  ) values (tenant_a, draft_one, batch_a, 'south', 'line-1', 'group-1', 'work_group')
   returning id into bucket_one;
   insert into public.demand_planning_allocations (
     tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity
@@ -79,8 +79,8 @@ begin
   insert into public.demand_planning_drafts (tenant_id, batch_id, source_scope)
   values (tenant_a, batch_a, 'remaining') returning id into draft_two;
   insert into public.demand_planning_buckets (
-    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name
-  ) values (tenant_a, draft_two, batch_a, 'south', 'line-2', 'group-2')
+    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, bucket_kind
+  ) values (tenant_a, draft_two, batch_a, 'south', 'line-2', 'group-2', 'work_group')
   returning id into bucket_two;
   insert into public.demand_planning_allocations (
     tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity
@@ -97,8 +97,8 @@ begin
   insert into public.demand_planning_drafts (tenant_id, batch_id, source_scope)
   values (tenant_a, batch_a, 'remaining') returning id into draft_three;
   insert into public.demand_planning_buckets (
-    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name
-  ) values (tenant_a, draft_three, batch_a, 'south', 'line-3', 'group-3')
+    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, bucket_kind
+  ) values (tenant_a, draft_three, batch_a, 'south', 'line-3', 'group-3', 'work_group')
   returning id into bucket_three;
   insert into public.demand_planning_allocations (
     tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity

@@ -376,6 +376,14 @@ export function demandPlanningExistingLineConflict(lineName: string, distributio
   );
 }
 
+export function demandPlanningDraftHasUnassignedAllocations(draftId: string) {
+  return new ApiError(
+    422,
+    'DRAFT_HAS_UNASSIGNED_ALLOCATIONS',
+    `Draft ${draftId} has allocations in technical_unassigned buckets. Move all allocations to work_group buckets before publishing.`
+  );
+}
+
 export function demandPlanningNoPublishableRows(draftId: string) {
   return new ApiError(
     422,

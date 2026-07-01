@@ -105,12 +105,9 @@ export function hashOrderGroupKey(groupKey: string): string {
 }
 
 export function isUserVisiblePlanningBucket(bucket: {
-  planningLineName: string;
-  bucketName: string;
+  bucketKind: string;
 }): boolean {
-  // TODO (PR-2/PR-3): Replace legacy name-based technical bucket detection
-  // with explicit bucketKind column on demand_planning_buckets.
-  return bucket.planningLineName !== 'default' && bucket.bucketName !== 'unassigned';
+  return bucket.bucketKind === 'work_group';
 }
 
 export function computeExplorerOrderStatus(

@@ -299,6 +299,12 @@ export const demandPlanningDraftSchema = z.object({
 });
 export type DemandPlanningDraft = z.infer<typeof demandPlanningDraftSchema>;
 
+export const demandPlanningBucketKindSchema = z.enum([
+  'technical_unassigned',
+  'work_group'
+]);
+export type DemandPlanningBucketKind = z.infer<typeof demandPlanningBucketKindSchema>;
+
 export const demandPlanningBucketSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),
@@ -307,6 +313,7 @@ export const demandPlanningBucketSchema = z.object({
   distributionArea: z.string().nullable(),
   planningLineName: z.string().min(1),
   bucketName: z.string().min(1),
+  bucketKind: demandPlanningBucketKindSchema,
   sortOrder: z.number().int().min(0),
   createdAt: z.string().datetime({ offset: true }),
   updatedAt: z.string().datetime({ offset: true })
@@ -352,7 +359,8 @@ export type DemandPlanningCreateDraftRequest = z.infer<typeof demandPlanningCrea
 export const demandPlanningPutPlanBucketSchema = z.object({
   distributionArea: z.string().nullable(),
   planningLineName: z.string().min(1),
-  bucketName: z.string().min(1)
+  bucketName: z.string().min(1),
+  bucketKind: demandPlanningBucketKindSchema.optional()
 });
 
 export const demandPlanningPutPlanAllocationSchema = z.object({

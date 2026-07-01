@@ -3677,7 +3677,7 @@ describe('demand planning draft routes', () => {
 
   const draftResponse = {
     draft: { id: draftId, tenantId: ids.tenant, batchId, status: 'draft' as const, createdBy: null, createdAt: '2026-06-25T00:00:00.000+00:00', updatedAt: '2026-06-25T00:00:00.000+00:00' },
-    buckets: [{ id: bucketId, tenantId: ids.tenant, draftId, batchId, distributionArea: 'דרום', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 0, createdAt: '2026-06-25T00:00:00.000+00:00', updatedAt: '2026-06-25T00:00:00.000+00:00' }],
+    buckets: [{ id: bucketId, tenantId: ids.tenant, draftId, batchId, distributionArea: 'דרום', planningLineName: 'default', bucketName: 'unassigned', bucketKind: 'technical_unassigned', sortOrder: 0, createdAt: '2026-06-25T00:00:00.000+00:00', updatedAt: '2026-06-25T00:00:00.000+00:00' }],
     allocations: []
   };
   const publishResponse = {
@@ -4027,7 +4027,7 @@ describe('demand planning draft routes', () => {
     const rollingDraftResponse = {
       draft: { id: rollingDraftId, tenantId: ids.tenant, batchId: null, sourceKind: 'rolling', status: 'draft', createdBy: null, createdAt: '2026-06-29T12:00:00.000Z', updatedAt: '2026-06-29T12:00:00.000Z' },
       buckets: [
-        { id: rollingBucketId, tenantId: ids.tenant, draftId: rollingDraftId, batchId: null, distributionArea: 'North', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 0, createdAt: '2026-06-29T12:00:00.000Z', updatedAt: '2026-06-29T12:00:00.000Z' }
+        { id: rollingBucketId, tenantId: ids.tenant, draftId: rollingDraftId, batchId: null, distributionArea: 'North', planningLineName: 'default', bucketName: 'unassigned', bucketKind: 'technical_unassigned', sortOrder: 0, createdAt: '2026-06-29T12:00:00.000Z', updatedAt: '2026-06-29T12:00:00.000Z' }
       ],
       allocations: [
         { id: rollingAllocId, tenantId: ids.tenant, draftId: rollingDraftId, batchId: rollingAllocBatchId, rawDemandRowId: rollingRawRowId, bucketId: rollingBucketId, allocatedQuantity: 10, createdAt: '2026-06-29T12:00:00.000Z', updatedAt: '2026-06-29T12:00:00.000Z' }

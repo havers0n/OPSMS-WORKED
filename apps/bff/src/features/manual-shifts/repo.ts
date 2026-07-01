@@ -512,6 +512,7 @@ type DemandPlanningBucketRow = {
   distribution_area: string | null;
   planning_line_name: string;
   bucket_name: string;
+  bucket_kind: string;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -526,6 +527,7 @@ function mapDemandPlanningBucketRow(row: DemandPlanningBucketRow): DemandPlannin
     distributionArea: row.distribution_area,
     planningLineName: row.planning_line_name,
     bucketName: row.bucket_name,
+    bucketKind: row.bucket_kind as DemandPlanningBucket['bucketKind'],
     sortOrder: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -1219,6 +1221,7 @@ export type ManualShiftsRepo = {
       distributionArea: string | null;
       planningLineName: string;
       bucketName: string;
+      bucketKind: string;
       sortOrder: number;
     }>;
   }): Promise<DemandPlanningBucket[]>;
@@ -3271,6 +3274,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
           distribution_area: b.distributionArea,
           planning_line_name: b.planningLineName,
           bucket_name: b.bucketName,
+          bucket_kind: b.bucketKind,
           sort_order: b.sortOrder
         })))
         .select();

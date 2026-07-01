@@ -149,20 +149,12 @@ describe('demandExplorerItemsResponseSchema', () => {
 });
 
 describe('isUserVisiblePlanningBucket', () => {
-  it('returns true for normal buckets', () => {
-    expect(isUserVisiblePlanningBucket({ planningLineName: 'line1', bucketName: 'group1' })).toBe(true);
+  it('returns true for work_group buckets', () => {
+    expect(isUserVisiblePlanningBucket({ bucketKind: 'work_group' })).toBe(true);
   });
 
-  it('returns false for default planning line', () => {
-    expect(isUserVisiblePlanningBucket({ planningLineName: 'default', bucketName: 'group1' })).toBe(false);
-  });
-
-  it('returns false for unassigned bucket', () => {
-    expect(isUserVisiblePlanningBucket({ planningLineName: 'line1', bucketName: 'unassigned' })).toBe(false);
-  });
-
-  it('returns false when both are technical names', () => {
-    expect(isUserVisiblePlanningBucket({ planningLineName: 'default', bucketName: 'unassigned' })).toBe(false);
+  it('returns false for technical_unassigned buckets', () => {
+    expect(isUserVisiblePlanningBucket({ bucketKind: 'technical_unassigned' })).toBe(false);
   });
 });
 

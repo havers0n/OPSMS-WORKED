@@ -797,6 +797,7 @@ describe('demand planning draft schema offset timestamp acceptance', () => {
       distributionArea: 'דרום',
       planningLineName: 'default',
       bucketName: 'unassigned',
+      bucketKind: 'technical_unassigned',
       sortOrder: 0,
       createdAt: '2026-06-26T08:49:57.681454+00:00',
       updatedAt: offsetTimestamp
@@ -840,6 +841,7 @@ describe('demand planning draft schema offset timestamp acceptance', () => {
         distributionArea: 'דרום',
         planningLineName: 'default',
         bucketName: 'unassigned',
+        bucketKind: 'technical_unassigned',
         sortOrder: 0,
         createdAt: '2026-06-26T08:49:57.681454+00:00',
         updatedAt: '2026-06-26T08:49:57.681454+00:00'

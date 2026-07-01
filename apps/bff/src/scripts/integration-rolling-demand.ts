@@ -370,6 +370,7 @@ async function main() {
           id: bucketId, tenant_id: tenantId, draft_id: draftId,
           batch_id: batchAId, distribution_area: 'North',
           planning_line_name: 'Test Line', bucket_name: 'Test Bucket',
+          bucket_kind: 'work_group',
           sort_order: 1
         });
         if (errBucket) throw errBucket;

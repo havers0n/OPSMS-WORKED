@@ -145,8 +145,8 @@ begin
   insert into public.demand_planning_drafts (tenant_id, batch_id, status, source_kind)
   values (tenant_a, batch_a, 'draft', 'batch') returning id into draft_one;
 
-  insert into public.demand_planning_buckets (tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, sort_order)
-  values (tenant_a, draft_one, batch_a, 'North', 'Line A', 'Bucket 1', 1) returning id into bucket_one;
+  insert into public.demand_planning_buckets (tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, bucket_kind, sort_order)
+  values (tenant_a, draft_one, batch_a, 'North', 'Line A', 'Bucket 1', 'work_group', 1) returning id into bucket_one;
 
   insert into public.demand_planning_allocations (tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity)
   values (tenant_a, draft_one, batch_a, row_one, bucket_one, 60);
@@ -280,8 +280,8 @@ begin
     insert into public.demand_planning_drafts (tenant_id, batch_id, status, source_kind)
     values (tenant_a, batch_a, 'draft', 'batch') returning id into draft_reborn;
 
-    insert into public.demand_planning_buckets (tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, sort_order)
-    values (tenant_a, draft_reborn, batch_a, 'North', 'Line A', 'Bucket Reborn', 1) returning id into bucket_reborn;
+    insert into public.demand_planning_buckets (tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, bucket_kind, sort_order)
+    values (tenant_a, draft_reborn, batch_a, 'North', 'Line A', 'Bucket Reborn', 'work_group', 1) returning id into bucket_reborn;
 
     insert into public.demand_planning_allocations (tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity)
     values (tenant_a, draft_reborn, batch_a, row_one, bucket_reborn, 60);
@@ -300,8 +300,8 @@ begin
   insert into public.demand_planning_drafts (tenant_id, batch_id, status, source_kind)
   values (tenant_a, batch_a, 'draft', 'batch') returning id into draft_two;
 
-  insert into public.demand_planning_buckets (tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, sort_order)
-  values (tenant_a, draft_two, batch_a, 'North', 'Line A', 'Bucket 2', 2) returning id into bucket_two;
+  insert into public.demand_planning_buckets (tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, bucket_kind, sort_order)
+  values (tenant_a, draft_two, batch_a, 'North', 'Line A', 'Bucket 2', 'work_group', 2) returning id into bucket_two;
 
   insert into public.demand_planning_allocations (tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity)
   values (tenant_a, draft_two, batch_a, row_one, bucket_two, 40);
@@ -324,8 +324,8 @@ begin
     insert into public.demand_planning_drafts (tenant_id, batch_id, status, source_kind)
     values (tenant_a, batch_a, 'draft', 'batch') returning id into draft_three;
 
-    insert into public.demand_planning_buckets (tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, sort_order)
-    values (tenant_a, draft_three, batch_a, 'North', 'Line A', 'Bucket 3', 3) returning id into bucket_three;
+    insert into public.demand_planning_buckets (tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, bucket_kind, sort_order)
+    values (tenant_a, draft_three, batch_a, 'North', 'Line A', 'Bucket 3', 'work_group', 3) returning id into bucket_three;
 
     insert into public.demand_planning_allocations (tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity)
     values (tenant_a, draft_three, batch_a, row_one, bucket_three, 1);
@@ -377,8 +377,8 @@ begin
     insert into public.demand_planning_drafts (tenant_id, batch_id, status, source_kind)
     values (tenant_a, batch_a, 'draft', 'batch') returning id into draft_append;
 
-    insert into public.demand_planning_buckets (tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, sort_order)
-    values (tenant_a, draft_append, batch_a, 'North', 'Line B', 'Bucket Append', 1) returning id into bucket_append;
+    insert into public.demand_planning_buckets (tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, bucket_kind, sort_order)
+    values (tenant_a, draft_append, batch_a, 'North', 'Line B', 'Bucket Append', 'work_group', 1) returning id into bucket_append;
 
     insert into public.demand_planning_allocations (tenant_id, draft_id, batch_id, raw_demand_row_id, bucket_id, allocated_quantity)
     values (tenant_a, draft_append, batch_a, row_two, bucket_append, 50);

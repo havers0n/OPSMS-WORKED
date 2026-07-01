@@ -5856,7 +5856,7 @@ describe('demand planning draft — create', () => {
       batches: DemandImportBatch[];
       rows: RawDemandRow[];
       drafts: Array<{ id: string; tenantId: string; batchId: string; status: string; createdBy: string | null; createdAt: string; updatedAt: string }>;
-      buckets: Array<{ id: string; tenantId: string; draftId: string; batchId: string; distributionArea: string | null; planningLineName: string; bucketName: string; sortOrder: number; createdAt: string; updatedAt: string }>;
+      buckets: Array<{ id: string; tenantId: string; draftId: string; batchId: string | null; distributionArea: string | null; planningLineName: string; bucketName: string; bucketKind: string; sortOrder: number; createdAt: string; updatedAt: string }>;
       allocations: Array<{ id: string; tenantId: string; draftId: string; batchId: string; rawDemandRowId: string; bucketId: string; allocatedQuantity: number; createdAt: string; updatedAt: string }>;
       published: Array<{ rawDemandRowId: string; publishedQuantity: number }>;
     } = { batches: [], rows: [], drafts: [], buckets: [], allocations: [], published: [] };
@@ -5893,10 +5893,10 @@ describe('demand planning draft — create', () => {
       deleteDemandPlanningBucketsByDraft: vi.fn(async (input: { tenantId: string; draftId: string }) => {
         state.buckets = state.buckets.filter((b) => !(b.tenantId === input.tenantId && b.draftId === input.draftId));
       }) as unknown as ManualShiftsRepo['deleteDemandPlanningBucketsByDraft'],
-      insertDemandPlanningBuckets: vi.fn(async (input: { tenantId: string; draftId: string; batchId: string; buckets: Array<{ distributionArea: string | null; planningLineName: string; bucketName: string; sortOrder: number }> }) => {
+      insertDemandPlanningBuckets: vi.fn(async (input: { tenantId: string; draftId: string; batchId: string | null; buckets: Array<{ distributionArea: string | null; planningLineName: string; bucketName: string; bucketKind: string; sortOrder: number }> }) => {
         return input.buckets.map((b) => {
           bucketCounter += 1;
-          const bucket = { id: `bucket-${bucketCounter}`, tenantId: input.tenantId, draftId: input.draftId, batchId: input.batchId, distributionArea: b.distributionArea, planningLineName: b.planningLineName, bucketName: b.bucketName, sortOrder: b.sortOrder, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' };
+          const bucket = { id: `bucket-${bucketCounter}`, tenantId: input.tenantId, draftId: input.draftId, batchId: input.batchId, distributionArea: b.distributionArea, planningLineName: b.planningLineName, bucketName: b.bucketName, bucketKind: b.bucketKind, sortOrder: b.sortOrder, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' };
           state.buckets.push(bucket);
           return bucket;
         });
@@ -6075,7 +6075,7 @@ describe('demand planning draft — get', () => {
   function createDemandRepo() {
     const state = {
       drafts: [] as Array<{ id: string; tenantId: string; batchId: string; status: string; createdBy: string | null; createdAt: string; updatedAt: string }>,
-      buckets: [] as Array<{ id: string; tenantId: string; draftId: string; batchId: string; distributionArea: string | null; planningLineName: string; bucketName: string; sortOrder: number; createdAt: string; updatedAt: string }>,
+      buckets: [] as Array<{ id: string; tenantId: string; draftId: string; batchId: string | null; distributionArea: string | null; planningLineName: string; bucketName: string; bucketKind: string; sortOrder: number; createdAt: string; updatedAt: string }>,
       allocations: [] as Array<{ id: string; tenantId: string; draftId: string; batchId: string; rawDemandRowId: string; bucketId: string; allocatedQuantity: number; createdAt: string; updatedAt: string }>
     };
 
@@ -6101,7 +6101,7 @@ describe('demand planning draft — get', () => {
     const service = createManualShiftsServiceFromRepo(repo);
 
     state.drafts.push({ id: 'draft-1', tenantId: ids.tenant, batchId, status: 'draft', createdBy: null, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' });
-    state.buckets.push({ id: 'bucket-1', tenantId: ids.tenant, draftId: 'draft-1', batchId, distributionArea: 'דרום', planningLineName: 'default', bucketName: 'unassigned', sortOrder: 0, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' });
+    state.buckets.push({ id: 'bucket-1', tenantId: ids.tenant, draftId: 'draft-1', batchId, distributionArea: 'דרום', planningLineName: 'default', bucketName: 'unassigned', bucketKind: 'technical_unassigned', sortOrder: 0, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' });
     state.allocations.push({ id: 'alloc-1', tenantId: ids.tenant, draftId: 'draft-1', batchId, rawDemandRowId: 'row-1', bucketId: 'bucket-1', allocatedQuantity: 3, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' });
 
     const result = await service.getDemandPlanningDraft({ tenantId: ids.tenant, draftId: 'draft-1' });
@@ -6145,7 +6145,7 @@ describe('demand planning draft — PUT plan', () => {
   function createPlanRepo() {
     const state: {
       drafts: Array<{ id: string; tenantId: string; batchId: string; status: string; createdBy: string | null; createdAt: string; updatedAt: string }>;
-      buckets: Array<{ id: string; tenantId: string; draftId: string; batchId: string; distributionArea: string | null; planningLineName: string; bucketName: string; sortOrder: number; createdAt: string; updatedAt: string }>;
+      buckets: Array<{ id: string; tenantId: string; draftId: string; batchId: string | null; distributionArea: string | null; planningLineName: string; bucketName: string; bucketKind: string; sortOrder: number; createdAt: string; updatedAt: string }>;
       allocations: Array<{ id: string; tenantId: string; draftId: string; batchId: string; rawDemandRowId: string; bucketId: string; allocatedQuantity: number; createdAt: string; updatedAt: string }>;
       rows: RawDemandRow[];
     } = { drafts: [], buckets: [], allocations: [], rows: [] };
@@ -6162,10 +6162,10 @@ describe('demand planning draft — PUT plan', () => {
       deleteDemandPlanningBucketsByDraft: vi.fn(async (input: { tenantId: string; draftId: string }) => {
         state.buckets = state.buckets.filter((b) => !(b.tenantId === input.tenantId && b.draftId === input.draftId));
       }) as unknown as ManualShiftsRepo['deleteDemandPlanningBucketsByDraft'],
-      insertDemandPlanningBuckets: vi.fn(async (input: { tenantId: string; draftId: string; batchId: string; buckets: Array<{ distributionArea: string | null; planningLineName: string; bucketName: string; sortOrder: number }> }) => {
+      insertDemandPlanningBuckets: vi.fn(async (input: { tenantId: string; draftId: string; batchId: string | null; buckets: Array<{ distributionArea: string | null; planningLineName: string; bucketName: string; bucketKind: string; sortOrder: number }> }) => {
         return input.buckets.map((b) => {
           bucketCounter += 1;
-          const bucket = { id: `bucket-${bucketCounter}`, tenantId: input.tenantId, draftId: input.draftId, batchId: input.batchId, distributionArea: b.distributionArea, planningLineName: b.planningLineName, bucketName: b.bucketName, sortOrder: b.sortOrder, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' };
+          const bucket = { id: `bucket-${bucketCounter}`, tenantId: input.tenantId, draftId: input.draftId, batchId: input.batchId, distributionArea: b.distributionArea, planningLineName: b.planningLineName, bucketName: b.bucketName, bucketKind: b.bucketKind, sortOrder: b.sortOrder, createdAt: '2026-06-25T00:00:00.000Z', updatedAt: '2026-06-25T00:00:00.000Z' };
           state.buckets.push(bucket);
           return bucket;
         });
@@ -7588,9 +7588,9 @@ describe('demand planning draft — publish to shift', () => {
         return { id: `rolling-draft-${batchCounter.val}`, tenantId: ids.tenant, batchId: null, sourceKind: 'rolling' as const, status: 'draft' as const, createdBy: null, createdAt: '2026-06-29T12:00:00.000Z', updatedAt: '2026-06-29T12:00:00.000Z' };
       }) as unknown as ManualShiftsRepo['createRollingDemandPlanningDraft'],
       insertDemandPlanningBuckets: vi.fn(async (input) => {
-        return (input.buckets ?? []).map((b: { distributionArea: string | null; planningLineName: string; bucketName: string; sortOrder: number }, i: number) => {
+        return (input.buckets ?? []).map((b: { distributionArea: string | null; planningLineName: string; bucketName: string; bucketKind: string; sortOrder: number }, i: number) => {
           bucketCounter.val += 1;
-          return { id: `rbucket-${bucketCounter.val}`, tenantId: input.tenantId, draftId: input.draftId, batchId: null, distributionArea: b.distributionArea, planningLineName: b.planningLineName, bucketName: b.bucketName, sortOrder: b.sortOrder, createdAt: '2026-06-29T12:00:00.000Z', updatedAt: '2026-06-29T12:00:00.000Z' };
+          return { id: `rbucket-${bucketCounter.val}`, tenantId: input.tenantId, draftId: input.draftId, batchId: null, distributionArea: b.distributionArea, planningLineName: b.planningLineName, bucketName: b.bucketName, bucketKind: b.bucketKind, sortOrder: b.sortOrder, createdAt: '2026-06-29T12:00:00.000Z', updatedAt: '2026-06-29T12:00:00.000Z' };
         });
       }) as unknown as ManualShiftsRepo['insertDemandPlanningBuckets'],
       listDemandPlanningBuckets: vi.fn(async () => []) as unknown as ManualShiftsRepo['listDemandPlanningBuckets'],

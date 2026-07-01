@@ -86,24 +86,24 @@ begin
   returning id into draft_a;
 
   insert into public.demand_planning_buckets (
-    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, sort_order
+    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, bucket_kind, sort_order
   )
   values
-    (tenant_a, draft_a, batch_a, 'דרום',  'קו א',  'דלי',        1)
+    (tenant_a, draft_a, batch_a, 'דרום',  'קו א',  'דלי',        'work_group', 1)
   returning id into bucket_a;
 
   insert into public.demand_planning_buckets (
-    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, sort_order
+    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, bucket_kind, sort_order
   )
   values
-    (tenant_a, draft_a, batch_a, 'דרום',  'קו א',  'סיגריות',   2)
+    (tenant_a, draft_a, batch_a, 'דרום',  'קו א',  'סיגריות',   'work_group', 2)
   returning id into bucket_b;
 
   insert into public.demand_planning_buckets (
-    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, sort_order
+    tenant_id, draft_id, batch_id, distribution_area, planning_line_name, bucket_name, bucket_kind, sort_order
   )
   values
-    (tenant_a, draft_a, batch_a, 'צפון',  'קו ב',  'כללי',       3)
+    (tenant_a, draft_a, batch_a, 'צפון',  'קו ב',  'כללי',       'work_group', 3)
   returning id into bucket_c;
 
   -- Rows for testing
