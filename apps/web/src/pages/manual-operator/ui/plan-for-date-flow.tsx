@@ -50,8 +50,6 @@ function formatDisplayDate(dateStr: string): string {
   }).format(new Date(year, month - 1, day));
 }
 
-const navigatedRollingDrafts = new Set<string>();
-
 export function PlanForDateFlow({ sourceMode = 'rolling' }: { sourceMode?: 'rolling' | 'batch' }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -66,7 +64,9 @@ export function PlanForDateFlow({ sourceMode = 'rolling' }: { sourceMode?: 'roll
   const createShift = useCreateShift();
   const createDraftMutation = useCreateDemandPlanningDraft();
   const createRollingDraft = useCreateRollingDemandPlanningDraft();
-  const attemptedShiftRef = useRef<string | null>(null);
+  const rollingMutateRef = useRef(createRollingDraft.mutate);
+  rollingMutateRef.current = createRollingDraft.mutate;
+  const navigatedDraftRef = useRef<string | null>(null);
 
   const { data: shiftData, isLoading: isShiftLoading } = useQuery({
     ...shiftByDateQueryOptions(targetDate ?? ''),
@@ -124,27 +124,28 @@ export function PlanForDateFlow({ sourceMode = 'rolling' }: { sourceMode?: 'roll
     );
   }, [targetShift, targetDate, selectedBatchId, createDraftMutation, navigate]);
 
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  const targetDateRef = useRef(targetDate);
+  targetDateRef.current = targetDate;
+
   const startRollingDraft = useCallback((targetShiftId: string) => {
-    if (createRollingDraft.isPending || attemptedShiftRef.current === targetShiftId) return;
-    attemptedShiftRef.current = targetShiftId;
-    createRollingDraft.mutate(targetShiftId, {
+    rollingMutateRef.current(targetShiftId, {
       onSuccess: (result) => {
-        if (navigatedRollingDrafts.has(result.draft.id)) return;
-        navigatedRollingDrafts.add(result.draft.id);
+        if (navigatedDraftRef.current === result.draft.id) return;
+        navigatedDraftRef.current = result.draft.id;
         const params = new URLSearchParams({
           mode: 'demand',
           intent: 'plan-for-date',
           targetShiftId,
           draftId: result.draft.id,
         });
-        if (targetDate) params.set('targetDate', targetDate);
-        navigate(`/operator/manual/lines?${params.toString()}`, { replace: true });
-      },
-      onError: () => {
-        attemptedShiftRef.current = null;
+        const refTargetDate = targetDateRef.current;
+        if (refTargetDate) params.set('targetDate', refTargetDate);
+        navigateRef.current(`/operator/manual/lines?${params.toString()}`, { replace: true });
       },
     });
-  }, [createRollingDraft, navigate, targetDate]);
+  }, []);
 
   useEffect(() => {
     if (sourceMode !== 'rolling' || !targetShift || targetShift.status !== 'active') return;

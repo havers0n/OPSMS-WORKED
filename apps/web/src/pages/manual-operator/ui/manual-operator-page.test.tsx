@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
+import { StrictMode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -969,6 +970,21 @@ it('past date with a closed shift hides import actions', async () => {
       );
     }
 
+    function renderAtStrict(initialUrl: string) {
+      const qc = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
+      });
+      return render(
+        <StrictMode>
+          <MemoryRouter initialEntries={[initialUrl]}>
+            <QueryClientProvider client={qc}>
+              <ManualOperatorPage />
+            </QueryClientProvider>
+          </MemoryRouter>
+        </StrictMode>
+      );
+    }
+
     it('/lines renders LinesLanding, not local editor', async () => {
       mockedBffRequest.mockResolvedValue({ shift: null, lines: [] });
       renderAt('/operator/manual/lines');
@@ -1028,6 +1044,84 @@ it('past date with a closed shift hides import actions', async () => {
       ));
       expect(mockedBffRequest.mock.calls.filter(([url]) => String(url) === '/api/demand-planning/rolling-drafts')).toHaveLength(1);
       expect(mockedBffRequest.mock.calls.some(([url]) => String(url).includes('/available-for-planning'))).toBe(false);
+    });
+
+    it('plan-for-date reaches SchemeBuilder under StrictMode without duplicate rolling POSTs', async () => {
+      const rollingDraft = { draft: { id: 'draft-strict', tenantId: 'tenant-1', batchId: null, sourceKind: 'rolling', status: 'draft', targetShiftId: 'shift-target', createdBy: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, buckets: [], allocations: [], rows: [] };
+      mockedBffRequest.mockImplementation((url: string, init?: RequestInit) => {
+        if (String(url).includes('/api/manual-shifts/by-date?date=2026-07-01')) {
+          return Promise.resolve({ shift: { id: 'shift-target', tenantId: 'tenant-1', date: '2026-07-01', name: 'Target', status: 'active', createdBy: null, createdAt: new Date().toISOString(), closedAt: null }, lines: [] });
+        }
+        if (String(url) === '/api/demand-planning/rolling-drafts' && init?.method === 'POST') return Promise.resolve(rollingDraft);
+        if (String(url).includes('/api/demand-planning-drafts/draft-strict')) return Promise.resolve(rollingDraft);
+        if (String(url).includes('/api/client-errors')) throw new Error('client error should not be reported');
+        return Promise.resolve({ shift: null, lines: [] });
+      });
+
+      renderAtStrict('/operator/manual/lines?mode=demand&intent=plan-for-date&targetShiftId=shift-target&targetDate=2026-07-01');
+
+      await waitFor(() => {
+        expect(mockedBffRequest.mock.calls.some(([url]) => String(url).includes('/api/demand-planning-drafts/draft-strict'))).toBe(true);
+      });
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'שמור טיוטה' })).toBeTruthy();
+      });
+      expect(mockedBffRequest.mock.calls.filter(([url]) => String(url) === '/api/demand-planning/rolling-drafts')).toHaveLength(1);
+      expect(mockedBffRequest.mock.calls.some(([url]) => String(url).includes('/api/client-errors'))).toBe(false);
+    });
+
+    it('renders SchemeBuilder for the rolling draft route without crashing', async () => {
+      const rollingDraft = {
+        draft: {
+          id: 'draft-rolling-route',
+          tenantId: 'tenant-1',
+          batchId: null,
+          sourceKind: 'rolling',
+          status: 'draft',
+          targetShiftId: 'shift-target',
+          createdBy: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        buckets: [],
+        allocations: [],
+        rows: [],
+      };
+      mockedBffRequest.mockImplementation((url: string, init?: RequestInit) => {
+        if (String(url).includes('/api/manual-shifts/by-date?date=2026-07-01')) {
+          return Promise.resolve({ shift: { id: 'shift-target', tenantId: 'tenant-1', date: '2026-07-01', name: 'Target', status: 'active', createdBy: null, createdAt: new Date().toISOString(), closedAt: null }, lines: [] });
+        }
+        if (String(url) === '/api/demand-planning/rolling-drafts' && init?.method === 'POST') return Promise.resolve(rollingDraft);
+        if (String(url).includes('/api/demand-planning-drafts/draft-rolling-route')) return Promise.resolve(rollingDraft);
+        return Promise.resolve({ shift: null, lines: [] });
+      });
+
+      renderAt('/operator/manual/lines?mode=demand&intent=plan-for-date&targetShiftId=shift-target&draftId=draft-rolling-route&targetDate=2026-07-01');
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'שמור טיוטה' })).toBeTruthy();
+      });
+    });
+
+    it('plan-for-date navigates again when the rolling endpoint returns an existing draft', async () => {
+      const rollingDraft = { draft: { id: 'draft-existing', tenantId: 'tenant-1', batchId: null, sourceKind: 'rolling', status: 'draft', targetShiftId: 'shift-target', createdBy: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, buckets: [], allocations: [], rows: [] };
+      mockedBffRequest.mockImplementation((url: string, init?: RequestInit) => {
+        if (String(url).includes('/api/manual-shifts/by-date?date=2026-07-01')) {
+          return Promise.resolve({ shift: { id: 'shift-target', tenantId: 'tenant-1', date: '2026-07-01', name: 'Target', status: 'active', createdBy: null, createdAt: new Date().toISOString(), closedAt: null }, lines: [] });
+        }
+        if (String(url) === '/api/demand-planning/rolling-drafts' && init?.method === 'POST') return Promise.resolve(rollingDraft);
+        if (String(url).includes('/api/demand-planning-drafts/draft-existing')) return Promise.resolve(rollingDraft);
+        return Promise.resolve({ shift: null, lines: [] });
+      });
+
+      const firstRender = renderAt('/operator/manual/lines?intent=plan-for-date&targetDate=2026-07-01');
+      await waitFor(() => expect(mockedBffRequest.mock.calls.some(([url]) => String(url).includes('/api/demand-planning-drafts/draft-existing'))).toBe(true));
+      firstRender.unmount();
+      mockedBffRequest.mockClear();
+
+      renderAt('/operator/manual/lines?intent=plan-for-date&targetDate=2026-07-01');
+
+      await waitFor(() => expect(mockedBffRequest.mock.calls.some(([url]) => String(url).includes('/api/demand-planning-drafts/draft-existing'))).toBe(true));
     });
 
     it('plan-for-date: no batches shows empty state', async () => {
