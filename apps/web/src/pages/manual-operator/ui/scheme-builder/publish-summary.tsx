@@ -6,6 +6,7 @@ import type {
   DemandPlanningPublishUiMode,
 } from './scheme-types';
 import { useSchemeBuilderStore } from './scheme-store';
+import { getVisiblePlanningLines, getVisibleWorkGroups } from './scheme-display-utils';
 
 interface PublishSummaryProps {
   orders: SourceOrder[];
@@ -57,8 +58,8 @@ export function PublishSummary({
   const assignedCount = assignedRowIds.size;
   const loadedUnassignedCount = loadedItemRows - assignedCount;
   const totalEstimatedRows = orders.reduce((acc, o) => acc + o.itemLinesCount, 0);
-  const groupCount = workGroups.length;
-  const planningLineCount = planningLines.length;
+  const groupCount = getVisibleWorkGroups(workGroups).length;
+  const planningLineCount = getVisiblePlanningLines(planningLines).length;
   const isPlanForDate = intent === 'plan-for-date';
   const isAppendCurrentShift = intent === 'append-current-shift';
   const isPublishedDraft = draftUiMode === 'publishedDraft';

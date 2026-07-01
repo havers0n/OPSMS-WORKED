@@ -17,6 +17,7 @@ export function WorkGroupWorkspace({
   sourceOrders,
   isShiftMode,
   shiftId,
+  onShowUnassignedOrders,
 }: {
   selectedAreaName: string;
   orderItemMap: Record<string, SourceOrderItem[]>;
@@ -26,6 +27,7 @@ export function WorkGroupWorkspace({
   sourceOrders: SourceOrder[];
   isShiftMode: boolean;
   shiftId: string | null;
+  onShowUnassignedOrders?: () => void;
 }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [dpCreateStatus, setDpCreateStatus] = useState<'idle' | 'creating' | 'success' | 'partial' | 'error'>('idle');
@@ -41,6 +43,7 @@ export function WorkGroupWorkspace({
   const areaLines = getVisiblePlanningLines(
     getPlanningLinesByArea(selectedAreaName),
   );
+  const shouldShowDemandEmptyState = !isShiftMode && areaOrders.length > 0 && areaLines.length === 0;
 
   const createLineMutation = useCreateLine(shiftId ?? '');
   const patchOrderMutation = usePatchManualShiftOrder();
@@ -142,18 +145,52 @@ export function WorkGroupWorkspace({
 
       {dpCreateStatus !== 'creating' && (areaLines.length === 0 ? (
         <div className="bg-white border border-dashed border-gray-300 rounded-lg p-4 text-center">
-          <p className="text-sm text-gray-500 mb-2">
-            {capabilities.canCreatePlanningLines ? 'יש ליצור קווי עבודה ולשייך אליהן קבוצות עבודה ושורות מוצר.' : 'אין קבוצות עבודה בתצוגה זו'}
-          </p>
-          {capabilities.canCreatePlanningLines && (
-            <button
-              type="button"
-              onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-            >
-              <Plus size={14} />
-              צור קו עבודה
-            </button>
+          {shouldShowDemandEmptyState ? (
+            <>
+              <h3 className="text-sm font-bold text-gray-800 mb-1">
+                יש {areaOrders.length} הזמנות שממתינות לתכנון
+              </h3>
+              <p className="text-sm text-gray-500 mb-3">
+                עדיין לא נוצרו קווי עבודה באזור זה
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {capabilities.canCreatePlanningLines && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                  >
+                    <Plus size={14} />
+                    צור קו עבודה ראשון
+                  </button>
+                )}
+                {onShowUnassignedOrders && (
+                  <button
+                    type="button"
+                    onClick={onShowUnassignedOrders}
+                    className="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    הצג הזמנות שלא שויכו
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-gray-500 mb-2">
+                {capabilities.canCreatePlanningLines ? 'יש ליצור קווי עבודה ולשייך אליהן קבוצות עבודה ושורות מוצר.' : 'אין קבוצות עבודה בתצוגה זו'}
+              </p>
+              {capabilities.canCreatePlanningLines && (
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                >
+                  <Plus size={14} />
+                  צור קו עבודה
+                </button>
+              )}
+            </>
           )}
         </div>
       ) : (

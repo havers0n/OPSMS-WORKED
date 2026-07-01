@@ -809,6 +809,10 @@ export function SchemeBuilder(props: SchemeBuilderProps) {
                 sourceOrders={source.orders}
                 isShiftMode={!isDemandMode}
                 shiftId={!isDemandMode && shiftId ? shiftId : null}
+                onShowUnassignedOrders={isDemandMode ? () => {
+                  setShowOrders(true);
+                  setStatusFilter('unassigned');
+                } : undefined}
               />
             ) : (
               <div className="bg-white border border-dashed border-gray-300 rounded-lg p-6 text-center">
