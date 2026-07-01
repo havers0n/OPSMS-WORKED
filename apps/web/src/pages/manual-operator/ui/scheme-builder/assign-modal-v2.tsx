@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useSchemeBuilderStore } from './scheme-store';
+import { getVisiblePlanningLines, getVisibleWorkGroups } from './scheme-display-utils';
 
 export function AssignModalV2({
   isOpen,
@@ -19,9 +20,11 @@ export function AssignModalV2({
   const planningLines = useSchemeBuilderStore((s) => s.planningLines);
   const getWorkGroupsByPlanningLine = useSchemeBuilderStore((s) => s.getWorkGroupsByPlanningLine);
 
-  const areaLines = targetAreaName
-    ? planningLines.filter((pl) => pl.areaName === targetAreaName)
-    : planningLines;
+  const areaLines = getVisiblePlanningLines(
+    targetAreaName
+      ? planningLines.filter((pl) => pl.areaName === targetAreaName)
+      : planningLines,
+  );
 
   const handleAssign = () => {
     if (!selectedWgId) return;
@@ -37,7 +40,10 @@ export function AssignModalV2({
 
   if (!isOpen) return null;
 
-  const totalGroups = areaLines.reduce((acc, pl) => acc + getWorkGroupsByPlanningLine(pl.id).length, 0);
+  const totalGroups = areaLines.reduce(
+    (acc, pl) => acc + getVisibleWorkGroups(getWorkGroupsByPlanningLine(pl.id)).length,
+    0,
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={handleClose}>
@@ -62,7 +68,7 @@ export function AssignModalV2({
           ) : (
             <div className="space-y-4">
               {areaLines.map((pl) => {
-                const lineGroups = getWorkGroupsByPlanningLine(pl.id);
+                const lineGroups = getVisibleWorkGroups(getWorkGroupsByPlanningLine(pl.id));
                 if (lineGroups.length === 0) return null;
                 return (
                   <div key={pl.id}>
