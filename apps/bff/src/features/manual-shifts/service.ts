@@ -2865,7 +2865,13 @@ export function createManualShiftsServiceFromRepo(
 
       const rollingDemand = await resolveRollingAvailableDemandForTargetDate(input.tenantId, targetDate);
 
-      const availableRows = rollingDemand.rows.filter(r => r.status === 'available');
+      const availableRows = rollingDemand.rows
+        .filter(r => r.status === 'available')
+        .filter(r => {
+          if (!r.plannedDeliveryDate) return false;
+          if (r.warnings.includes('missing_planned_delivery_date')) return false;
+          return true;
+        });
 
       if (availableRows.length === 0) {
         throw demandPlanningNoRollingAvailableDemand();
@@ -2905,6 +2911,8 @@ export function createManualShiftsServiceFromRepo(
         areaGroups.set(key, group);
       }
 
+      // TODO: Rolling publish should probably reject default/unassigned
+      // allocations with DRAFT_HAS_UNASSIGNED_ALLOCATIONS.
       const bucketInputs = [...areaGroups.entries()].map(([areaKey, groupRows], i) => ({
         distributionArea: groupRows[0].distributionArea,
         planningLineName: 'default' as const,

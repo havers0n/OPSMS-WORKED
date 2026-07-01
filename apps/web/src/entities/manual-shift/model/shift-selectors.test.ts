@@ -1556,6 +1556,61 @@ describe('selectWorkHierarchyLineSummaries', () => {
     const result = selectWorkHierarchyLineSummaries(hierarchy);
     expect(result[0].itemLinesCount).toBe(0);
   });
+
+  it('filters out lines with lineGroupName === "default"', () => {
+    const hierarchy = makeHierarchyResponse({
+      areas: [
+        {
+          areaName: 'צפון',
+          displayName: 'צפון',
+          totalLines: 2,
+          totalBuckets: 2,
+          totalOrders: 3,
+          totalQuantity: 30,
+          statusBreakdown: { queued: 3, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          lines: [
+            {
+              lineId: LINE_A,
+              lineGroupName: 'default',
+              distributionArea: 'צפון',
+              status: 'open',
+              totalBuckets: 1,
+              totalOrders: 1,
+              totalQuantity: 10,
+              statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              buckets: [{
+                bucketName: 'unassigned', displayName: 'unassigned',
+                totalOrders: 1, totalQuantity: 10,
+                statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                orders: [{ orderId: 'order-d1', orderNumber: 'SO-D1', customerName: 'Cust D', pointName: 'unassigned', status: 'queued', totalQuantity: 10, hasAshlama: false, hasCheckUnits: false, lineCount: 0 }]
+              }]
+            },
+            {
+              lineId: LINE_B,
+              lineGroupName: 'שרון',
+              distributionArea: 'צפון',
+              status: 'open',
+              totalBuckets: 1,
+              totalOrders: 2,
+              totalQuantity: 20,
+              statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              buckets: [{
+                bucketName: 'תל אביב', displayName: 'תל אביב',
+                totalOrders: 2, totalQuantity: 20,
+                statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                orders: [{ orderId: 'order-1', orderNumber: 'SO-1', customerName: null, pointName: 'תל אביב', status: 'queued', lineCount: 2, totalQuantity: 20, hasAshlama: false, hasCheckUnits: false }]
+              }]
+            }
+          ]
+        }
+      ]
+    });
+
+    const result = selectWorkHierarchyLineSummaries(hierarchy);
+    expect(result).toHaveLength(1);
+    expect(result[0].lineId).toBe(LINE_B);
+    expect(result[0].lineName).toBe('שרון');
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1800,6 +1855,89 @@ describe('selectWorkHierarchyBucketSummaries', () => {
     const result = selectWorkHierarchyBucketSummaries(hierarchy, LINE_A);
     expect(result[0].itemLinesCount).toBe(0);
     expect(result[0].orders[0].lineCount).toBe(0);
+  });
+
+  it('returns empty array for technical line (lineGroupName === "default")', () => {
+    const hierarchy = makeHierarchyResponse({
+      areas: [
+        {
+          areaName: 'צפון',
+          displayName: 'צפון',
+          totalLines: 1,
+          totalBuckets: 1,
+          totalOrders: 1,
+          totalQuantity: 10,
+          statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          lines: [
+            {
+              lineId: LINE_A,
+              lineGroupName: 'default',
+              distributionArea: 'צפון',
+              status: 'open',
+              totalBuckets: 1,
+              totalOrders: 1,
+              totalQuantity: 10,
+              statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              buckets: [{
+                bucketName: 'unassigned', displayName: 'unassigned',
+                totalOrders: 1, totalQuantity: 10,
+                statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                orders: [{ orderId: 'order-d1', orderNumber: 'SO-D1', customerName: 'Cust D', pointName: 'unassigned', status: 'queued', totalQuantity: 10, hasAshlama: false, hasCheckUnits: false, lineCount: 0 }]
+              }]
+            }
+          ]
+        }
+      ]
+    });
+
+    const result = selectWorkHierarchyBucketSummaries(hierarchy, LINE_A);
+    expect(result).toEqual([]);
+  });
+
+  it('filters out unassigned buckets from normal line', () => {
+    const hierarchy = makeHierarchyResponse({
+      areas: [
+        {
+          areaName: 'צפון',
+          displayName: 'צפון',
+          totalLines: 1,
+          totalBuckets: 2,
+          totalOrders: 2,
+          totalQuantity: 20,
+          statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          lines: [
+            {
+              lineId: LINE_A,
+              lineGroupName: 'שרון',
+              distributionArea: 'צפון',
+              status: 'open',
+              totalBuckets: 2,
+              totalOrders: 2,
+              totalQuantity: 20,
+              statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              buckets: [
+                {
+                  bucketName: 'unassigned', displayName: 'unassigned',
+                  totalOrders: 1, totalQuantity: 5,
+                  statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                  orders: [{ orderId: 'order-u1', orderNumber: 'SO-U1', customerName: 'Cust U', pointName: 'unassigned', status: 'queued', totalQuantity: 5, hasAshlama: false, hasCheckUnits: false, lineCount: 0 }]
+                },
+                {
+                  bucketName: 'תל אביב', displayName: 'תל אביב',
+                  totalOrders: 1, totalQuantity: 15,
+                  statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                  orders: [{ orderId: 'order-1', orderNumber: 'SO-1', customerName: null, pointName: 'תל אביב', status: 'queued', lineCount: 3, totalQuantity: 15, hasAshlama: false, hasCheckUnits: false }]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    const result = selectWorkHierarchyBucketSummaries(hierarchy, LINE_A);
+    expect(result).toHaveLength(1);
+    expect(result[0].workBucketName).toBe('תל אביב');
   });
 });
 
@@ -2178,6 +2316,52 @@ describe('selectWorkHierarchyLineSummariesByArea', () => {
     expect(allLineNames).not.toContain("צ'יטה");
     expect(allLineNames).not.toContain('שפלה דרומית');
   });
+
+  it('filters out lines with lineGroupName === "default" when selecting area', () => {
+    const hierarchy: ManualShiftWorkHierarchyResponse = {
+      shiftId: SHIFT_ID,
+      areas: [
+        {
+          areaName: 'צפון',
+          displayName: 'צפון',
+          totalLines: 2,
+          totalBuckets: 2,
+          totalOrders: 2,
+          totalQuantity: 15,
+          statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          lines: [
+            {
+              lineId: LINE_A,
+              lineGroupName: 'default',
+              distributionArea: 'צפון',
+              status: 'open',
+              totalBuckets: 1,
+              totalOrders: 1,
+              totalQuantity: 5,
+              statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              buckets: [{ bucketName: 'unassigned', displayName: 'unassigned', totalOrders: 1, totalQuantity: 5, statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, orders: [] }]
+            },
+            {
+              lineId: LINE_B,
+              lineGroupName: 'שרון',
+              distributionArea: 'צפון',
+              status: 'open',
+              totalBuckets: 1,
+              totalOrders: 1,
+              totalQuantity: 10,
+              statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              buckets: [{ bucketName: 'תל אביב', displayName: 'תל אביב', totalOrders: 1, totalQuantity: 10, statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 }, orders: [] }]
+            }
+          ]
+        }
+      ]
+    };
+
+    const result = selectWorkHierarchyLineSummariesByArea(hierarchy, 'צפון');
+    expect(result).toHaveLength(1);
+    expect(result[0].lineId).toBe(LINE_B);
+    expect(result[0].lineName).toBe('שרון');
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2515,6 +2699,61 @@ describe('selectLineDistributionGroupSummaries', () => {
 
   it('returns empty array for undefined hierarchy', () => {
     const result = selectLineDistributionGroupSummaries(undefined, LINE_GALIL);
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array for technical line (lineGroupName === "default")', () => {
+    const hierarchy: ManualShiftWorkHierarchyResponse = {
+      shiftId: SHIFT_ID,
+      areas: [
+        {
+          areaName: 'גליל',
+          displayName: 'גליל',
+          totalLines: 1,
+          totalBuckets: 1,
+          totalOrders: 2,
+          totalQuantity: 20,
+          statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          lines: [{
+            lineId: LINE_GALIL,
+            lineGroupName: 'default',
+            distributionArea: 'גליל',
+            status: 'open',
+            totalBuckets: 1,
+            totalOrders: 2,
+            totalQuantity: 20,
+            statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            buckets: [],
+            routeGroups: [{
+              routeGroupKey: 'rg-tech',
+              routeGroupName: 'טכני',
+              routeGroupKind: 'general',
+              classificationConfidence: 'high',
+              classificationReasons: [],
+              orderCount: 2,
+              itemLinesCount: 3,
+              totalQuantity: 20,
+              statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              workBuckets: [{
+                workBucketKey: 'wb-tech',
+                workBucketName: 'unassigned',
+                workBucketDisplayName: 'unassigned',
+                workBucketKind: 'general',
+                classificationConfidence: 'high',
+                classificationReasons: [],
+                orderCount: 2,
+                itemLinesCount: 3,
+                totalQuantity: 20,
+                statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                orders: []
+              }]
+            }]
+          }]
+        }
+      ]
+    };
+
+    const result = selectLineDistributionGroupSummaries(hierarchy, LINE_GALIL);
     expect(result).toEqual([]);
   });
 });
@@ -3071,5 +3310,60 @@ describe('selectedWorkBucketRawName derivation (diagnostic — inline logic repl
     const result = selectDistributionGroupWorkGroupSummaries(hierarchy, LINE_GALIL, 'galil-general');
     const rawName = deriveRawName(result, 'NONEXISTENT');
     expect(rawName).toBe('');
+  });
+
+  it('returns empty array for technical line (lineGroupName === "default")', () => {
+    const hierarchy: ManualShiftWorkHierarchyResponse = {
+      shiftId: SHIFT_ID,
+      areas: [
+        {
+          areaName: 'גליל',
+          displayName: 'גליל',
+          totalLines: 1,
+          totalBuckets: 1,
+          totalOrders: 2,
+          totalQuantity: 20,
+          statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+          lines: [{
+            lineId: LINE_GALIL,
+            lineGroupName: 'default',
+            distributionArea: 'גליל',
+            status: 'open',
+            totalBuckets: 1,
+            totalOrders: 2,
+            totalQuantity: 20,
+            statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            buckets: [],
+            routeGroups: [{
+              routeGroupKey: 'rg-tech',
+              routeGroupName: 'טכני',
+              routeGroupKind: 'general',
+              classificationConfidence: 'high',
+              classificationReasons: [],
+              orderCount: 2,
+              itemLinesCount: 3,
+              totalQuantity: 20,
+              statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+              workBuckets: [{
+                workBucketKey: 'wb-tech',
+                workBucketName: 'unassigned',
+                workBucketDisplayName: 'unassigned',
+                workBucketKind: 'general',
+                classificationConfidence: 'high',
+                classificationReasons: [],
+                orderCount: 2,
+                itemLinesCount: 3,
+                totalQuantity: 20,
+                statusBreakdown: { queued: 2, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                orders: []
+              }]
+            }]
+          }]
+        }
+      ]
+    };
+
+    const result = selectDistributionGroupWorkGroupSummaries(hierarchy, LINE_GALIL, 'rg-tech');
+    expect(result).toEqual([]);
   });
 });

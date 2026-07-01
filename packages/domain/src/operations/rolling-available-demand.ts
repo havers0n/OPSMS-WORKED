@@ -209,7 +209,7 @@ function isNonSoOrderNumber(orderNumber: string | null): boolean {
 }
 
 function isExcludedPlanningStatus(status: string): boolean {
-  return status === 'error' || status === 'excluded' || status === 'special_flow';
+  return status === 'error' || status === 'excluded' || status === 'special_flow' || status === 'requires_review';
 }
 
 function isInvalidQuantity(qty: number | null): boolean {

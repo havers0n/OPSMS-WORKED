@@ -527,6 +527,28 @@ describe('PR-1: Rolling Available Demand Resolver', () => {
     expect(result.rows[0].status).toBe('requires_review');
   });
 
+  it('requires_review for requires_review planning status', async () => {
+    const batch = makeBatch({ id: 'b0000000-0000-4000-a000-000000000135', uploadedAt: '2026-06-29T10:00:00.000Z' });
+    const row = makeRow({
+      id: 'r0000000-0000-4000-a000-000000000135',
+      batchId: batch.id,
+      planningStatus: 'requires_review',
+      quantity: 100
+    });
+
+    const result = await resolveRollingAvailableDemandV1(
+      [batch],
+      [row],
+      []
+    );
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].status).toBe('requires_review');
+    expect(result.summary.byStatus.requiresReview).toBe(1);
+    expect(result.summary.byStatus.available).toBe(0);
+    expect(result.summary.totalAvailableQuantity).toBe(0);
+  });
+
   it('requires_review for null quantity', async () => {
     const batch = makeBatch({ id: 'b0000000-0000-4000-a000-000000000132', uploadedAt: '2026-06-29T10:00:00.000Z' });
     const row = makeRow({

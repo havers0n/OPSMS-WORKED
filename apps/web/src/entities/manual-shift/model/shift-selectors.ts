@@ -10,6 +10,11 @@ import type {
   ManualShiftWorkHierarchyWorkBucket
 } from '@wos/domain';
 import {
+  isTechnicalHierarchyLine,
+  isTechnicalHierarchyBucket,
+  getVisibleHierarchyLines
+} from './work-display-utils';
+import {
   summarizeManualShiftOrderCheckUnits as domainSummarizeManualShiftOrderCheckUnits,
   canTransitionManualShiftOrderToDoneWithCheckUnits as domainCanTransitionManualShiftOrderToDoneWithCheckUnits,
   getEffectiveExpectedCheckUnitsCount as domainGetEffectiveExpectedCheckUnitsCount
@@ -885,7 +890,7 @@ export function selectWorkHierarchyLineSummariesByArea(
   );
   if (!area) return [];
 
-  return area.lines.map((line) => ({
+  return getVisibleHierarchyLines(area.lines).map((line) => ({
     areaLineKey: resolveAreaLineKey(line),
     lineId: line.lineId,
     lineName: line.lineName ?? line.lineGroupName,
@@ -909,7 +914,7 @@ export function selectWorkHierarchyLineSummaries(
 
   const result: LineHierarchySummary[] = [];
   for (const area of hierarchy.areas) {
-    for (const line of area.lines) {
+    for (const line of getVisibleHierarchyLines(area.lines)) {
       result.push({
         areaLineKey: resolveAreaLineKey(line),
         lineId: line.lineId,
@@ -939,9 +944,9 @@ export function selectWorkHierarchyBucketSummaries(
   const line = selectedAreaLineKey === undefined
     ? selectHierarchyLineByLineId(hierarchy, selectedAreaKeyOrLineId)
     : selectHierarchyLineByArea(hierarchy, selectedAreaKeyOrLineId, selectedAreaLineKey);
-  if (!line) return [];
+  if (!line || isTechnicalHierarchyLine(line)) return [];
 
-  return line.buckets.map((bucket) => {
+  return line.buckets.filter((b) => !isTechnicalHierarchyBucket(b)).map((bucket) => {
     const orders: HierarchyOrder[] = bucket.orders.map((order) => ({
       orderId: order.orderId,
       orderNumber: order.orderNumber,
@@ -1008,7 +1013,7 @@ export function selectLineDistributionGroupSummaries(
   const line = selectedAreaLineKey === undefined
     ? selectHierarchyLineByLineId(hierarchy, selectedAreaKeyOrLineId)
     : selectHierarchyLineByArea(hierarchy, selectedAreaKeyOrLineId, selectedAreaLineKey);
-  if (!line) return [];
+  if (!line || isTechnicalHierarchyLine(line)) return [];
 
   const groups = line.routeGroups;
   if (!groups || groups.length === 0) return [];
@@ -1041,7 +1046,7 @@ export function selectDistributionGroupWorkGroupSummaries(
   const line = routeGroupKeyArg === undefined
     ? selectHierarchyLineByLineId(hierarchy, selectedAreaKeyOrLineId)
     : selectHierarchyLineByArea(hierarchy, selectedAreaKeyOrLineId, selectedAreaLineKeyOrRouteGroupKey);
-  if (!line) return [];
+  if (!line || isTechnicalHierarchyLine(line)) return [];
 
   const groups = line.routeGroups;
   if (!groups) return [];

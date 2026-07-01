@@ -357,25 +357,25 @@ begin
   -- Phase 1: pre-validate publishable rows and planned delivery dates
   select
     count(*) filter (
-      where r.planning_status not in ('error', 'special_flow')
+      where r.planning_status not in ('error', 'special_flow', 'requires_review')
         and r.sku is not null
         and nullif(btrim(r.sku), '') is not null
         and alloc.allocated_quantity > 0
     ) as publishable_count,
     coalesce(count(distinct r.planned_delivery_date) filter (
-      where r.planning_status not in ('error', 'special_flow')
+      where r.planning_status not in ('error', 'special_flow', 'requires_review')
         and r.sku is not null
         and nullif(btrim(r.sku), '') is not null
         and alloc.allocated_quantity > 0
     ), 0) as distinct_date_count,
     min(r.planned_delivery_date) filter (
-      where r.planning_status not in ('error', 'special_flow')
+      where r.planning_status not in ('error', 'special_flow', 'requires_review')
         and r.sku is not null
         and nullif(btrim(r.sku), '') is not null
         and alloc.allocated_quantity > 0
     ) as first_date,
     coalesce(bool_or(r.planned_delivery_date is null) filter (
-      where r.planning_status not in ('error', 'special_flow')
+      where r.planning_status not in ('error', 'special_flow', 'requires_review')
         and r.sku is not null
         and nullif(btrim(r.sku), '') is not null
         and alloc.allocated_quantity > 0
@@ -442,7 +442,7 @@ begin
       and ib.tenant_id = p_tenant_id
     where alloc.draft_id = p_draft_id
       and alloc.tenant_id = p_tenant_id
-      and r.planning_status not in ('error', 'special_flow')
+      and r.planning_status not in ('error', 'special_flow', 'requires_review')
       and r.sku is not null
       and nullif(btrim(r.sku), '') is not null
       and alloc.allocated_quantity > 0
@@ -635,6 +635,7 @@ declare
 
   v_skipped_error int;
   v_skipped_special_flow int;
+  v_skipped_requires_review int;
   v_skipped_no_sku int;
   v_skipped_zero_qty int;
 
@@ -702,29 +703,33 @@ begin
     select
       coalesce(count(*) filter (where r.planning_status = 'error'), 0),
       coalesce(count(*) filter (where r.planning_status = 'special_flow'), 0),
+      coalesce(count(*) filter (where r.planning_status = 'requires_review'), 0),
       coalesce(count(*) filter (
-        where r.planning_status not in ('error', 'special_flow')
+        where r.planning_status not in ('error', 'special_flow', 'requires_review')
           and (r.sku is null or nullif(btrim(r.sku), '') is null)
       ), 0),
       coalesce(count(*) filter (
-        where r.planning_status not in ('error', 'special_flow')
+        where r.planning_status not in ('error', 'special_flow', 'requires_review')
           and r.sku is not null
           and nullif(btrim(r.sku), '') is not null
           and a.allocated_quantity <= 0
       ), 0)
-    into v_skipped_error, v_skipped_special_flow, v_skipped_no_sku, v_skipped_zero_qty
+    into v_skipped_error, v_skipped_special_flow, v_skipped_requires_review, v_skipped_no_sku, v_skipped_zero_qty
     from public.demand_planning_allocations a
     join public.raw_demand_rows r on r.id = a.raw_demand_row_id
     where a.draft_id = p_draft_id
       and a.tenant_id = p_tenant_id;
 
-    v_total_skipped := v_skipped_error + v_skipped_special_flow + v_skipped_no_sku + v_skipped_zero_qty;
+    v_total_skipped := v_skipped_error + v_skipped_special_flow + v_skipped_requires_review + v_skipped_no_sku + v_skipped_zero_qty;
 
     if v_skipped_error > 0 then
       v_warnings := v_warnings || to_jsonb(format('%s error row(s) were skipped.', v_skipped_error)::text);
     end if;
     if v_skipped_special_flow > 0 then
       v_warnings := v_warnings || to_jsonb(format('%s special_flow row(s) were skipped because no explicit publish rule exists for them yet.', v_skipped_special_flow)::text);
+    end if;
+    if v_skipped_requires_review > 0 then
+      v_warnings := v_warnings || to_jsonb(format('%s requires_review row(s) were skipped.', v_skipped_requires_review)::text);
     end if;
     if v_skipped_no_sku > 0 then
       v_warnings := v_warnings || to_jsonb(format('%s row(s) were skipped because SKU is required for operational order items.', v_skipped_no_sku)::text);
